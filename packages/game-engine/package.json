@@ -1,0 +1,13 @@
+{
+  "name": "@shake2/game-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

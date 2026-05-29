@@ -4,5 +4,7 @@ node_modules/
 dist/
 build/
 coverage/
+ios/
+android/
 *.log
 *.tmp
