@@ -1,5 +1,5 @@
 import type { TeamId } from "@shake2/game-engine";
-import { getScoreSummary, getWinningTeamId } from "@shake2/game-engine";
+import { SEAT_LABELS, getScoreSummary, getWinningTeamId } from "@shake2/game-engine";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ListChecks, Minus, Plus, RotateCcw } from "lucide-react-native";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
@@ -41,6 +41,7 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
   }
 
   const activeGame = game;
+  const dealer = activeGame.players[activeGame.dealer];
   const selectedTeam = activeGame.teams[selectedTeamId];
   const winningTeam = winningTeamId ? activeGame.teams[winningTeamId] : null;
 
@@ -109,6 +110,16 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
         </Text>
       </View>
 
+      <View style={styles.dealerPanel}>
+        <View>
+          <Text style={styles.dealerLabel}>Dealer</Text>
+          <Text numberOfLines={1} style={styles.dealerName}>
+            {dealer.name}
+          </Text>
+        </View>
+        <Text style={styles.dealerSeat}>{SEAT_LABELS[activeGame.dealer]}</Text>
+      </View>
+
       {winningTeam ? (
         <View style={styles.winnerBanner}>
           <Text style={styles.winnerTitle}>{winningTeam.name} wins</Text>
@@ -119,6 +130,7 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
       <View style={styles.scoreboard}>
         {Object.values(activeGame.teams).map((team) => {
           const isLeader = scoreSummary?.leaderTeamId === team.id;
+          const hasDealer = team.playerSeats.includes(activeGame.dealer);
 
           return (
             <Pressable
@@ -138,7 +150,10 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
                     {team.playerSeats.map((seat) => activeGame.players[seat].name).join(" / ")}
                   </Text>
                 </View>
-                {isLeader ? <Text style={styles.leaderPill}>Leader</Text> : null}
+                <View style={styles.pills}>
+                  {hasDealer ? <Text style={styles.dealerPill}>Dealer</Text> : null}
+                  {isLeader ? <Text style={styles.leaderPill}>Leader</Text> : null}
+                </View>
               </View>
               <Text style={styles.scoreNumber}>{team.marks}</Text>
               <MarkDots marks={team.marks} targetMarks={activeGame.targetMarks} />
@@ -192,6 +207,49 @@ const styles = StyleSheet.create({
   completeStatus: {
     backgroundColor: palette.goldSoft,
     color: palette.goldDark
+  },
+  dealerLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase"
+  },
+  dealerName: {
+    color: palette.ink,
+    fontSize: 20,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  dealerPanel: {
+    alignItems: "center",
+    backgroundColor: palette.surface,
+    borderColor: palette.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    padding: spacing.md
+  },
+  dealerPill: {
+    backgroundColor: palette.goldSoft,
+    borderRadius: radius.sm,
+    color: palette.goldDark,
+    fontSize: 12,
+    fontWeight: "800",
+    overflow: "hidden",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5
+  },
+  dealerSeat: {
+    backgroundColor: palette.ink,
+    borderRadius: radius.sm,
+    color: palette.surface,
+    fontSize: 13,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6
   },
   emptyCopy: {
     color: palette.muted,
@@ -264,6 +322,10 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 18,
     fontWeight: "900"
+  },
+  pills: {
+    alignItems: "flex-end",
+    gap: spacing.xs
   },
   players: {
     color: palette.muted,

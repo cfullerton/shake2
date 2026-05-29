@@ -1,4 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { SEAT_LABELS } from "@shake2/game-engine";
 import { RotateCcw } from "lucide-react-native";
 import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
 
@@ -58,6 +59,7 @@ export function HistoryScreen({ route }: HistoryScreenProps) {
           keyExtractor={(entry) => entry.id}
           renderItem={({ item }) => {
             const team = activeGame.teams[item.teamId];
+            const dealer = item.dealer ? activeGame.players[item.dealer] : null;
 
             return (
               <View style={styles.entry}>
@@ -69,6 +71,11 @@ export function HistoryScreen({ route }: HistoryScreenProps) {
                 <Text style={styles.detail}>
                   {item.marks} {item.marks === 1 ? "mark" : "marks"}
                 </Text>
+                {item.dealer && dealer ? (
+                  <Text style={styles.dealer}>
+                    Dealer: {dealer.name} ({SEAT_LABELS[item.dealer]})
+                  </Text>
+                ) : null}
                 {item.note ? <Text style={styles.note}>{item.note}</Text> : null}
               </View>
             );
@@ -92,6 +99,11 @@ const styles = StyleSheet.create({
   detail: {
     color: palette.ink,
     fontSize: 17,
+    fontWeight: "800"
+  },
+  dealer: {
+    color: palette.goldDark,
+    fontSize: 14,
     fontWeight: "800"
   },
   emptyCopy: {

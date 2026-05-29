@@ -1,4 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { SEAT_LABELS } from "@shake2/game-engine";
 import { Plus, Trophy } from "lucide-react-native";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -52,43 +53,48 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
       ) : (
         <View style={styles.games}>
           <Text style={styles.sectionTitle}>Saved Games</Text>
-          {sortedGames.map((game) => (
-            <Pressable
-              key={game.id}
-              onPress={() => navigation.navigate("Scorekeeper", { gameId: game.id })}
-              style={({ pressed }) => [styles.gameCard, pressed && styles.pressedCard]}
-            >
-              <View style={styles.gameHeader}>
-                <View style={styles.gameTitleGroup}>
-                  <Text numberOfLines={1} style={styles.gameTitle}>
-                    {game.name}
-                  </Text>
-                  <Text style={styles.gameMeta}>
-                    Hand {game.handNumber} · Updated {formatDate(game.updatedAt)}
+          {sortedGames.map((game) => {
+            const dealer = game.players[game.dealer];
+
+            return (
+              <Pressable
+                key={game.id}
+                onPress={() => navigation.navigate("Scorekeeper", { gameId: game.id })}
+                style={({ pressed }) => [styles.gameCard, pressed && styles.pressedCard]}
+              >
+                <View style={styles.gameHeader}>
+                  <View style={styles.gameTitleGroup}>
+                    <Text numberOfLines={1} style={styles.gameTitle}>
+                      {game.name}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.gameMeta}>
+                      Hand {game.handNumber} · Dealer {dealer.name} ({SEAT_LABELS[game.dealer]}) ·
+                      Updated {formatDate(game.updatedAt)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.status, game.status === "complete" && styles.complete]}>
+                    {game.status === "complete" ? "Complete" : "Active"}
                   </Text>
                 </View>
-                <Text style={[styles.status, game.status === "complete" && styles.complete]}>
-                  {game.status === "complete" ? "Complete" : "Active"}
-                </Text>
-              </View>
 
-              <View style={styles.scoreRows}>
-                {Object.values(game.teams).map((team) => (
-                  <View key={team.id} style={styles.scoreRow}>
-                    <View style={styles.teamCopy}>
-                      <Text numberOfLines={1} style={styles.teamName}>
-                        {team.name}
-                      </Text>
-                      <Text style={styles.marksText}>
-                        {team.marks}/{game.targetMarks}
-                      </Text>
+                <View style={styles.scoreRows}>
+                  {Object.values(game.teams).map((team) => (
+                    <View key={team.id} style={styles.scoreRow}>
+                      <View style={styles.teamCopy}>
+                        <Text numberOfLines={1} style={styles.teamName}>
+                          {team.name}
+                        </Text>
+                        <Text style={styles.marksText}>
+                          {team.marks}/{game.targetMarks}
+                        </Text>
+                      </View>
+                      <MarkDots marks={team.marks} targetMarks={game.targetMarks} />
                     </View>
-                    <MarkDots marks={team.marks} targetMarks={game.targetMarks} />
-                  </View>
-                ))}
-              </View>
-            </Pressable>
-          ))}
+                  ))}
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </Screen>
