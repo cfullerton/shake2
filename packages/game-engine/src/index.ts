@@ -41,6 +41,7 @@ export interface Team {
 export interface ScoreEntry {
   readonly id: string;
   readonly handNumber: number;
+  readonly dealer?: PlayerSeat;
   readonly teamId: TeamId;
   readonly marks: number;
   readonly createdAt: string;
@@ -171,6 +172,7 @@ export function awardMarks(
   };
   const nextGame: ScorekeeperGame = {
     ...game,
+    dealer: getNextDealer(game.dealer),
     handNumber: game.handNumber + 1,
     history: [...game.history, entry],
     teams,
@@ -207,6 +209,7 @@ export function undoLastScore(
 
   const nextGame: ScorekeeperGame = {
     ...game,
+    dealer: lastEntry.dealer ?? getPreviousDealer(game.dealer),
     handNumber: Math.max(1, game.handNumber - 1),
     history: game.history.slice(0, -1),
     status: "active",
@@ -250,6 +253,21 @@ export function getWinningTeamId(game: ScorekeeperGame): TeamId | null {
   )[0] ?? null;
 }
 
+export function getNextDealer(dealer: PlayerSeat): PlayerSeat {
+  assertPlayerSeat(dealer);
+  const currentIndex = PLAYER_SEATS.indexOf(dealer);
+  return PLAYER_SEATS[(currentIndex + 1) % PLAYER_SEATS.length] ?? "north";
+}
+
+export function getPreviousDealer(dealer: PlayerSeat): PlayerSeat {
+  assertPlayerSeat(dealer);
+  const currentIndex = PLAYER_SEATS.indexOf(dealer);
+  return (
+    PLAYER_SEATS[(currentIndex - 1 + PLAYER_SEATS.length) % PLAYER_SEATS.length] ??
+    "north"
+  );
+}
+
 export function isTeamId(value: unknown): value is TeamId {
   return TEAM_IDS.includes(value as TeamId);
 }
@@ -265,6 +283,7 @@ function createScoreEntry(
   const note = input.note?.trim();
   const entry = {
     createdAt: cleanRequired(input.createdAt, "createdAt"),
+    dealer: game.dealer,
     handNumber: game.handNumber,
     id: cleanRequired(input.id, "id"),
     marks: input.marks,

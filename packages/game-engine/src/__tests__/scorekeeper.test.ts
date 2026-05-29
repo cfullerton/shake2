@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   awardMarks,
   createScorekeeperGame,
+  getNextDealer,
+  getPreviousDealer,
   getScoreSummary,
   getWinningTeamId,
   undoLastScore
@@ -30,6 +32,7 @@ test("creates a serializable scorekeeper game with partner seats", () => {
 
   assert.equal(game.name, "Friday night");
   assert.equal(game.targetMarks, 7);
+  assert.equal(game.dealer, "north");
   assert.equal(game.handNumber, 1);
   assert.equal(game.teams.northSouth.name, "Stars");
   assert.equal(game.teams.eastWest.name, "Moon");
@@ -40,9 +43,10 @@ test("creates a serializable scorekeeper game with partner seats", () => {
   assert.equal(JSON.parse(JSON.stringify(game)).id, "game-1");
 });
 
-test("awards marks, advances hands, and identifies a winner", () => {
+test("awards marks, advances hands, rotates dealers, and identifies a winner", () => {
   const game = createScorekeeperGame({
     createdAt,
+    dealer: "west",
     id: "game-1",
     targetMarks: 2
   });
@@ -56,8 +60,10 @@ test("awards marks, advances hands, and identifies a winner", () => {
   });
 
   assert.equal(firstHand.handNumber, 2);
+  assert.equal(firstHand.dealer, "north");
   assert.equal(firstHand.status, "active");
   assert.equal(firstHand.history.length, 1);
+  assert.equal(firstHand.history[0]?.dealer, "west");
   assert.equal(firstHand.history[0]?.note, "opening hand");
   assert.equal(firstHand.teams.northSouth.marks, 1);
   assert.deepEqual(getScoreSummary(firstHand), {
@@ -74,6 +80,8 @@ test("awards marks, advances hands, and identifies a winner", () => {
   });
 
   assert.equal(secondHand.handNumber, 3);
+  assert.equal(secondHand.dealer, "east");
+  assert.equal(secondHand.history[1]?.dealer, "north");
   assert.equal(secondHand.status, "complete");
   assert.equal(secondHand.teams.northSouth.marks, 2);
   assert.equal(getWinningTeamId(secondHand), "northSouth");
@@ -106,9 +114,18 @@ test("undo removes the latest score and reopens a completed game", () => {
 
   assert.equal(reopened.status, "active");
   assert.equal(reopened.handNumber, 2);
+  assert.equal(reopened.dealer, "east");
   assert.equal(reopened.history.length, 1);
   assert.equal(reopened.teams.eastWest.marks, 1);
   assert.equal(getWinningTeamId(reopened), null);
+});
+
+test("rotates dealer seats in table order", () => {
+  assert.equal(getNextDealer("north"), "east");
+  assert.equal(getNextDealer("east"), "south");
+  assert.equal(getNextDealer("south"), "west");
+  assert.equal(getNextDealer("west"), "north");
+  assert.equal(getPreviousDealer("north"), "west");
 });
 
 test("rejects invalid mark awards", () => {
