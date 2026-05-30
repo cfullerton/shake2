@@ -4,7 +4,7 @@ Last reviewed: 2026-05-30
 
 ## Scope
 
-This file lists rules and product decisions missing from the current engine compared with broad Texas 42 expectations. It does not mean these are required for the current local standard numeric slice. The current supported rules are intentionally narrow: four-player partnership Texas 42, double-six dominoes, numeric bids from 30 to 42, one pip trump suit, standard trick play, marks scoring, and dealer-forced 30 on all-pass hands.
+This file lists rules and product decisions missing from the current engine compared with broad Texas 42 expectations. It does not mean these are required for the current local standard numeric slice. The current supported rules are intentionally narrow: four-player partnership Texas 42, double-six dominoes, numeric bids from 30 to 42, one pip trump selection, standard trick play, marks scoring, and dealer-forced 30 on all-pass hands.
 
 ## Implemented Standard Rules
 
@@ -44,8 +44,8 @@ This file lists rules and product decisions missing from the current engine comp
 | Splash | Missing | Config flag exists only. Needs eligibility rules and scoring/mark awards. |
 | Nello | Missing | Config flag exists only. Requires low/no-trump style winner logic and scoring rules. |
 | Sevens | Missing | Config flag exists only. Requires special contract semantics. |
-| Follow-me | Missing | Config flag exists only. Requires contract and trump/lead behavior. |
-| No-trump | Missing | Not currently represented as a contract. Product decision needed. |
+| Follow-me | Missing | Config flag exists only. Contract union scaffolding now exists, but no follow-me contract member, bid flow, or first-lead trump behavior is implemented. |
+| No-trump | Missing | Contract union scaffolding now exists, but no no-trump contract member, call action, or no-trump trick/scoring behavior is implemented. |
 | Low/no-low variants | Missing | Not represented. Product decision needed. |
 | Dealer redeal on all-pass | Missing | `RuleConfig.bidding.allPassBehavior` includes `"redeal"`, but the bidding implementation always forces dealer 30. |
 | Multiple-mark awards | Missing | Current numeric bids award exactly one mark. Higher-risk bids and variants may require more. |
@@ -93,4 +93,3 @@ These are not gameplay rules, but they become rule-enforcement requirements once
 3. Enforce hidden-information DTOs before improving bot strategy.
 4. Add one variant at a time behind `RuleConfig`, with fixture-backed tests and no hidden conditionals.
 5. Defer tournament, spectator, analytics, and admin workflows until the standard multiplayer game loop is stable.
-
