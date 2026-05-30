@@ -20,6 +20,9 @@ Implemented now:
 - Automatic server completion of bidding after the fourth bid.
 - Redacted player views that hide other players' hands.
 - Replay verification through existing Forty Two event reducers.
+- Serializable storage records for rooms, trusted events, public snapshots, private hands, and action idempotency.
+- Restore helpers that rebuild an authoritative session from records.
+- Reconnect helpers that return a redacted latest player view and pending-action status.
 
 ## Authority Model
 
@@ -57,11 +60,25 @@ Client action
   -> Realtime notification
 ```
 
-The current module covers the middle authority/command layer. Durable storage and realtime fanout are still missing.
+The current modules cover the middle authority/command layer and the backend-neutral durable record shape. Actual DynamoDB persistence, conditional writes, auth, and realtime fanout are still missing.
+
+## Durable Record Shape
+
+The backend-neutral storage module lives in `packages/game-engine/src/multiplayer/storage.ts`.
+
+It produces records shaped for a future DynamoDB adapter:
+
+- `ROOM#<roomId> / META`
+- `GAME#<gameId> / EVENT#<sequence>`
+- `GAME#<gameId> / SNAPSHOT#LATEST`
+- `GAME#<gameId> / PRIVATE_HAND#<seatIndex>`
+- `ACTION#<actionId> / RESULT`
+
+The latest snapshot record is public/redacted. It stores hand counts, not full hands. Current private hands are stored in seat-specific private-hand records.
 
 ## Hidden Information
 
-Multiplayer player views must not expose `snapshot.hands` directly. The current redacted view exposes:
+Multiplayer player views and public snapshot records must not expose `snapshot.hands` directly. The current redacted view exposes:
 
 - public game state
 - public hand counts by seat
@@ -81,10 +98,19 @@ Target reconnect behavior remains:
 6. Retry safe pending actions by `actionId`.
 7. Resume subscriptions.
 
+The current reconnect helper returns:
+
+- whether the client needs a snapshot refresh
+- the server snapshot version and last event sequence
+- accepted pending action IDs
+- rejected pending actions with stable error codes
+- unknown pending action IDs
+- the latest redacted player view
+
 ## Still Missing
 
 - Authenticated identity mapping to `playerId`.
-- Durable event log, snapshot, private-hand, and idempotency records.
+- Physical DynamoDB adapter for the durable records.
 - Runtime schema validation for all network payloads.
 - Accepted-event validation before persistence.
 - AppSync schema/resolvers and DynamoDB conditional writes.

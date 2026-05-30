@@ -117,6 +117,9 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Multiplayer action submission records action results by `actionId` for idempotent duplicate retries.
 - Multiplayer session automatically emits `BIDDING_COMPLETED` after the fourth bid.
 - Multiplayer player views redact `hands`, expose public hand counts, and include only the viewer's own hand.
+- Multiplayer storage records split room metadata, trusted event records, public latest snapshots, private hand records, and action idempotency records.
+- Multiplayer storage restore rebuilds an authoritative in-memory session from records and verifies the trusted event log can replay to the restored snapshot.
+- Multiplayer reconnect views return a redacted player snapshot plus accepted, rejected, and unknown pending action IDs.
 
 ## Test Status
 
@@ -163,6 +166,7 @@ Important covered invariants:
 - Local session tests for start, restart/reset, dealer rotation, 100 completed simulated hands, and 25 completed simulated games.
 - Simulation assertions for replay equality, possible hand scores, mark awards, and game completion.
 - Multiplayer session tests for room seating, host-only start, server-managed initial deal, invalid seat claims, bidding auto-completion, duplicate action ID idempotency, hidden-hand redaction, and replay equality.
+- Multiplayer storage tests for public/private hand separation, full session restore, accepted/rejected pending-action reconnect handling, missing private-hand rejection, and replay equality.
 
 Latest known verification before this report:
 
@@ -171,7 +175,7 @@ npm run typecheck -w @shake2/game-engine
 npm run test -w @shake2/game-engine
 ```
 
-Both passed after the first multiplayer session slice.
+Both passed after the first multiplayer storage/reconnect slice.
 
 ## Current M2 Plan Alignment
 
@@ -209,14 +213,14 @@ This means the repository has implemented and tested the core local hand lifecyc
 - There is no standalone `COMPLETE_HAND` command; this is acceptable for the current automatic lifecycle but should be an explicit ADR or implementation note if retained.
 - Rule constants now route through `standardRules`, but existing modules still expose compatibility constants.
 - Local practice screen consumes the rules engine, but only as an in-memory vertical slice.
-- A multiplayer-safe authority model has started in code, but it is in-memory and backend-neutral only.
-- No AWS, AppSync, DynamoDB, Cognito, durable room state, or reconnect handling.
+- A multiplayer-safe authority and storage model has started in code, but it is backend-neutral only.
+- No AWS, AppSync, DynamoDB, Cognito, physical durable room state, or deployed reconnect endpoint exists.
 - Only legal-random bots exist; no heuristic or advanced strategy exists.
 - No variant contracts such as mark bids, 84, plunge, splash, nello, sevens, or follow-me.
 - No runtime schema validation for serialized full-game snapshots or accepted-event payloads yet.
 - No package-local test utilities for deterministic hands; integration tests currently build fixtures inline.
 - No persistence adapter exists for full-rules snapshots/events.
-- No durable multiplayer event log, snapshot adapter, private-hand table, or idempotency table exists yet.
+- No physical multiplayer event log, snapshot table, private-hand table, or idempotency table exists yet.
 - Multiplayer redaction exists for player views, but bots and local practice still use full snapshots.
 
 ## Technical Risks
@@ -237,13 +241,14 @@ This means the repository has implemented and tested the core local hand lifecyc
 2. Document the automatic hand-completion decision in an ADR or implementation note if a standalone `COMPLETE_HAND` command remains intentionally omitted.
 3. Add accepted-event validation or command-side consistency checks before any server-authoritative persistence path.
 4. Add local-practice persistence or explicit resume/discard UX if practice games should survive app restarts.
-5. Add durable multiplayer room/event/snapshot/idempotency adapters around the backend-neutral session layer.
-6. Defer advanced bots, tournaments, and analytics until standard multiplayer is stable.
+5. Add runtime schemas and accepted-event validation before accepting network-sourced multiplayer payloads.
+6. Build the physical AWS adapter for room/event/snapshot/private-hand/idempotency records.
+7. Defer advanced bots, tournaments, and analytics until standard multiplayer is stable.
 
 ## Architecture Notes
 
 - The current separation between scorekeeper mode and full rules mode is still correct.
 - The rules engine is pure TypeScript and remains UI-independent.
 - The current implementation favors small functional modules, serializable state shapes, accepted-event replay, and narrow command slices over an early monolithic reducer. Hand completion is currently automatic from `PLAY_DOMINO`, which keeps the normal rules path simple but should be documented before server-authoritative multiplayer work.
-- The docs describe a future server-authoritative multiplayer engine. The new backend-neutral multiplayer session module is the first code-level step in that direction, but it still needs durable storage, runtime schemas, accepted-event validation, auth, and reconnect handling before production use.
+- The docs describe a future server-authoritative multiplayer engine. The new backend-neutral multiplayer session and storage modules are the first code-level steps in that direction, but they still need runtime schemas, accepted-event validation, auth, physical persistence, and deployed reconnect handling before production use.
 - The biggest remaining architecture deviation is sequence: later rule primitives were implemented before all command validation. `RuleConfig`, `FortyTwoState`, event envelopes, replay, setup/bidding/trump commands, play/trick-completion commands, and automatic hand/game completion now exist, so the next correction should harden full-hand integration fixtures and accepted-event validation boundaries.
