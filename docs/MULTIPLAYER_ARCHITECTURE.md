@@ -25,6 +25,7 @@ Implemented now:
 - Reconnect helpers that return a redacted latest player view and pending-action status.
 - Validated replay for restored event streams, including forged trick-winner and forged hand-score rejection.
 - Runtime boundary parsers for action envelopes, durable records, public snapshots, private hands, idempotency records, and client reconnect state.
+- Backend-neutral write plans for game start, accepted player actions, and rejected player actions.
 
 ## Authority Model
 
@@ -62,7 +63,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, and validated accepted-event restore. Actual DynamoDB persistence, conditional writes, auth, and realtime fanout are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, and conditional write planning. Actual DynamoDB persistence, auth, and realtime fanout are still missing.
 
 ## Durable Record Shape
 
@@ -118,6 +119,35 @@ Covered payloads:
 
 These parsers reject common corrupt or hostile payloads including unsupported schema versions, invalid seats, invalid domino pips, public snapshots that include private hands, event-record metadata mismatches, malformed idempotency records, and malformed reconnect state.
 
+## Write Plans
+
+The backend-neutral write-plan module lives in `packages/game-engine/src/multiplayer/write-plan.ts`.
+
+It does not call AWS. Instead, it converts authoritative multiplayer sessions and action results into ordered persistence intentions that a future DynamoDB adapter can translate into transactions.
+
+Covered plans:
+
+- game start
+- accepted player action
+- rejected player action
+
+Write plans can include:
+
+- room record updates
+- append-only event records
+- latest public snapshot records
+- private hand records
+- action idempotency records
+
+Write plans carry backend-neutral conditions for future adapters:
+
+- room state must match expected previous status/game ID
+- event records must not already exist
+- latest snapshot must match expected previous sequence/version
+- action idempotency records must not already exist
+
+Accepted-action and game-start plans run validated replay before emitting records. This closes the earlier gap where accepted-event validation existed for restore but not for initial persistence planning.
+
 ## Hidden Information
 
 Multiplayer player views and public snapshot records must not expose `snapshot.hands` directly. The current redacted view exposes:
@@ -154,7 +184,6 @@ The current reconnect helper returns:
 - Authenticated identity mapping to `playerId`.
 - Physical DynamoDB adapter for the durable records.
 - Schema migration/version-compatibility tooling for future payload changes.
-- Accepted-event validation before initial persistence writes, not only restore.
 - AppSync schema/resolvers and DynamoDB conditional writes.
 - Subscription gap detection.
 - Leave/rejoin/replacement behavior.
