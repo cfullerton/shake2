@@ -1,5 +1,5 @@
-import { PLAYER_SEATS, type PlayerSeat } from "./types.js";
-import { assertPlayerSeat } from "./validation.js";
+import { PLAYER_SEATS, type PlayerSeat } from "./types.ts";
+import { assertPlayerSeat } from "./validation.ts";
 
 export function getNextDealer(dealer: PlayerSeat): PlayerSeat {
   assertPlayerSeat(dealer);

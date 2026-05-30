@@ -13,7 +13,7 @@ import {
   MAX_TARGET_MARKS,
   MAX_TEAM_NAME_LENGTH,
   undoLastScore
-} from "../index.js";
+} from "../index.ts";
 
 const createdAt = "2026-05-29T12:00:00.000Z";
 

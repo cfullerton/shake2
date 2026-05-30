@@ -1,4 +1,4 @@
-import { TEAM_IDS, type ScoreSummary, type ScorekeeperGame, type TeamId } from "./types.js";
+import { TEAM_IDS, type ScoreSummary, type ScorekeeperGame, type TeamId } from "./types.ts";
 
 export function getScoreSummary(game: ScorekeeperGame): ScoreSummary {
   const northSouthMarks = game.teams.northSouth.marks;

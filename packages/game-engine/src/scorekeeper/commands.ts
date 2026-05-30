@@ -1,5 +1,5 @@
-import { getNextDealer, getPreviousDealer } from "./dealer.js";
-import { getWinningTeamId } from "./selectors.js";
+import { getNextDealer, getPreviousDealer } from "./dealer.ts";
+import { getWinningTeamId } from "./selectors.ts";
 import {
   DEFAULT_TARGET_MARKS,
   PLAYER_SEATS,
@@ -16,7 +16,7 @@ import {
   type Team,
   type TeamId,
   type UndoInput
-} from "./types.js";
+} from "./types.ts";
 import {
   assertAwardMarks,
   assertPlayerSeat,
@@ -28,7 +28,7 @@ import {
   cleanScoreNote,
   cleanTeamName,
   cleanTimestamp
-} from "./validation.js";
+} from "./validation.ts";
 
 export function createScorekeeperGame(
   input: CreateScorekeeperGameInput

@@ -15,7 +15,7 @@ import {
   type ScorekeeperGame,
   type Team,
   type TeamId
-} from "./types.js";
+} from "./types.ts";
 import {
   cleanTimestamp,
   isNonNegativeInteger,
@@ -24,7 +24,7 @@ import {
   isStringWithin,
   isTeamId,
   isTimestampString
-} from "./validation.js";
+} from "./validation.ts";
 
 export const SCOREKEEPER_STORAGE_SCHEMA_VERSION = 1;
 

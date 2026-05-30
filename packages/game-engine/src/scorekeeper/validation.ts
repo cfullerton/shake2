@@ -10,7 +10,7 @@ import {
   TEAM_IDS,
   type PlayerSeat,
   type TeamId
-} from "./types.js";
+} from "./types.ts";
 
 export function cleanGameName(value: string | undefined): string {
   return cleanLabel(value, "Texas 42", "name", MAX_GAME_NAME_LENGTH);
