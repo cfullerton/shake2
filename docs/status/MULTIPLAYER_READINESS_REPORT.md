@@ -242,19 +242,21 @@ Current backend contract tests cover:
 
 - Public snapshot GraphQL type and mapper do not expose full hands.
 - Private hand query maps through an explicit seat-ownership boundary.
-- Subscription notification payloads include only safe public fields.
+- Subscription output matches the subscribed mutation result and includes only safe event summaries plus public snapshots.
 - Reconnect response can represent accepted, rejected, and unknown pending actions.
 - Query resolver shell tests enforce public/private separation and private-hand ownership.
 - Infrastructure tests assert AppSync uses Cognito authorization, Lambda resolvers, and native-app Cognito client settings.
 - Submit-action tests assert rejected actions persist idempotency results without writing public snapshots, trusted events, or private hand records.
 - Smoke harness tests assert the deployed smoke checks cover all current AppSync resolvers without requiring seeded private hand data.
 
-Recommended subscription payload:
+Current subscription payload:
 
-- room/game ID
-- latest sequence/snapshot version
-- public event summary safe for all room members
-- optional actor/action status
+- accepted/committed/duplicate action status
+- backend error for rejected actions
+- safe event summaries
+- latest public/redacted snapshot when an action is accepted
+
+AppSync requires mutation-backed subscriptions to use a compatible output type with the subscribed mutation, so `onGameUpdated` currently returns `SubmitGameActionResult`.
 
 Clients should fetch a fresh redacted snapshot after reconnect or when they detect a sequence gap.
 

@@ -24,7 +24,7 @@ type Mutation {
 }
 
 type Subscription {
-  onGameUpdated(gameId: ID!): GameUpdatedNotification!
+  onGameUpdated(gameId: ID!): SubmitGameActionResult!
     @aws_subscribe(mutations: ["submitGameAction"])
 }
 
@@ -105,18 +105,6 @@ type ReconnectView {
 type PendingActionRejection {
   actionId: ID!
   errorCode: String!
-}
-
-type GameUpdatedNotification {
-  gameId: ID!
-  accepted: Boolean!
-  duplicate: Boolean!
-  lastEventSequence: Int!
-  snapshotVersion: Int!
-  eventIds: [ID!]!
-  eventTypes: [String!]!
-  actionIds: [ID!]!
-  actorIds: [ID!]!
 }
 
 type SafeGameEventSummary {
