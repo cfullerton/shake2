@@ -8,7 +8,7 @@ Multiplayer is ready for the next backend-design slice, but not ready for produc
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice now converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace and testable `submitGameAction` Lambda-style resolver shell now exist. The largest remaining gap is still physical infrastructure: no Cognito identity, public AppSync API, deployed DynamoDB client adapter, subscription fanout, deployed reconnect endpoint, or multiplayer UI exists yet.
+The first DynamoDB adapter contract slice now converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable `submitGameAction` Lambda-style resolver shell, and mocked-testable AWS SDK DynamoDB store implementation now exist. The largest remaining gap is still deployed infrastructure: no Cognito identity, public AppSync API, provisioned DynamoDB table, subscription fanout, deployed reconnect endpoint, or multiplayer UI exists yet.
 
 ## Current Multiplayer Architecture
 
@@ -23,7 +23,7 @@ Current multiplayer code is backend-neutral and lives under `packages/game-engin
 Backend shell code now lives under `backend`.
 
 - `src/functions/submitGameAction/handler.ts`: AppSync-like Lambda resolver shell for submit-game-action requests.
-- `src/dynamodb/store.ts`: `MultiplayerStore` interface for loading stored game records, loading idempotency results, and committing write plans.
+- `src/dynamodb/store.ts`: `MultiplayerStore` interface plus AWS SDK v3 `DynamoDBMultiplayerStore` for loading stored game records, loading idempotency results, and committing write plans.
 - `src/auth/identity.ts`: mocked/auth-neutral actor extraction boundary.
 - `src/types/index.ts`: backend-local request, response, actor, resolver-context, and error types.
 
@@ -49,8 +49,9 @@ Production multiplayer blockers:
 2. Physical persistence adapter
    - DynamoDB transaction intent shapes now exist and are tested.
    - A Lambda-style resolver shell can delegate transaction intents to `MultiplayerStore` mocks.
-   - No AWS SDK/AppSync production adapter executes those transaction intents yet.
-   - Need physical adapter tests for AWS error mapping, transaction cancellation reasons, partial failures, and retry handling.
+   - An AWS SDK v3 DynamoDB store implementation exists behind the interface and is tested with mocked clients.
+   - No DynamoDB table, IAM policy, or Lambda deployment exists yet.
+   - Need physical adapter tests for AWS error mapping, transaction cancellation reasons, partial failures, and retry handling against a local or integration test environment.
 
 3. AppSync or realtime transport
    - No GraphQL schema/resolvers/subscriptions exist.
@@ -278,10 +279,10 @@ Production-quality casual multiplayer:
 
 ## Recommended Next Slices
 
-1. Physical DynamoDB adapter shell
-   - Translate tested transaction intents into AWS SDK `TransactWriteItems` calls.
-   - Map conditional-check failures back to stable `EngineError` codes.
-   - Keep the AWS SDK dependency inside `backend`, not `packages/game-engine`.
+1. DynamoDB failure mapping and local integration test harness
+   - Map transaction cancellation reasons back to stable `EngineError` codes.
+   - Add DynamoDB Local or equivalent integration tests for conditional failures.
+   - Keep AWS SDK dependencies isolated inside `backend`.
 
 2. AppSync schema draft
    - Define `submitGameAction` mutation shape against the existing resolver response.

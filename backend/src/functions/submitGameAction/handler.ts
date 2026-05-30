@@ -18,7 +18,9 @@ import {
   submitMultiplayerGameAction,
   type EngineContext,
   type FortyTwoActionEnvelope,
+  type MultiplayerActionIdempotencyRecord,
   type MultiplayerGameSession,
+  type MultiplayerStoredGameRecords,
   type MultiplayerSubmitActionResult,
   type MultiplayerWritePlan
 } from "../../game-engine.ts";
@@ -51,15 +53,18 @@ export function createSubmitGameActionHandler(
       assertActionMatchesRequest(request, action);
       assertActorMatchesAction(actor.playerId, action);
 
-      await dependencies.store.loadIdempotencyResult({
+      const idempotencyResult = await dependencies.store.loadIdempotencyResult({
         actionId: action.actionId,
         gameId: action.gameId
       });
 
       const previousSession = restoreSession(
-        await dependencies.store.loadGameSnapshot({
-          gameId: request.gameId
-        })
+        addLoadedIdempotencyResult(
+          await dependencies.store.loadGameSnapshot({
+            gameId: request.gameId
+          }),
+          idempotencyResult
+        )
       );
       const result = submitMultiplayerGameAction(
         previousSession,
@@ -207,6 +212,29 @@ function restoreSession(records: unknown): MultiplayerGameSession {
   }
 
   return restored.value;
+}
+
+function addLoadedIdempotencyResult(
+  records: MultiplayerStoredGameRecords,
+  idempotencyResult: MultiplayerActionIdempotencyRecord | null
+): MultiplayerStoredGameRecords {
+  if (!idempotencyResult) {
+    return records;
+  }
+
+  const idempotency = records.idempotency.some((record) =>
+    record.actionId === idempotencyResult.actionId
+  )
+    ? records.idempotency
+    : [
+        ...records.idempotency,
+        idempotencyResult
+      ];
+
+  return {
+    ...records,
+    idempotency
+  };
 }
 
 function parseSubmitGameActionRequest(value: unknown): SubmitGameActionRequest {
