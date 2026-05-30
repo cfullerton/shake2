@@ -9,7 +9,6 @@ import {
   playLocalGameDomino,
   restartLocalGameSession,
   submitLocalGameBid,
-  type Domino,
   type EngineContext,
   type LegalDominoPlay,
   type LocalGameSession,
@@ -40,7 +39,8 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   );
   const view = getLocalGameView(session);
   const state = session.snapshot.snapshot;
-  const humanHand = state.phase === "trickPlay" ? state.hands[session.humanSeat] : [];
+  const humanHand = "hands" in state ? state.hands[session.humanSeat] : [];
+  const humanHandText = humanHand.map(formatDomino).join("  ");
   const currentTrick = state.phase === "trickPlay" ? state.currentTrick : null;
 
   const phaseTitle = useMemo(() => {
@@ -116,6 +116,12 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Your bid</Text>
           <Text style={styles.copy}>Choose a pass or a legal numeric bid.</Text>
+          <View style={styles.handPreview}>
+            <Text style={styles.handLabel}>Your hand</Text>
+            <Text style={styles.handText} testID="local-game-human-hand">
+              {humanHandText}
+            </Text>
+          </View>
           <View style={styles.buttonGrid}>
             {view.legalBids.map((option) => (
               <Button
@@ -182,7 +188,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Your hand</Text>
-            <Text style={styles.handText}>{humanHand.map(formatDomino).join("  ")}</Text>
+            <Text style={styles.handText} testID="local-game-human-hand">
+              {humanHandText}
+            </Text>
             <View style={styles.buttonGrid}>
               {view.legalPlays.map((play) => (
                 <Button
@@ -331,6 +339,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     lineHeight: 24
+  },
+  handLabel: {
+    color: palette.subtle,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+  handPreview: {
+    gap: spacing.xs
   },
   header: {
     alignItems: "flex-start",
