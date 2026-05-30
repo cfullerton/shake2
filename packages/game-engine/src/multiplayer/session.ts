@@ -136,10 +136,12 @@ export type MultiplayerActionResultIndex = Readonly<Record<
 
 export type MultiplayerStoredActionResult =
   | {
+      readonly actorId: string;
       readonly events: readonly FortyTwoEventEnvelope[];
       readonly ok: true;
     }
   | {
+      readonly actorId: string;
       readonly error: EngineError;
       readonly ok: false;
     };
@@ -463,7 +465,12 @@ export function submitMultiplayerGameAction(
     const commandResult = runFortyTwoAction(session.snapshot, action, context);
 
     if (!commandResult.ok) {
-      return storeActionFailure(session, action.actionId, commandResult.error);
+      return storeActionFailure(
+        session,
+        action.actionId,
+        action.actorId,
+        commandResult.error
+      );
     }
 
     const advanced = applyMultiplayerAutomation(
@@ -493,6 +500,7 @@ export function submitMultiplayerGameAction(
         snapshot
       },
       action.actionId,
+      action.actorId,
       events
     );
 
@@ -505,7 +513,7 @@ export function submitMultiplayerGameAction(
     };
   } catch (error) {
     if (error instanceof EngineError) {
-      return storeActionFailure(session, action.actionId, error);
+      return storeActionFailure(session, action.actionId, action.actorId, error);
     }
 
     throw error;
@@ -525,13 +533,20 @@ export function getMultiplayerPlayerView(
 
     return {
       room: session.room,
-      snapshot: {
-        ...session.snapshot,
-        snapshot: redactFortyTwoState(session.snapshot.snapshot, viewerSeat)
-      },
+      snapshot: createMultiplayerVisibleSnapshot(session.snapshot, viewerSeat),
       viewerSeat
     };
   });
+}
+
+export function createMultiplayerVisibleSnapshot(
+  snapshot: FortyTwoSnapshotEnvelope,
+  viewerSeat: SeatIndex | null
+): MultiplayerVisibleSnapshotEnvelope {
+  return {
+    ...snapshot,
+    snapshot: redactFortyTwoState(snapshot.snapshot, viewerSeat)
+  };
 }
 
 export function getMultiplayerSeatForPlayer(
@@ -779,6 +794,7 @@ function applyMultiplayerAutomation(
 function storeActionSuccess(
   session: MultiplayerGameSession,
   actionId: string,
+  actorId: string,
   events: readonly FortyTwoEventEnvelope[]
 ): MultiplayerGameSession {
   if (actionId.trim().length === 0) {
@@ -790,6 +806,7 @@ function storeActionSuccess(
     actionResults: {
       ...session.actionResults,
       [actionId]: {
+        actorId,
         events,
         ok: true
       }
@@ -800,6 +817,7 @@ function storeActionSuccess(
 function storeActionFailure(
   session: MultiplayerGameSession,
   actionId: string,
+  actorId: string,
   error: EngineError
 ): MultiplayerSubmitActionResult {
   const nextSession = actionId.trim().length === 0
@@ -809,6 +827,7 @@ function storeActionFailure(
         actionResults: {
           ...session.actionResults,
           [actionId]: {
+            actorId,
             error,
             ok: false as const
           }
