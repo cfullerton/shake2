@@ -1,58 +1,52 @@
 # Next 10 Tasks
 
-Last reviewed: 2026-05-29
+Last reviewed: 2026-05-30
 
 These tasks are ordered to protect the future real-time multiplayer iOS goal while still moving through the roadmap sensibly.
 
-## 1. Add AsyncStorage Integration Tests And Recovery UX
+## Completed Since Previous Review
 
-The pure persistence codec is versioned and tested. Next, add tests around the AsyncStorage wrapper and a user-facing recovery/reset path for invalid local data.
+- Versioned local scorekeeper persistence.
+- Hardened scorekeeper validation.
+- Split scorekeeper engine modules.
+- Initial shared Action/Event/Snapshot contracts.
+- Mobile persistence and scorekeeper flow tests.
+- GitHub Actions CI.
+- ADRs for local-first M1, server-authoritative event target, and scorekeeper mode separation.
+
+## 1. Add Local Data Recovery UX
+
+The persistence codec drops corrupt or unsupported data safely, but users need a visible recovery path. Add a reset/quarantine flow, explain what happened, and test it.
 
 ## 2. Mirror Validation Limits In The UI
 
-The engine now validates scorekeeper inputs. Add matching UI limits, counters, and clearer validation messages so users hit fewer generic alerts.
+The engine validates scorekeeper inputs. Add matching UI limits, counters, and clearer validation messages so users hit fewer generic alerts.
 
-## 3. Add CI
+## 3. Add User-Controlled Game Management
 
-Run install, typecheck, engine tests, and audit reporting on every branch. Document the current Expo audit advisory instead of letting it become background noise.
+Add delete, archive, and rename flows for local scorekeeper games before saved data grows.
 
-## 4. Define Action/Event/Snapshot Contracts
+## 4. Connect Contracts To Engine Results
 
-Create versioned TypeScript contracts for local and future server use:
+The shared contracts exist, but the app still mutates local snapshots directly. Add scorekeeper command-result/event application helpers so local replay can be tested before backend work.
 
-- `GameAction`
-- `GameEvent`
-- `GameSnapshot`
-- `GameActionResult`
-- `GameErrorCode`
+## 5. Expand Contract And Reconnect Tests
 
-Include actor ID, game ID, client action ID, sequence number, and schema version where appropriate.
+Add tests for duplicate action IDs, stale sequences, unsupported schema versions, reconnect snapshots, and event ordering.
 
-## 5. Add UI Flow Tests
-
-Add React Native screen tests for create game, award marks, undo, history, dealer rotation, and validation errors.
-
-## 6. Add ADRs For Current Architecture Deviations
-
-Add ADRs for:
-
-- Local-first M1 scorekeeper despite original AWS architecture.
-- Event-sourced/server-authoritative target architecture for multiplayer.
-- Scorekeeper mode as separate from full rules/multiplayer mode.
-
-## 7. Add User-Controlled Game Management
-
-Add delete/archive/rename flows for local scorekeeper games before saved data grows.
-
-## 8. Build The M2 Domino Domain Model
+## 6. Build The M2 Domino Domain Model
 
 Implement pure TypeScript types and tests for dominoes, double-six set generation, shuffling/dealing via injected randomness, seats, hands, tricks, count domino values, and hand total invariants.
 
-## 9. Implement M2 Rules Validation Incrementally
+## 7. Implement M2 Rules Validation Incrementally
 
 Add bidding, trump selection, legal play validation, trick winner determination, scoring, and bid evaluation as tested pure engine commands. Do not touch AWS or multiplayer until these rules are deterministic.
 
-## 10. Design Multiplayer Backend Contracts Before Backend Code
+## 8. Design Multiplayer Authorization Before Backend
+
+Create an authorization matrix for room membership, seat assignment, turn order, action type, phase, invite state, reconnect state, and admin actions.
+
+## 9. Design Backend And Reconnect Protocols
 
 Before creating `/backend`, write the room lifecycle and reconnect protocol:
 
@@ -65,3 +59,7 @@ Before creating `/backend`, write the room lifecycle and reconnect protocol:
 - duplicate action handling
 - stale client recovery
 - disconnect/timeout behavior
+
+## 10. Strengthen Engineering Gates
+
+Add linting, formatting, coverage thresholds, visual regression or screenshots, and an iOS end-to-end smoke suite before the app grows beyond M1.

@@ -1,6 +1,6 @@
 # Security Review
 
-Last reviewed: 2026-05-29
+Last reviewed: 2026-05-30
 
 ## Executive Assessment
 
@@ -14,6 +14,7 @@ The current app has a small security surface because it is local-only and has no
 - Player/team names and notes are user-provided local strings only.
 - There is no authentication or authorization.
 - There are no outbound app network calls in the source.
+- CI now reports dependency audit findings, but the audit step is non-blocking because the current Expo transitive advisory has no safe fix path in this repo yet.
 
 ## Dependency Findings
 
@@ -71,13 +72,13 @@ The project has no data classification for player names, game history, stats, in
 
 ## Recommended Security Tasks
 
-1. Add a dependency-audit note to CI once CI exists, but do not force downgrade Expo.
-2. Mirror scorekeeper input limits in UI affordances and future server validation.
-3. Replace local ID generation with an injectable ID provider and use `crypto.randomUUID` where available.
-4. Add user-facing recovery for invalid local persistence data.
-5. Create a security-focused multiplayer action authorization matrix.
-6. Define data classes: public profile data, private account data, room membership data, game event data, analytics data.
-7. Decide token/session storage strategy for Cognito on iOS before implementing auth.
-8. Design invite codes as short-lived, server-generated, single-room scoped capabilities.
-9. Add backend security tests before exposing multiplayer writes.
-10. Create a policy for dependency updates and Expo SDK upgrades.
+1. Mirror scorekeeper input limits in UI affordances and future server validation.
+2. Replace local ID generation with an injectable ID provider and use `crypto.randomUUID` where available.
+3. Add user-facing recovery for invalid local persistence data.
+4. Create a security-focused multiplayer action authorization matrix.
+5. Define data classes: public profile data, private account data, room membership data, game event data, analytics data.
+6. Decide token/session storage strategy for Cognito on iOS before implementing auth.
+7. Design invite codes as short-lived, server-generated, single-room scoped capabilities.
+8. Add backend security tests before exposing multiplayer writes.
+9. Create a policy for dependency updates and Expo SDK upgrades.
+10. Make dependency audit blocking once the Expo transitive advisory has a safe upgrade path.

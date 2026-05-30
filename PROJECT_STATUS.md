@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed: 2026-05-29
+Last reviewed: 2026-05-30
 
 ## Current Architecture
 
@@ -8,7 +8,8 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 
 - `apps/mobile` contains the Expo app, React Navigation stack, screens, local state provider, AsyncStorage persistence, shared UI components, and theme tokens.
 - `packages/game-engine` contains pure TypeScript scorekeeper domain logic, validation, selectors, persistence codecs, and Node test coverage.
-- `packages/shared` exists as a placeholder package with only a shared `EntityId` type.
+- `packages/shared` contains initial versioned Action/Event/Snapshot contracts for scorekeeper and future server use.
+- `.github/workflows/ci.yml` runs install, typecheck, tests, and audit reporting on pull requests and pushes to `main`.
 - There is no `backend` workspace yet, despite the original architecture docs naming AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB.
 - App state is client-owned today. The mobile app loads/saves games from AsyncStorage and applies game-engine functions locally.
 - The game engine is serializable and UI-independent, but it is still a scorekeeper model, not a full Texas 42 rules engine.
@@ -44,9 +45,15 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 |   `-- shared/
 |       |-- package.json
 |       |-- tsconfig.json
-|       `-- src/index.ts
+|       `-- src/
+|           |-- __tests__/
+|           |-- contracts/
+|           `-- index.ts
 |-- docs/
 |-- adr/
+|-- .github/
+|   `-- workflows/
+|       `-- ci.yml
 |-- package.json
 |-- package-lock.json
 `-- tsconfig.base.json
@@ -66,15 +73,20 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - Legacy migration from the original raw saved-game array format.
 - Hardened scorekeeper validation for target marks, mark awards, timestamps, IDs, names, and notes.
 - Pure TypeScript scorekeeper engine with tests for creation, mark awards, dealer rotation, undo, winner detection, validation, and persistence codecs.
+- Initial shared contracts for `GameAction`, `GameEvent`, `GameSnapshot`, `GameActionResult`, and `GameErrorCode`.
+- React Native Testing Library coverage for core scorekeeper flows and AsyncStorage persistence wrapper behavior.
+- GitHub Actions CI for install, typecheck, tests, and non-blocking audit reporting.
+- ADRs documenting local-first M1, server-authoritative event target architecture, and the scorekeeper mode boundary.
 
 ## Features Partially Implemented
 
 - Game engine: currently covers scorekeeper-only state, not legal Texas 42 play, bidding, trump, tricks, domino hands, or bid evaluation.
-- Game state model: current shape is serializable, but not event-sourced or replayable in the way multiplayer docs require.
+- Game state model: current scorekeeper shape is serializable, but the app does not yet apply shared actions/events or replay an event log.
 - Persistence: local JSON persistence has schema versioning and legacy migration, but there is no user-facing corruption recovery, delete/archive flow, or cloud sync.
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.
 - UI system: reusable components exist, but there is no formal design system, accessibility pass, or cross-device visual regression coverage.
-- Shared package: present but essentially unused.
+- Shared package: contracts exist, but they are initial scorekeeper-oriented TypeScript contracts, not a backend schema or runtime validator.
+- CI: basic workflow exists, but there is no lint, coverage threshold, visual test, iOS device test, or required audit pass yet.
 
 ## Known Issues
 
@@ -83,29 +95,28 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - `createLocalId` uses `Date.now()` plus `Math.random()`, which is acceptable for local prototypes but not collision-resistant or multiplayer-safe.
 - `findGame` reads from a ref and is stable, but screens rely on provider re-renders for freshness; this is acceptable now, not a durable state architecture.
 - Completed games cannot receive marks, but there is no explicit "new match" or archive/delete flow.
-- No automated tests cover React Native screens, navigation, persistence, or UI behavior.
+- Automated UI tests cover the main scorekeeper flow, but Home states, long text layout, accessibility, delete/archive, and end-to-end iOS behavior remain untested.
 - `npm audit` reports 10 moderate vulnerabilities through Expo's transitive `uuid/xcode` dependency chain.
 - React Native packages warn that current Node `23.10.0` is outside their preferred engine range.
 
 ## Technical Debt
 
-- The engine has initial scorekeeper modules, but it still needs clearer boundaries for future full-game rules, command results, event application, and variant configuration.
-- Domain actions are state snapshots rather than explicit events. Multiplayer will need event IDs, actor IDs, idempotency keys, ordering, and replay.
+- The engine has initial scorekeeper modules, but it still needs full-game rules modules, command results, event application, and variant configuration.
+- Shared contracts define action/event/snapshot shapes, but no engine command currently emits or applies those events.
 - Persistence has a versioned envelope, but no backup/quarantine strategy or user-controlled reset path.
 - There is no centralized error taxonomy. UI currently catches generic `Error` messages from engine/storage.
 - Package build outputs (`packages/game-engine/dist`) are generated locally and ignored, but the package `main` still points at `src/index.ts`; this is fine for Metro path aliases, weak for external package consumers.
-- No linting, formatting, CI, pre-commit hooks, or test coverage thresholds.
+- No linting, formatting, pre-commit hooks, or test coverage thresholds.
 - No environment/config strategy for future AWS endpoints.
 - No app icon/adaptive icon assets configured.
-- No ADR records the local-first M1 implementation or the decision to defer `/backend`.
 
 ## Recommended Next Milestones
 
-1. Finish M1 hardening: add AsyncStorage integration tests, user-facing corrupt-data recovery, and delete/archive for saved games.
-2. Continue formalizing the engine model: command results, event application, rules primitives, and deterministic IDs/clocks injected by callers.
-3. Add automated mobile tests around navigation, game creation, scoring, undo, validation errors, and persistence.
+1. Finish M1 hardening: add user-facing corrupt-data recovery and delete/archive/rename for saved games.
+2. Mirror engine validation limits in the UI with input bounds, counters, and clearer form errors.
+3. Connect engine command results to shared events so local replay can be proven before multiplayer.
 4. Build M2 rules engine as pure TypeScript: domino model, deal, bids, trump, legal play validation, trick winner, hand scoring, and regional variant config.
-5. Define multiplayer contracts before backend code: action schema, event log schema, snapshot schema, reconnect semantics, conflict/idempotency strategy, and server authority boundaries.
+5. Expand contract tests around duplicate actions, stale sequences, reconnect snapshots, and unsupported schemas.
 6. Introduce AWS Amplify Gen 2 only after contracts are stable enough to avoid baking prototype state shapes into DynamoDB.
 
 ## Architecture Decisions That Differ From Original Docs
@@ -113,6 +124,6 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - Original docs include `/backend`; the current repo has no backend workspace.
 - Original stack includes AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB; current implementation is local-only with AsyncStorage.
 - Original game-state docs require server authority and reconnect support; current state is client-authoritative and offline-local.
-- Original database docs mention immutable events; current persistence stores mutable full game snapshots.
-- Original monorepo structure names `/packages/shared`; it exists, but meaningful shared contracts are currently in `packages/game-engine`.
+- Original database docs mention immutable events; current local persistence still stores mutable full game snapshots, although shared event contracts now exist.
 - The current app includes Expo web dependencies for browser smoke testing, though the product target remains iOS-first mobile.
+- ADR-0002, ADR-0003, and ADR-0004 now document why M1 is local-first and how the future multiplayer authority model should differ.

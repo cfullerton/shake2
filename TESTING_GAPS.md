@@ -1,10 +1,10 @@
 # Testing Gaps
 
-Last reviewed: 2026-05-29
+Last reviewed: 2026-05-30
 
 ## Current Test Coverage
 
-The repo currently has focused Node tests for `packages/game-engine`.
+The repo currently has focused Node tests for `packages/game-engine`, contract tests for `packages/shared`, and React Native Testing Library tests for the main scorekeeper mobile flow.
 
 Covered today:
 
@@ -19,22 +19,28 @@ Covered today:
 - Reject over-target mark awards.
 - Reject invalid target marks, timestamps, and overlong labels/notes.
 - Serialize, parse, and migrate versioned scorekeeper persistence data.
+- Create and validate versioned action, event, and snapshot contracts.
+- Save, load, migrate, and reject invalid data through the mobile AsyncStorage wrapper.
+- New Game target-mark validation and normalized Team Setup navigation.
+- Team Setup game creation defaults.
+- Scorekeeper dealer display, mark award, History navigation, undo, and dealer rotation.
+- History hand rendering, dealer display, note display, and undo.
 
-Manual/browser verification has been performed for the app flow, but it is not automated.
+Manual/browser verification has also been performed for the app flow, but visual and device-specific behavior is not automated.
 
 ## Major Gaps
 
-1. No mobile component tests.
+1. Mobile component coverage is still narrow.
 
-Screens and components have no React Native Testing Library coverage. Navigation, form validation, button disabled states, and rendering edge cases are untested.
+The core scorekeeper flow now has React Native Testing Library coverage, but Home loading/error/saved-game states, accessibility labels, long text wrapping, delete/archive flows, and edge-case button disabled states are still untested.
 
-2. No AsyncStorage integration tests.
+2. No local persistence recovery UX tests.
 
-The pure persistence codec has tests, but the React Native AsyncStorage wrapper has no tests for read/write failures or platform integration.
+The pure persistence codec and AsyncStorage wrapper have tests, but there is no user-facing reset/quarantine/recovery flow to test yet.
 
-3. No navigation tests.
+3. Navigation coverage is partial.
 
-The New Game -> Team Setup -> Scorekeeper flow is not automated. History navigation and missing-game states are not covered.
+The New Game -> Team Setup creation path and Scorekeeper -> History button behavior are covered at screen level. Full stack navigation, route guards, deep links, and missing-game navigation are not.
 
 4. No UI regression tests.
 
@@ -48,17 +54,17 @@ Expected at this stage, but important: there are no tests for domino modeling, b
 
 There are no tests for event ordering, reconnect, duplicate actions, stale clients, invalid actor actions, server/client divergence, or room membership.
 
-7. No contract tests.
+7. Contract tests are initial only.
 
-There are no shared schemas or tests proving mobile/backend compatibility, because backend/contracts do not exist yet.
+Shared TypeScript action/event/snapshot guards have tests, but there is no runtime schema validator, backend consumer, generated schema, or compatibility suite.
 
-8. No CI.
+8. CI is basic.
 
-Local `npm run typecheck` and `npm test` work, but nothing enforces them on branches.
+GitHub Actions now runs install, typecheck, tests, and audit reporting. It does not run linting, coverage thresholds, iOS simulator tests, visual regression, or a required audit gate.
 
-9. No security tests.
+9. Security tests are not present.
 
-No dependency audit automation, input limit tests, authorization tests, or invalid payload tests.
+CI reports dependency audit findings, but there are no input limit tests in the UI, authorization tests, invalid remote payload tests, or abuse-case tests.
 
 10. No performance tests.
 
@@ -70,18 +76,17 @@ No checks for large history lists, many saved games, slow AsyncStorage, or low-e
 - Complete-game behavior and error path.
 - Invalid IDs/timestamps.
 - Sanitizing empty game/team/player names.
-- Deterministic replay from an event sequence, once events exist.
+- Deterministic replay from an event sequence.
+- Command result to event generation and event application.
 - Variant configuration once rules are added.
 
 ## App Test Gaps
 
 - Home empty/loading/error/saved-game states.
-- New Game validation for invalid target marks.
-- Team Setup create-game loading and failure behavior.
+- Team Setup loading and failure behavior.
 - Scorekeeper mark stepper bounds.
 - Award button disabled on completed games.
 - Undo button disabled without history.
-- History list rendering and undo behavior.
 - Persistence across app reload.
 - Long names/notes wrapping correctly on small iPhones.
 - Accessibility labels/roles for icon buttons and controls.
@@ -93,11 +98,11 @@ No checks for large history lists, many saved games, slow AsyncStorage, or low-e
 - Add AsyncStorage mock tests for persistence.
 - Add Playwright or Expo-compatible smoke tests for web-only sanity checks, but do not treat web as a substitute for iOS.
 - Add Detox or Maestro for critical iOS flows before App Store launch.
-- Add contract/schema tests once backend/action types exist.
+- Expand contract/schema tests before backend work and add runtime validators.
 
 ## Minimum CI Gate
 
-Before M2 grows, add CI that runs:
+CI now runs the minimum gate:
 
 ```text
 npm ci
@@ -106,4 +111,4 @@ npm test
 npm audit --audit-level=moderate
 ```
 
-Treat the current Expo transitive audit issue explicitly, rather than ignoring audit output silently.
+The audit step currently reports the known Expo transitive moderate advisory without blocking. That should become stricter once the dependency chain has an upgrade path.
