@@ -38,6 +38,10 @@ import {
   type MultiplayerVisibleFortyTwoState,
   type MultiplayerVisibleSnapshotEnvelope
 } from "./session.ts";
+import {
+  parseMultiplayerClientSyncState,
+  parseMultiplayerStoredGameRecords
+} from "./schema.ts";
 
 export interface MultiplayerRoomRecord {
   readonly createdAt: string;
@@ -171,58 +175,62 @@ export function createMultiplayerStorageRecords(
 }
 
 export function restoreMultiplayerSessionFromRecords(
-  records: MultiplayerStoredGameRecords
+  records: unknown
 ): MultiplayerResult<MultiplayerGameSession> {
   return runStorageResult(() => {
-    const events = sortEventRecords(records.events).map((record) => record.envelope);
-    const snapshot = restoreSnapshotFromRecords(records.snapshot, records.privateHands);
+    const parsedRecords = parseMultiplayerStoredGameRecords(records);
+    const events = sortEventRecords(parsedRecords.events).map((record) => record.envelope);
+    const snapshot = restoreSnapshotFromRecords(
+      parsedRecords.snapshot,
+      parsedRecords.privateHands
+    );
     const initialSnapshot = restoreInitialSnapshot(events);
     const replayedSnapshot = replayValidatedFortyTwoEvents(initialSnapshot, events);
 
     assertSnapshotsMatch(replayedSnapshot, snapshot);
 
     return {
-      actionResults: restoreActionResults(records.idempotency, events),
+      actionResults: restoreActionResults(parsedRecords.idempotency, events),
       events,
       initialSnapshot,
-      room: records.room.room,
+      room: parsedRecords.room.room,
       snapshot
     };
   });
 }
 
 export function getMultiplayerReconnectView(
-  records: MultiplayerStoredGameRecords,
+  records: unknown,
   playerId: string,
-  clientState: MultiplayerClientSyncState
+  clientState: unknown
 ): MultiplayerResult<MultiplayerReconnectView> {
-  const restored = restoreMultiplayerSessionFromRecords(records);
-
-  if (!restored.ok) {
-    return restored;
-  }
-
   return runStorageResult(() => {
-    if (clientState.gameId !== restored.value.snapshot.gameId) {
+    const parsedRecords = parseMultiplayerStoredGameRecords(records);
+    const parsedClientState = parseMultiplayerClientSyncState(clientState);
+    const restored = unwrapStorageResult(
+      restoreMultiplayerSessionFromRecords(parsedRecords)
+    );
+
+    if (parsedClientState.gameId !== restored.snapshot.gameId) {
       throw new EngineError("GAME_NOT_FOUND", "Client sync state belongs to a different game.");
     }
 
     const view = unwrapStorageResult(
-      getMultiplayerPlayerView(restored.value, playerId)
+      getMultiplayerPlayerView(restored, playerId)
     );
     const pending = classifyPendingActions(
-      records.idempotency,
+      parsedRecords.idempotency,
       playerId,
-      clientState.pendingActionIds ?? []
+      parsedClientState.pendingActionIds ?? []
     );
 
     return {
       ...pending,
       requiresSnapshotRefresh:
-        clientState.lastAppliedEventSequence !== restored.value.snapshot.lastEventSequence ||
-        clientState.snapshotVersion !== restored.value.snapshot.snapshotVersion,
-      serverLastEventSequence: restored.value.snapshot.lastEventSequence,
-      serverSnapshotVersion: restored.value.snapshot.snapshotVersion,
+        parsedClientState.lastAppliedEventSequence !== restored.snapshot.lastEventSequence ||
+        parsedClientState.snapshotVersion !== restored.snapshot.snapshotVersion,
+      serverLastEventSequence: restored.snapshot.lastEventSequence,
+      serverSnapshotVersion: restored.snapshot.snapshotVersion,
       view
     };
   });

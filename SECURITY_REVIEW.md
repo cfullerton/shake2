@@ -14,6 +14,7 @@ The current app has a small security surface because it is local-only and has no
 - Player/team names and notes are user-provided local strings only.
 - There is no authentication or authorization.
 - There are no outbound app network calls in the source.
+- Backend-neutral multiplayer action, storage, and reconnect payloads now have runtime parsers, but they are not a substitute for authenticated server-side authorization.
 - CI now reports dependency audit findings, but the audit step is non-blocking because the current Expo transitive advisory has no safe fix path in this repo yet.
 
 ## Dependency Findings

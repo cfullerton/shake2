@@ -12,6 +12,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - `packages/game-engine` now contains the first backend-neutral multiplayer session layer for rooms, seat ownership, server-authoritative action submission, idempotency, and redacted player views.
 - `packages/game-engine` now contains backend-neutral multiplayer storage records for room metadata, trusted event logs, redacted public snapshots, private hands, action idempotency, restore, and reconnect views.
 - `packages/game-engine` now contains a validated Forty Two replay path for restoring accepted events at multiplayer persistence/reconnect boundaries.
+- `packages/game-engine` now contains runtime multiplayer boundary parsers for action envelopes, room records, event records, public snapshots, private hands, idempotency records, and client reconnect state.
 - `packages/shared` contains initial versioned Action/Event/Snapshot contracts for scorekeeper and future server use.
 - `.github/workflows/ci.yml` runs install, typecheck, tests, and audit reporting on pull requests and pushes to `main`.
 - `.github/workflows/deploy-web.yml` builds the Expo web bundle and deploys static assets to AWS S3/CloudFront with GitHub OIDC.
@@ -90,6 +91,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - Backend-neutral multiplayer room/session primitives in the engine: room creation, joins, seat assignment, host-only start, multiplayer-mode snapshots, server-managed initial deal, authorized bid/trump/play submission, duplicate action ID handling, automatic bidding completion, and private-hand redaction.
 - Backend-neutral multiplayer storage/reconnect primitives: public snapshot records omit full hands, private hands are stored by seat, authoritative sessions can be restored from records, and reconnect views classify accepted/rejected/unknown pending actions.
 - Validated accepted-event replay for restored Forty Two event streams, including runtime envelope checks, deal validation, derived bid/trump/play validation, trick-winner recomputation, hand-score recomputation, and stored-snapshot comparison.
+- Runtime schema parsers for multiplayer network/storage boundaries. Multiplayer action submission, session restore, and reconnect now parse `unknown` payloads before typed engine code trusts them.
 - Initial shared contracts for `GameAction`, `GameEvent`, `GameSnapshot`, `GameActionResult`, and `GameErrorCode`.
 - React Native Testing Library coverage for core scorekeeper flows and AsyncStorage persistence wrapper behavior.
 - GitHub Actions CI for install, typecheck, tests, and non-blocking audit reporting.
@@ -123,7 +125,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 ## Technical Debt
 
 - Full-rules fixtures and local-session helpers are still young and should be consolidated before multiplayer work.
-- Multiplayer restore now validates accepted events before replay, but broader network payload schemas and migration tooling are still missing before network ingestion.
+- Multiplayer restore validates accepted events before replay, and multiplayer actions/storage/reconnect payloads now pass through runtime parsers. Schema migrations and physical backend adapters are still missing.
 - Shared contracts define action/event/snapshot shapes, but the mobile app still does not submit actions through a remote authority.
 - Persistence has a versioned envelope, but no backup/quarantine strategy or user-controlled reset path.
 - There is no centralized error taxonomy. UI currently catches generic `Error` messages from engine/storage.
@@ -139,7 +141,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 3. Connect engine command results to shared events so local replay can be proven before multiplayer.
 4. Harden M3 local practice: persist or explicitly discard practice sessions, improve local game UI states, and extract reusable simulation fixtures.
 5. Expand contract tests around duplicate actions, stale sequences, reconnect snapshots, and unsupported schemas.
-6. Broaden runtime schemas for network action/room/storage payloads and migration handling.
+6. Wire the runtime multiplayer schemas into a physical AWS adapter and add explicit migration handling.
 7. Build the physical AWS backend adapter around the backend-neutral session/storage modules.
 8. Introduce mobile multiplayer room UI after deployed auth and persistence exist.
 
@@ -154,4 +156,4 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - Original game-state docs require deployed server authority and reconnect support; the engine now has backend-neutral authority primitives, but the app remains offline-local.
 - Original database docs mention immutable events; current local persistence still stores mutable full game snapshots, although shared event contracts now exist.
 - The current app includes Expo web dependencies for browser smoke testing, though the product target remains iOS-first mobile.
-- ADR-0002 through ADR-0007 document why M1 is local-first, how server authority should work, why scorekeeper stays separate, why the first multiplayer slice is backend-neutral, why public snapshots are split from private hands, and why restore uses validated replay.
+- ADR-0002 through ADR-0008 document why M1 is local-first, how server authority should work, why scorekeeper stays separate, why the first multiplayer slice is backend-neutral, why public snapshots are split from private hands, why restore uses validated replay, and why multiplayer boundary payloads are parsed at runtime.

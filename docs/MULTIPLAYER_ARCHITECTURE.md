@@ -24,6 +24,7 @@ Implemented now:
 - Restore helpers that rebuild an authoritative session from records.
 - Reconnect helpers that return a redacted latest player view and pending-action status.
 - Validated replay for restored event streams, including forged trick-winner and forged hand-score rejection.
+- Runtime boundary parsers for action envelopes, durable records, public snapshots, private hands, idempotency records, and client reconnect state.
 
 ## Authority Model
 
@@ -92,6 +93,31 @@ Validated replay checks:
 - completed hand score recomputation
 - stored latest snapshot equality after replay
 
+## Runtime Boundary Schemas
+
+The backend-neutral schema module lives in `packages/game-engine/src/multiplayer/schema.ts`.
+
+The current parsers are dependency-free TypeScript guards that accept `unknown`, return typed engine records on success, and throw stable `EngineError` codes on failure.
+
+Boundary parsing is now applied before:
+
+- multiplayer player action submission
+- multiplayer session restore from durable records
+- multiplayer reconnect view creation
+
+Covered payloads:
+
+- `FortyTwoActionEnvelope`
+- room records
+- game event records
+- public snapshot records
+- private hand records
+- action idempotency records
+- aggregate stored-game record bundles
+- client sync/reconnect state
+
+These parsers reject common corrupt or hostile payloads including unsupported schema versions, invalid seats, invalid domino pips, public snapshots that include private hands, event-record metadata mismatches, malformed idempotency records, and malformed reconnect state.
+
 ## Hidden Information
 
 Multiplayer player views and public snapshot records must not expose `snapshot.hands` directly. The current redacted view exposes:
@@ -127,7 +153,7 @@ The current reconnect helper returns:
 
 - Authenticated identity mapping to `playerId`.
 - Physical DynamoDB adapter for the durable records.
-- Broader runtime schema validation for all network payloads and migrations.
+- Schema migration/version-compatibility tooling for future payload changes.
 - Accepted-event validation before initial persistence writes, not only restore.
 - AppSync schema/resolvers and DynamoDB conditional writes.
 - Subscription gap detection.

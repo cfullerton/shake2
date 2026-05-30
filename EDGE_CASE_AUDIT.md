@@ -12,7 +12,7 @@ The weak edge is not normal local gameplay. The weak edge is trust at boundaries
 
 | Area | Edge case | Status | Evidence or next action |
 |---|---|---:|---|
-| Dominoes | Invalid pip values | Partial | Type-level model and helpers exist; add runtime schema checks at persistence/network boundaries. |
+| Dominoes | Invalid pip values | Covered at current boundaries | Type-level model, helper assertions, command tests, and multiplayer runtime parsers reject invalid pips in private-hand and action payloads. |
 | Dominoes | Reversed domino input | Covered | Normalized domino model and canonical key helpers. |
 | Dominoes | Duplicate double-six set entries | Covered | Tests prove exactly 28 unique dominoes. |
 | Dominoes | Count domino total | Covered | Tests prove total count points equal 35. |
@@ -33,7 +33,7 @@ The weak edge is not normal local gameplay. The weak edge is trust at boundaries
 | Bidding | Redeal all pass | Missing | Config type mentions `"redeal"`, but no command behavior exists. |
 | Trump | Non-declarer calls trump | Covered | Command/helper validation rejects invalid actor/declarer. |
 | Trump | Trump called before bidding complete | Covered | Phase validation rejects invalid phase. |
-| Trump | Invalid trump suit | Partial | Type-level union exists; runtime schema validation is still needed. |
+| Trump | Invalid trump suit | Covered at current boundaries | Type-level union, helper assertions, and multiplayer action parsing reject invalid trump suits before command handling. |
 | Trump | Double-high trump ranking | Covered | Tests cover double-high ranking. |
 | Trump | Trump identity over off-suit identity | Covered for default | Tests and helpers use default trump identity behavior. Variant behavior is not implemented. |
 | Trick play | Play before trump | Covered | Command phase validation rejects non-`trickPlay`. |
@@ -81,7 +81,7 @@ The weak edge is not normal local gameplay. The weak edge is trust at boundaries
 
 ## Highest Priority Edge Fixes
 
-1. Broaden runtime schemas and migrations for network action, room, storage, and snapshot payloads.
+1. Add schema migration/version-compatibility tests for future multiplayer payload changes.
 2. Apply validated accepted-event replay before initial persistence writes, not only restore.
 3. Redact hidden information at the bot/client boundary.
 4. Add local full-rules persistence with corruption and unsupported-version tests.
@@ -100,4 +100,4 @@ The weak edge is not normal local gameplay. The weak edge is trust at boundaries
 
 ## Bottom Line
 
-The engine is ready for continued local-play iteration and UI hardening. Multiplayer authority is now partially protected by idempotency, hidden-hand redaction, storage records, and validated restore, but it still needs broader runtime schemas, physical persistence, auth, and deployed reconnect handling.
+The engine is ready for continued local-play iteration and UI hardening. Multiplayer authority is now partially protected by idempotency, hidden-hand redaction, storage records, validated restore, and runtime boundary parsers, but it still needs physical persistence, auth, schema migrations, and deployed reconnect handling.

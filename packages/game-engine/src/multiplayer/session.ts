@@ -48,6 +48,9 @@ import {
   type FortyTwoTrickPlayState,
   type FortyTwoTrumpPhaseState
 } from "../forty-two/state.ts";
+import {
+  parseFortyTwoActionEnvelope
+} from "./schema.ts";
 
 export type MultiplayerRoomStatus =
   | "waiting"
@@ -433,42 +436,45 @@ export function createMultiplayerActionEnvelope<
 
 export function submitMultiplayerGameAction(
   session: MultiplayerGameSession,
-  action: FortyTwoActionEnvelope,
+  action: unknown,
   context: Pick<EngineContext, "newId" | "now">
 ): MultiplayerSubmitActionResult {
-  const stored = action.actionId.trim().length > 0
-    ? session.actionResults[action.actionId]
-    : undefined;
+  let parsedAction: FortyTwoActionEnvelope | null = null;
 
-  if (stored) {
-    if (stored.ok) {
+  try {
+    parsedAction = parseFortyTwoActionEnvelope(action);
+    const stored = parsedAction.actionId.trim().length > 0
+      ? session.actionResults[parsedAction.actionId]
+      : undefined;
+
+    if (stored) {
+      if (stored.ok) {
+        return {
+          duplicate: true,
+          events: stored.events,
+          ok: true,
+          session,
+          snapshot: session.snapshot
+        };
+      }
+
       return {
         duplicate: true,
-        events: stored.events,
-        ok: true,
-        session,
-        snapshot: session.snapshot
+        error: stored.error,
+        ok: false,
+        session
       };
     }
 
-    return {
-      duplicate: true,
-      error: stored.error,
-      ok: false,
-      session
-    };
-  }
+    assertMultiplayerActionAuthorized(session, parsedAction);
 
-  try {
-    assertMultiplayerActionAuthorized(session, action);
-
-    const commandResult = runFortyTwoAction(session.snapshot, action, context);
+    const commandResult = runFortyTwoAction(session.snapshot, parsedAction, context);
 
     if (!commandResult.ok) {
       return storeActionFailure(
         session,
-        action.actionId,
-        action.actorId,
+        parsedAction.actionId,
+        parsedAction.actorId,
         commandResult.error
       );
     }
@@ -499,8 +505,8 @@ export function submitMultiplayerGameAction(
           : session.room,
         snapshot
       },
-      action.actionId,
-      action.actorId,
+      parsedAction.actionId,
+      parsedAction.actorId,
       events
     );
 
@@ -513,7 +519,21 @@ export function submitMultiplayerGameAction(
     };
   } catch (error) {
     if (error instanceof EngineError) {
-      return storeActionFailure(session, action.actionId, action.actorId, error);
+      if (parsedAction) {
+        return storeActionFailure(
+          session,
+          parsedAction.actionId,
+          parsedAction.actorId,
+          error
+        );
+      }
+
+      return {
+        duplicate: false,
+        error,
+        ok: false,
+        session
+      };
     }
 
     throw error;
