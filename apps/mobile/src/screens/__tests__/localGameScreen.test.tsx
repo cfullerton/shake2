@@ -108,4 +108,66 @@ describe("LocalGameScreen", () => {
       randomSpy.mockRestore();
     }
   });
+
+  it("keeps bot animation active when the human leads and wins a trick", () => {
+    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0.99);
+
+    try {
+      const view = render(
+        <LocalGameScreen
+          navigation={{} as never}
+          route={{ params: { targetMarks: 7 } } as never}
+        />
+      );
+
+      fireEvent.press(view.getByText("Pass"));
+      act(() => { jest.runAllTimers(); });
+
+      fireEvent.press(view.getByText("Call Sixes"));
+      act(() => { jest.runAllTimers(); });
+
+      let foundLeadWinAnimation = false;
+
+      for (let turn = 0; turn < 7; turn += 1) {
+        const legalPlayButton = view.queryAllByLabelText(/^Select \d-\d$/)[0];
+
+        if (!legalPlayButton) {
+          break;
+        }
+
+        fireEvent.press(legalPlayButton);
+        const playButton = view.queryByText(/^Play \d-\d$/);
+
+        if (!playButton) {
+          break;
+        }
+
+        fireEvent.press(playButton);
+
+        const hasNoVisibleCurrentPlays = view.queryAllByLabelText(/played \d-\d$/).length === 0;
+        const showsNewLead = Boolean(view.queryByText("You lead this trick."));
+        const isAnimatingBots = Boolean(view.queryByText("Bots are playing…"));
+
+        if (hasNoVisibleCurrentPlays && showsNewLead && isAnimatingBots) {
+          foundLeadWinAnimation = true;
+
+          act(() => { jest.advanceTimersByTime(800); });
+          expect(view.queryByText("Bots are playing…")).toBeTruthy();
+
+          act(() => { jest.advanceTimersByTime(800); });
+          expect(view.queryByText("Bots are playing…")).toBeTruthy();
+
+          act(() => { jest.runAllTimers(); });
+          expect(view.queryByText("Bots are playing…")).toBeNull();
+          break;
+        }
+
+        act(() => { jest.runAllTimers(); });
+      }
+
+      expect(foundLeadWinAnimation).toBe(true);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
 });
