@@ -23,7 +23,9 @@ This workspace is the first backend boundary for multiplayer Texas 42. It is int
 
 - `src/dynamodb/store.ts`
   - Defines `MultiplayerStore`.
-  - No AWS SDK client exists yet.
+  - Implements `DynamoDBMultiplayerStore` with AWS SDK v3 DynamoDB DocumentClient commands.
+  - Supports loading game records, loading one idempotency result, and committing transaction intents.
+  - Is unit-tested with a mocked client and does not require AWS credentials in tests.
 
 - `src/auth/identity.ts`
   - Defines a simple mocked identity extraction boundary.
@@ -36,10 +38,30 @@ This workspace is the first backend boundary for multiplayer Texas 42. It is int
 - No deployed AWS resources.
 - No public AppSync schema or API.
 - No Cognito user pool or authorizer.
-- No real DynamoDB client.
+- No provisioned DynamoDB table.
+- No production Lambda environment wiring.
 - No subscriptions.
 - No frontend multiplayer UI.
 - No game-rule changes.
+
+## Configuration
+
+The DynamoDB store keeps all environment and resource names injected. It does not hardcode AWS accounts, regions, credentials, or table names.
+
+Required when constructing from environment:
+
+```text
+SHAKE2_MULTIPLAYER_TABLE_NAME
+SHAKE2_ROOM_GAME_ID_INDEX_NAME
+```
+
+Optional:
+
+```text
+AWS_REGION
+```
+
+The room game ID index must allow lookup of room metadata by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 
 ## Test Commands
 
@@ -58,8 +80,8 @@ npm test
 
 ## Next Steps
 
-1. Add a real DynamoDB adapter package or module that executes the already-tested transaction intents with AWS SDK `TransactWriteItems`.
-2. Map DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes.
-3. Add an AppSync schema draft for `submitGameAction`, room queries, snapshot queries, and room/game subscriptions.
-4. Add Cognito identity mapping from authenticated user IDs to multiplayer `playerId`.
-5. Add reconnect/query resolver shells that return redacted player views and pending-action status.
+1. Map DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes.
+2. Add an AppSync schema draft for `submitGameAction`, room queries, snapshot queries, and room/game subscriptions.
+3. Add Cognito identity mapping from authenticated user IDs to multiplayer `playerId`.
+4. Add reconnect/query resolver shells that return redacted player views and pending-action status.
+5. Provision the DynamoDB table and indexes with infrastructure code after the API/auth boundary is ready.
