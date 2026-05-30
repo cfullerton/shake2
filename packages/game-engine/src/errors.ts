@@ -5,6 +5,7 @@ export type EngineErrorCode =
   | "INVALID_ACTOR"
   | "INVALID_CONTEXT"
   | "INVALID_PHASE"
+  | "INVALID_SEAT"
   | "INVALID_BID"
   | "INVALID_TRUMP"
   | "INVALID_DOMINO"
