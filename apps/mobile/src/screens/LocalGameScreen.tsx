@@ -416,7 +416,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                   );
                 }
               }}
-              variant="ghost"
+              style={styles.bidButton}
               accessibilityLabel="Pass"
             >
               Pass
@@ -893,7 +893,7 @@ function InfoTile({
 }) {
   return (
     <View style={[styles.statusItem, compact ? styles.compactStatusItem : null]}>
-      <Text style={styles.handLabel}>{label}</Text>
+      <Text style={styles.statusLabel}>{label}</Text>
       <Text style={[styles.statusValue, compact ? styles.compactStatusValue : null]}>
         {value}
       </Text>
@@ -1423,6 +1423,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minWidth: 132,
     padding: spacing.sm
+  },
+  statusLabel: {
+    color: palette.muted,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: letterSpacing.caps,
+    textTransform: "uppercase"
   },
   statusValue: {
     color: palette.ink,
