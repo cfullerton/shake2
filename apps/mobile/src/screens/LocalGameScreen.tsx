@@ -302,9 +302,7 @@ function formatPlayKey(play: LegalDominoPlay): string {
 }
 
 function formatPlayLabel(play: LegalDominoPlay): string {
-  return play.ledSuit
-    ? `${formatDomino(play.domino)} as ${formatTrumpSuit(play.ledSuit)}`
-    : formatDomino(play.domino);
+  return formatDomino(play.domino);
 }
 
 function createMobileEngineContext(): EngineContext {

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createDomino,
   determineTrickWinner,
+  getLegalLedSuits,
   isEngineError,
   isTrickComplete,
   playDominoToTrick,
@@ -78,6 +79,11 @@ test("allows sloughing only when player cannot follow led suit", () => {
   assert.equal(trick.playedDominoes.length, 2);
 });
 
+test("uses the high pip as the only led suit for non-trump dominoes", () => {
+  assert.deepEqual(getLegalLedSuits(createDomino(6, 4), "fives"), ["sixes"]);
+  assert.deepEqual(getLegalLedSuits(createDomino(4, 2), "sixes"), ["fours"]);
+});
+
 test("rejects play out of turn", () => {
   const trick = startTrick(0);
   const hands = createHands({
@@ -105,11 +111,11 @@ test("rejects a domino not held by the player", () => {
 test("rejects led suit that is illegal for the led domino", () => {
   const trick = startTrick(0);
   const hands = createHands({
-    0: [createDomino(6, 4)]
+    0: [createDomino(5, 4)]
   });
 
   assert.throws(
-    () => play(trick, hands, 0, createDomino(6, 4), "fours"),
+    () => play(trick, hands, 0, createDomino(5, 4), "fours"),
     (error) => isEngineError(error) && error.code === "INVALID_TRUMP"
   );
 });

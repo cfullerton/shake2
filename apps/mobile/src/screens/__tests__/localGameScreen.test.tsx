@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 
 import { LocalGameScreen } from "../LocalGameScreen";
 
@@ -24,5 +24,25 @@ describe("LocalGameScreen", () => {
       randomSpy.mockRestore();
     }
   });
-});
 
+  it("shows lead plays as dominoes without suit-choice labels", () => {
+    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0.99);
+
+    try {
+      const view = render(
+        <LocalGameScreen
+          navigation={{} as never}
+          route={{ params: { targetMarks: 7 } } as never}
+        />
+      );
+
+      fireEvent.press(view.getByText("Pass"));
+      fireEvent.press(view.getByText("Sixes"));
+
+      expect(view.getByText("Trick Play")).toBeTruthy();
+      expect(view.queryAllByText(/ as /).length).toBe(0);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+});

@@ -76,6 +76,7 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Standard numeric contract model after declarer calls trump.
 - Trump identity and trump ranking with double highest.
 - Trick model with leader, led domino, led suit, and played dominoes.
+- Canonical led-suit selection for local play: a non-trump domino always leads its higher pip suit.
 - Legal play validation for turn order, hand ownership, led-suit legality, and follow-suit.
 - Trick winner determination by highest trump, then highest led-suit domino.
 - Completed hand scoring by winning team.

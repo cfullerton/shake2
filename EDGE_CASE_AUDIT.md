@@ -40,6 +40,7 @@ The weak edge is not normal local gameplay. The weak edge is trust at boundaries
 | Trick play | Invalid turn | Covered | Tests cover invalid turn. |
 | Trick play | Domino not in hand | Covered | Tests cover missing domino. |
 | Trick play | Leader omits led suit | Covered | Helper requires led suit on first play. |
+| Trick play | Leader chooses lower suit for two-pip domino | Covered | Local standard play canonicalizes led suit to the higher pip and rejects lower-suit leads. |
 | Trick play | Leader chooses illegal led suit | Covered | Helper validates led suit for led domino. |
 | Trick play | Player sloughs while holding led suit | Covered | Tests cover must-follow failures. |
 | Trick play | Player sloughs when unable to follow | Covered | Tests cover legal sloughing. |
@@ -101,4 +102,3 @@ The weak edge is not normal local gameplay. The weak edge is trust at boundaries
 ## Bottom Line
 
 The engine is ready for continued local-play iteration and UI hardening. It is not ready to be treated as a multiplayer authority until accepted-event validation, runtime schemas, idempotency, persistence, and hidden-information boundaries are added.
-

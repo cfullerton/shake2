@@ -207,11 +207,7 @@ export function getLegalLedSuits(
 
   const highSuit = DOMINO_SUIT_BY_PIP[domino.high];
 
-  if (isDouble(domino)) {
-    return [highSuit];
-  }
-
-  return [highSuit, DOMINO_SUIT_BY_PIP[domino.low]];
+  return [highSuit];
 }
 
 export function canFollowSuit(
