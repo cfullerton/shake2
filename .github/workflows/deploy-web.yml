@@ -33,6 +33,13 @@ jobs:
           : "${AWS_ROLE_TO_ASSUME:?Set GitHub repository variable AWS_ROLE_TO_ASSUME}"
           : "${AWS_S3_BUCKET:?Set GitHub repository variable AWS_S3_BUCKET}"
 
+      - name: Print OIDC trust context
+        run: |
+          echo "GitHub repository: $GITHUB_REPOSITORY"
+          echo "GitHub ref: $GITHUB_REF"
+          echo "Expected IAM subject: repo:${GITHUB_REPOSITORY}:ref:${GITHUB_REF}"
+          echo "AWS role ARN: $AWS_ROLE_TO_ASSUME"
+
       - name: Check out repository
         uses: actions/checkout@v4
 

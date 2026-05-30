@@ -265,3 +265,6 @@ Outputs:
   GitHubActionsRoleArn:
     Description: Role ARN to store in GitHub repository variable AWS_ROLE_TO_ASSUME.
     Value: !GetAtt GitHubDeployRole.Arn
+  GitHubOidcSubject:
+    Description: GitHub OIDC subject allowed to assume the deploy role.
+    Value: !Sub "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/${GitHubBranch}"

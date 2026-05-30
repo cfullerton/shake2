@@ -28,6 +28,15 @@ No AWS access keys should be stored in GitHub.
 
 2. Deploy the CloudFormation stack.
 
+   For this repository, use:
+
+   - `GitHubOwner=cfullerton`
+   - `GitHubRepo=shake2`
+   - `GitHubBranch=main`
+
+   The owner must match the GitHub repository owner, not the local macOS user or
+   AWS account name. GitHub OIDC trust policies are case-sensitive.
+
    Default CloudFront domain only:
 
    ```sh
@@ -36,7 +45,7 @@ No AWS access keys should be stored in GitHub.
      --template-file infra/aws/web-hosting.yml \
      --capabilities CAPABILITY_NAMED_IAM \
      --parameter-overrides \
-       GitHubOwner=<github-owner> \
+       GitHubOwner=cfullerton \
        GitHubRepo=shake2 \
        GitHubBranch=main \
        GitHubOidcProviderArn=arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com
@@ -51,7 +60,7 @@ No AWS access keys should be stored in GitHub.
      --template-file infra/aws/web-hosting.yml \
      --capabilities CAPABILITY_NAMED_IAM \
      --parameter-overrides \
-       GitHubOwner=<github-owner> \
+       GitHubOwner=cfullerton \
        GitHubRepo=shake2 \
        GitHubBranch=main \
        GitHubOidcProviderArn=arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com \
@@ -72,7 +81,7 @@ No AWS access keys should be stored in GitHub.
      --template-file infra/aws/web-hosting.yml \
      --capabilities CAPABILITY_NAMED_IAM \
      --parameter-overrides \
-       GitHubOwner=<github-owner> \
+       GitHubOwner=cfullerton \
        GitHubRepo=shake2 \
        GitHubBranch=main \
        GitHubOidcProviderArn=arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com \
@@ -108,6 +117,39 @@ If a custom domain is configured, the stack also outputs `CustomDomainUrl` and
 `CertificateArn`.
 
 The workflow deploys on pushes to `main` and can also be run manually.
+
+## OIDC Troubleshooting
+
+If the workflow fails at `Configure AWS credentials` with an assume-role or
+`AssumeRoleWithWebIdentity` access denied error, compare these two values:
+
+1. The workflow log line from `Print OIDC trust context`:
+
+   ```text
+   Expected IAM subject: repo:cfullerton/shake2:ref:refs/heads/main
+   ```
+
+2. The CloudFormation stack output named `GitHubOidcSubject`.
+
+They must match exactly. If they do not, update the CloudFormation stack with the
+correct `GitHubOwner`, `GitHubRepo`, or `GitHubBranch` parameter.
+
+Common causes:
+
+- `GitHubOwner` was set to `connerfullerton` instead of `cfullerton`.
+- The workflow was manually run from a branch other than `main`.
+- The `AWS_ROLE_TO_ASSUME` variable points to a role from a different AWS account
+  or older stack.
+- The IAM OIDC provider does not exist in the target AWS account, or its audience
+  is not `sts.amazonaws.com`.
+
+You can inspect the stack values with:
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name shake2-web \
+  --query "Stacks[0].Outputs"
+```
 
 ## Local Build Check
 
