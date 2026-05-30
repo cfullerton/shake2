@@ -43,7 +43,8 @@ packages/game-engine/src
 |-- multiplayer/
 |   |-- schema.ts
 |   |-- session.ts
-|   `-- storage.ts
+|   |-- storage.ts
+|   `-- write-plan.ts
 `-- __tests__/
     |-- dominoes.test.ts
     |-- engine-primitives.test.ts
@@ -60,7 +61,8 @@ packages/game-engine/src
     |-- local-play-session.test.ts
     |-- multiplayer-schema.test.ts
     |-- multiplayer-session.test.ts
-    `-- multiplayer-storage.test.ts
+    |-- multiplayer-storage.test.ts
+    `-- multiplayer-write-plan.test.ts
 ```
 
 The mobile app now has two local modes: the original scorekeeper flow and a minimal local practice flow backed by the full Texas 42 rules modules.
@@ -126,6 +128,7 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Multiplayer reconnect views return a redacted player snapshot plus accepted, rejected, and unknown pending action IDs.
 - Validated Forty Two replay checks accepted event envelopes and recomputes derived bid, trump, play, trick-winner, and hand-score data before restore.
 - Runtime multiplayer boundary parsers validate action envelopes, room records, event records, public snapshot records, private hand records, action idempotency records, and client reconnect state before command, restore, or reconnect code trusts them.
+- Backend-neutral multiplayer write plans describe future conditional persistence writes for game start, accepted actions, and rejected actions. Accepted write plans validate event replay before emitting records.
 
 ## Test Status
 
@@ -175,6 +178,7 @@ Important covered invariants:
 - Multiplayer storage tests for public/private hand separation, full session restore, accepted/rejected pending-action reconnect handling, missing private-hand rejection, and replay equality.
 - Validated replay tests for command-emitted event streams, forged trick winners, forged hand scores, unsupported event schema versions, and forged stored hand-dealt records.
 - Multiplayer schema tests for JSON-roundtripped storage records, hidden-hand leakage, bad seats, invalid private-hand dominoes, missing event fields, unsupported action schemas, malformed idempotency records, malformed actions, and malformed reconnect state.
+- Multiplayer write-plan tests for game-start records, accepted-action records, rejected-action idempotency, forged accepted events, public snapshot redaction, restore compatibility, and conditional snapshot/private-hand expectations.
 
 Latest known verification for this report:
 
@@ -221,13 +225,13 @@ This means the repository has implemented and tested the core local hand lifecyc
 - There is no standalone `COMPLETE_HAND` command; this is acceptable for the current automatic lifecycle but should be an explicit ADR or implementation note if retained.
 - Rule constants now route through `standardRules`, but existing modules still expose compatibility constants.
 - Local practice screen consumes the rules engine, but only as an in-memory vertical slice.
-- A multiplayer-safe authority and storage model has started in code, but it is backend-neutral only.
+- A multiplayer-safe authority, storage, schema, and write-plan model has started in code, but it is backend-neutral only.
 - No AWS, AppSync, DynamoDB, Cognito, physical durable room state, or deployed reconnect endpoint exists.
 - Only legal-random bots exist; no heuristic or advanced strategy exists.
 - No variant contracts such as mark bids, 84, plunge, splash, nello, sevens, or follow-me.
-- Runtime validation now exists for accepted Forty Two event replay and multiplayer action/storage/reconnect boundary payloads. Version migrations and physical adapter compatibility tests are still missing.
+- Runtime validation now exists for accepted Forty Two event replay, multiplayer action/storage/reconnect boundary payloads, and accepted-event write planning. Version migrations and physical adapter compatibility tests are still missing.
 - No package-local test utilities for deterministic hands; integration tests currently build fixtures inline.
-- No persistence adapter exists for full-rules snapshots/events.
+- No physical persistence adapter exists for full-rules snapshots/events.
 - No physical multiplayer event log, snapshot table, private-hand table, or idempotency table exists yet.
 - Multiplayer redaction exists for player views, but bots and local practice still use full snapshots.
 
@@ -235,7 +239,7 @@ This means the repository has implemented and tested the core local hand lifecyc
 
 - The rules modules now have end-to-end command tests from actual dealt hands through hand scoring, but the deterministic fixture helpers are still test-local.
 - `scoreCompletedHand` trusts caller-provided trick winners. Validated replay now recomputes trick winners before restore, but direct scoring callers still need to remain trusted or separately validated.
-- The play command derives trick winners before scoring, and restored accepted-event streams now reject forged trick winners and forged hand scores. Initial persistence writes should still use the same validated path at the API boundary.
+- The play command derives trick winners before scoring, restored accepted-event streams reject forged trick winners and forged hand scores, and write plans validate accepted streams before persistence records are emitted.
 - The bidding, trump, trick, scoring, and next-hand transitions are connected for the local command path, but accepted-event replay intentionally trusts accepted events.
 - Constants are now behind `RuleConfig`, but variant-specific behavior still needs command-level enforcement.
 - Current full-rules replay is deterministic for accepted events, and command-emitted events replay to the same state through post-hand and game-complete outcomes.
@@ -247,10 +251,10 @@ This means the repository has implemented and tested the core local hand lifecyc
 
 1. Move repeated rules test fixtures into `packages/game-engine/src/test-utils`.
 2. Document the automatic hand-completion decision in an ADR or implementation note if a standalone `COMPLETE_HAND` command remains intentionally omitted.
-3. Apply validated replay before initial multiplayer persistence writes, not only restore.
+3. Build the physical AWS adapter around backend-neutral multiplayer write plans.
 4. Add local-practice persistence or explicit resume/discard UX if practice games should survive app restarts.
 5. Extend schema migration coverage once the physical AWS adapter exists.
-6. Build the physical AWS adapter for room/event/snapshot/private-hand/idempotency records.
+6. Add adapter-level conditional-write and migration tests once AWS record translation exists.
 7. Defer advanced bots, tournaments, and analytics until standard multiplayer is stable.
 
 ## Architecture Notes
@@ -258,5 +262,5 @@ This means the repository has implemented and tested the core local hand lifecyc
 - The current separation between scorekeeper mode and full rules mode is still correct.
 - The rules engine is pure TypeScript and remains UI-independent.
 - The current implementation favors small functional modules, serializable state shapes, accepted-event replay, and narrow command slices over an early monolithic reducer. Hand completion is currently automatic from `PLAY_DOMINO`, which keeps the normal rules path simple but should be documented before server-authoritative multiplayer work.
-- The docs describe a future server-authoritative multiplayer engine. The new backend-neutral multiplayer session, storage, validated replay, and runtime schema modules are the first code-level steps in that direction, but they still need auth, physical persistence, migrations, and deployed reconnect handling before production use.
+- The docs describe a future server-authoritative multiplayer engine. The new backend-neutral multiplayer session, storage, validated replay, runtime schema, and write-plan modules are the first code-level steps in that direction, but they still need auth, physical persistence, migrations, and deployed reconnect handling before production use.
 - The biggest remaining architecture deviation is sequence: later rule primitives were implemented before all command validation. `RuleConfig`, `FortyTwoState`, event envelopes, replay, setup/bidding/trump commands, play/trick-completion commands, and automatic hand/game completion now exist, so the next correction should harden full-hand integration fixtures and accepted-event validation boundaries.

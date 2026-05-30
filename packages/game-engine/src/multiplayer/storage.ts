@@ -166,11 +166,11 @@ export function createMultiplayerStorageRecords(
   options: CreateMultiplayerStorageRecordsOptions = {}
 ): MultiplayerStoredGameRecords {
   return {
-    events: session.events.map(createEventRecord),
-    idempotency: createIdempotencyRecords(session, options),
-    privateHands: createPrivateHandRecords(session),
-    room: createRoomRecord(session.room),
-    snapshot: createSnapshotRecord(session.snapshot)
+    events: session.events.map(createMultiplayerGameEventRecord),
+    idempotency: createMultiplayerActionIdempotencyRecords(session, options),
+    privateHands: createMultiplayerPrivateHandRecords(session),
+    room: createMultiplayerRoomRecord(session.room),
+    snapshot: createMultiplayerSnapshotRecord(session.snapshot)
   };
 }
 
@@ -236,7 +236,9 @@ export function getMultiplayerReconnectView(
   });
 }
 
-function createRoomRecord(room: MultiplayerRoom): MultiplayerRoomRecord {
+export function createMultiplayerRoomRecord(
+  room: MultiplayerRoom
+): MultiplayerRoomRecord {
   return {
     createdAt: room.createdAt,
     ...(room.gameId !== undefined ? { gameId: room.gameId } : {}),
@@ -251,7 +253,7 @@ function createRoomRecord(room: MultiplayerRoom): MultiplayerRoomRecord {
   };
 }
 
-function createEventRecord(
+export function createMultiplayerGameEventRecord(
   event: FortyTwoEventEnvelope
 ): MultiplayerGameEventRecord {
   return {
@@ -270,7 +272,7 @@ function createEventRecord(
   };
 }
 
-function createSnapshotRecord(
+export function createMultiplayerSnapshotRecord(
   snapshot: FortyTwoSnapshotEnvelope
 ): MultiplayerSnapshotRecord {
   return {
@@ -290,7 +292,7 @@ function createPublicSnapshot(
   return createMultiplayerVisibleSnapshot(snapshot, null);
 }
 
-function createPrivateHandRecords(
+export function createMultiplayerPrivateHandRecords(
   session: MultiplayerGameSession
 ): readonly MultiplayerPrivateHandRecord[] {
   const state = session.snapshot.snapshot;
@@ -322,7 +324,7 @@ function createPrivateHandRecords(
   });
 }
 
-function createIdempotencyRecords(
+export function createMultiplayerActionIdempotencyRecords(
   session: MultiplayerGameSession,
   options: CreateMultiplayerStorageRecordsOptions
 ): readonly MultiplayerActionIdempotencyRecord[] {
@@ -370,6 +372,27 @@ function createIdempotencyRecords(
   }
 
   return records;
+}
+
+export function createMultiplayerActionIdempotencyRecord(
+  session: MultiplayerGameSession,
+  actionId: string,
+  options: CreateMultiplayerStorageRecordsOptions = {}
+): MultiplayerActionIdempotencyRecord {
+  const result = session.actionResults[actionId];
+
+  if (!result) {
+    throw new EngineError("GAME_NOT_FOUND", "Cannot persist missing action result.");
+  }
+
+  const record = createMultiplayerActionIdempotencyRecords(session, options)
+    .find((idempotencyRecord) => idempotencyRecord.actionId === actionId);
+
+  if (!record) {
+    throw new EngineError("GAME_NOT_FOUND", "Cannot persist missing action result.");
+  }
+
+  return record;
 }
 
 function sortEventRecords(
