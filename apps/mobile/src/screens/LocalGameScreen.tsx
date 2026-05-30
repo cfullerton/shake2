@@ -5,14 +5,20 @@ import {
   continueLocalGameSession,
   createLocalGameSession,
   formatDomino,
+  getDominoKey,
+  getLocalGameActivityLog,
+  getLocalGameCurrentTurnSeat,
   getLocalGameView,
   playLocalGameDomino,
   restartLocalGameSession,
   scoreCompletedTricks,
+  sortDominoesForLocalPlay,
   submitLocalGameBid,
   type EngineContext,
+  type FortyTwoState,
   type LegalDominoPlay,
   type LocalGameSession,
+  type SeatIndex,
   type TrumpSuit
 } from "@shake2/game-engine";
 import { Play, RotateCcw } from "lucide-react-native";
@@ -38,16 +44,31 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       contextRef.current
     )
   );
+  const [selectedPlayKey, setSelectedPlayKey] = useState<string | null>(null);
   const view = getLocalGameView(session);
   const state = session.snapshot.snapshot;
   const humanHand = "hands" in state ? state.hands[session.humanSeat] : [];
-  const humanHandText = humanHand.map(formatDomino).join("  ");
+  const activeTrumpSuit = state.phase === "trickPlay"
+    ? state.contract.trumpSuit
+    : undefined;
+  const sortedHumanHand = sortDominoesForLocalPlay(humanHand, activeTrumpSuit);
+  const humanHandText = sortedHumanHand.map(formatDomino).join("  ");
   const currentTrick = state.phase === "trickPlay" ? state.currentTrick : null;
   const currentHandScore = state.phase === "trickPlay"
     ? scoreCompletedTricks(state.completedTricks)
     : null;
   const trumpSuitLabel = state.phase === "trickPlay"
     ? formatTrumpSuit(state.contract.trumpSuit)
+    : null;
+  const activityLog = getLocalGameActivityLog(session, 7);
+  const turnSeat = getLocalGameCurrentTurnSeat(session);
+  const legalPlayByDominoKey = new Map(
+    view.kind === "trickPlay"
+      ? view.legalPlays.map((play) => [getDominoKey(play.domino), play])
+      : []
+  );
+  const selectedPlay = view.kind === "trickPlay" && selectedPlayKey
+    ? view.legalPlays.find((play) => formatPlayKey(play) === selectedPlayKey) ?? null
     : null;
 
   const phaseTitle = useMemo(() => {
@@ -69,7 +90,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
 
   function updateSession(run: () => LocalGameSession) {
     try {
-      setSession(run());
+      const nextSession = run();
+      setSelectedPlayKey(null);
+      setSession(nextSession);
     } catch (error) {
       Alert.alert(
         "Action failed",
@@ -119,6 +142,20 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
         />
       </View>
 
+      <View style={styles.panel}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.panelTitle}>Status</Text>
+          <Text style={styles.meta}>Latest: {getLatestActivityText(activityLog)}</Text>
+        </View>
+        <View style={styles.infoGrid}>
+          <InfoTile label="Turn" value={formatTurnLabel(state, turnSeat, session.humanSeat)} />
+          <InfoTile label="Dealer" value={formatSeatLabel(state, state.dealer, session.humanSeat)} />
+          <InfoTile label="Current bid" value={formatCurrentBid(state, session.humanSeat)} />
+          <InfoTile label="Trump" value={formatTrumpStatus(state)} />
+          <InfoTile label="Previous trick" value={formatPreviousTrickWinner(state, session.humanSeat)} />
+        </View>
+      </View>
+
       {view.kind === "bidding" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Your bid</Text>
@@ -140,8 +177,13 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                 }
                 style={styles.gridButton}
                 variant={option.bid.kind === "pass" ? "secondary" : "primary"}
+                accessibilityLabel={
+                  option.bid.kind === "numeric"
+                    ? `Bid ${option.bid.amount}`
+                    : "Pass"
+                }
               >
-                {option.label}
+                {option.bid.kind === "numeric" ? `Bid ${option.label}` : option.label}
               </Button>
             ))}
           </View>
@@ -168,8 +210,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                   )
                 }
                 style={styles.gridButton}
+                accessibilityLabel={`Call ${formatTrumpSuit(trumpSuit)} trump`}
               >
-                {formatTrumpSuit(trumpSuit)}
+                {`Call ${formatTrumpSuit(trumpSuit)}`}
               </Button>
             ))}
           </View>
@@ -197,64 +240,156 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Current trick</Text>
+            {currentTrick ? (
+              <View style={styles.trickMetaRow}>
+                <Text style={styles.meta}>
+                  Leader: {formatSeatLabel(state, currentTrick.leader, session.humanSeat)}
+                </Text>
+                <Text style={styles.meta}>
+                  Led: {currentTrick.ledSuit ? formatTrumpSuit(currentTrick.ledSuit) : "Not led yet"}
+                </Text>
+              </View>
+            ) : null}
             {currentTrick && currentTrick.playedDominoes.length > 0 ? (
               <View style={styles.trickList}>
                 {currentTrick.playedDominoes.map((play) => (
                   <Text key={`${play.seat}-${formatDomino(play.domino)}`} style={styles.meta}>
-                    {seatNames[play.seat]} played {formatDomino(play.domino)}
+                    {formatSeatLabel(state, play.seat, session.humanSeat)} played{" "}
+                    {formatDomino(play.domino)}
                   </Text>
                 ))}
               </View>
             ) : (
-              <Text style={styles.copy}>You lead this trick.</Text>
+              <Text style={styles.copy}>
+                {turnSeat === session.humanSeat
+                  ? "You lead this trick."
+                  : `${formatSeatLabel(state, turnSeat, session.humanSeat)} leads this trick.`}
+              </Text>
             )}
           </View>
 
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Your hand</Text>
-            <Text style={styles.handText} testID="local-game-human-hand">
-              {humanHandText}
-            </Text>
-            <View style={styles.buttonGrid}>
-              {view.legalPlays.map((play) => (
-                <Button
-                  key={formatPlayKey(play)}
-                  onPress={() =>
-                    updateSession(() =>
-                      playLocalGameDomino(session, play, contextRef.current)
-                    )
-                  }
-                  style={styles.gridButton}
-                >
-                  {formatPlayLabel(play)}
-                </Button>
-              ))}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.panelTitle}>Your hand</Text>
+              <Text style={styles.meta}>
+                {selectedPlay
+                  ? `${formatDomino(selectedPlay.domino)} selected`
+                  : "Select a highlighted domino"}
+              </Text>
             </View>
+            <View style={styles.dominoGrid} testID="local-game-human-hand">
+              {sortedHumanHand.map((domino) => {
+                const dominoKey = getDominoKey(domino);
+                const legalPlay = legalPlayByDominoKey.get(dominoKey);
+                const playKey = legalPlay ? formatPlayKey(legalPlay) : dominoKey;
+                const isSelected = selectedPlayKey === playKey;
+
+                return (
+                  <Button
+                    accessibilityLabel={
+                      legalPlay
+                        ? `Select ${formatDomino(domino)}`
+                        : `${formatDomino(domino)} cannot be played now`
+                    }
+                    disabled={!legalPlay}
+                    key={dominoKey}
+                    onPress={() => {
+                      if (legalPlay) {
+                        setSelectedPlayKey(playKey);
+                      }
+                    }}
+                    style={[
+                      styles.dominoButton,
+                      isSelected ? styles.selectedDominoButton : null,
+                      !legalPlay ? styles.illegalDominoButton : null
+                    ]}
+                    variant={legalPlay ? "secondary" : "ghost"}
+                  >
+                    {formatDomino(domino)}
+                  </Button>
+                );
+              })}
+            </View>
+            <Button
+              accessibilityLabel={
+                selectedPlay
+                  ? `Play ${formatDomino(selectedPlay.domino)}`
+                  : "Choose a domino before playing"
+              }
+              disabled={!selectedPlay}
+              onPress={() =>
+                selectedPlay
+                  ? updateSession(() =>
+                      playLocalGameDomino(session, selectedPlay, contextRef.current)
+                    )
+                  : undefined
+              }
+            >
+              {selectedPlay ? `Play ${formatDomino(selectedPlay.domino)}` : "Choose a domino"}
+            </Button>
           </View>
         </>
       ) : null}
+
+      {activityLog.length > 0 ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Activity</Text>
+          <View style={styles.activityList}>
+            {activityLog.map((entry) => (
+              <Text key={entry.id} style={styles.meta}>
+                {entry.text}
+              </Text>
+            ))}
+          </View>
+        </View>
+      ) : (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Activity</Text>
+          <Text style={styles.copy}>No table activity yet.</Text>
+        </View>
+      )}
 
       {view.kind === "handSummary" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>
             {view.summary.handScore.outcome === "made" ? "Bid made" : "Bid set"}
           </Text>
+          <View style={styles.infoGrid}>
+            <InfoTile
+              label="Bid"
+              value={`${view.summary.handScore.bidAmount} by ${state.teams[view.summary.handScore.biddingTeamId].name}`}
+            />
+            <InfoTile
+              label="Points"
+              value={`Team A ${view.summary.handScore.teamPoints.teamA} · Team B ${view.summary.handScore.teamPoints.teamB}`}
+            />
+            <InfoTile
+              label="Tricks"
+              value={`Team A ${view.summary.handScore.teamTrickCounts.teamA} · Team B ${view.summary.handScore.teamTrickCounts.teamB}`}
+            />
+            <InfoTile
+              label="Marks"
+              value={`Team A +${view.summary.handScore.markAwards.teamA} · Team B +${view.summary.handScore.markAwards.teamB}`}
+            />
+            <InfoTile
+              label="Next dealer"
+              value={state.phase === "setup"
+                ? formatSeatLabel(state, state.dealer, session.humanSeat)
+                : "Game complete"}
+            />
+          </View>
           <Text style={styles.copy}>
             Bidding team scored {view.summary.handScore.biddingTeamPoints} of{" "}
-            {view.summary.handScore.bidAmount}. Team A {view.summary.handScore.teamPoints.teamA},
-            Team B {view.summary.handScore.teamPoints.teamB}.
-          </Text>
-          <Text style={styles.meta}>
-            Marks awarded: Team A +{view.summary.handScore.markAwards.teamA}, Team B +
-            {view.summary.handScore.markAwards.teamB}
+            {view.summary.handScore.bidAmount}.
           </Text>
           <Button
+            accessibilityLabel="Start next hand"
             icon={<Play color={palette.surface} size={18} />}
             onPress={() =>
               updateSession(() => continueLocalGameSession(session, contextRef.current))
             }
           >
-            Next Hand
+            Deal Next Hand
           </Button>
         </View>
       ) : null}
@@ -264,10 +399,20 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           <Text style={styles.panelTitle}>
             {state.teams[view.summary.winningTeamId].name} wins
           </Text>
-          <Text style={styles.copy}>
-            Final score: Team A {state.marks.teamA}, Team B {state.marks.teamB}.
-          </Text>
+          <View style={styles.infoGrid}>
+            <InfoTile
+              label="Final marks"
+              value={`Team A ${state.marks.teamA} · Team B ${state.marks.teamB}`}
+            />
+            {session.lastHandSummary ? (
+              <InfoTile
+                label="Final hand"
+                value={`${session.lastHandSummary.handScore.outcome === "made" ? "Bid made" : "Bid set"} · Team A ${session.lastHandSummary.handScore.teamPoints.teamA} · Team B ${session.lastHandSummary.handScore.teamPoints.teamB}`}
+              />
+            ) : null}
+          </View>
           <Button
+            accessibilityLabel="Start another local game"
             icon={<Play color={palette.surface} size={18} />}
             onPress={handleRestart}
           >
@@ -278,15 +423,18 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
 
       {view.kind === "waiting" ? (
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Bots are thinking</Text>
-          <Text style={styles.copy}>The local session is resolving automatic actions.</Text>
+          <Text style={styles.panelTitle}>Resolving table</Text>
+          <Text style={styles.copy}>
+            Bots are taking legal actions. Refresh if the table does not advance.
+          </Text>
           <Button
+            accessibilityLabel="Refresh local game"
             onPress={() =>
               updateSession(() => applyLocalHumanAction(session, contextRef.current))
             }
             variant="secondary"
           >
-            Refresh
+            Refresh Table
           </Button>
         </View>
       ) : null}
@@ -325,8 +473,109 @@ function formatPlayKey(play: LegalDominoPlay): string {
   return `${formatDomino(play.domino)}-${play.ledSuit ?? "follow"}`;
 }
 
-function formatPlayLabel(play: LegalDominoPlay): string {
-  return formatDomino(play.domino);
+function InfoTile({
+  label,
+  value
+}: {
+  readonly label: string;
+  readonly value: string;
+}) {
+  return (
+    <View style={styles.statusItem}>
+      <Text style={styles.handLabel}>{label}</Text>
+      <Text style={styles.statusValue}>{value}</Text>
+    </View>
+  );
+}
+
+function formatSeatLabel(
+  state: FortyTwoState,
+  seat: SeatIndex | null,
+  humanSeat: SeatIndex
+): string {
+  if (seat === null) {
+    return "Waiting";
+  }
+
+  const name = seat === humanSeat ? "You" : state.players[seat].name;
+  return `${name} (${seatNames[seat]})`;
+}
+
+function formatTurnLabel(
+  state: FortyTwoState,
+  turnSeat: SeatIndex | null,
+  humanSeat: SeatIndex
+): string {
+  if (turnSeat !== null) {
+    return formatSeatLabel(state, turnSeat, humanSeat);
+  }
+
+  if (state.phase === "gameComplete") {
+    return "Game complete";
+  }
+
+  if (state.phase === "handComplete") {
+    return "Hand complete";
+  }
+
+  return "Resolving";
+}
+
+function formatCurrentBid(state: FortyTwoState, humanSeat: SeatIndex): string {
+  if (
+    state.phase !== "bidding" &&
+    state.phase !== "trump" &&
+    state.phase !== "trickPlay"
+  ) {
+    return "No bid yet";
+  }
+
+  const highestBid = state.bidding.highestBid;
+
+  if (!highestBid) {
+    return "No bid yet";
+  }
+
+  return `${highestBid.bid.amount} by ${formatSeatLabel(state, highestBid.seat, humanSeat)}${
+    highestBid.forced ? " (forced)" : ""
+  }`;
+}
+
+function formatTrumpStatus(state: FortyTwoState): string {
+  if (state.phase === "trickPlay") {
+    return formatTrumpSuit(state.contract.trumpSuit);
+  }
+
+  if (state.phase === "trump") {
+    return "Not called yet";
+  }
+
+  return "Not called";
+}
+
+function formatPreviousTrickWinner(
+  state: FortyTwoState,
+  humanSeat: SeatIndex
+): string {
+  if (state.phase !== "trickPlay" || state.completedTricks.length === 0) {
+    return "None yet";
+  }
+
+  const previousTrick = state.completedTricks[state.completedTricks.length - 1];
+
+  if (!previousTrick) {
+    return "None yet";
+  }
+
+  return formatSeatLabel(state, previousTrick.winner, humanSeat);
+}
+
+function getLatestActivityText(
+  activityLog: ReturnType<typeof getLocalGameActivityLog>
+): string {
+  const latestActivity = activityLog[activityLog.length - 1];
+
+  return latestActivity?.text ?? "No activity yet.";
 }
 
 function createMobileEngineContext(): EngineContext {
@@ -343,6 +592,9 @@ function createMobileEngineContext(): EngineContext {
 }
 
 const styles = StyleSheet.create({
+  activityList: {
+    gap: spacing.xs
+  },
   buttonGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -352,6 +604,14 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 15,
     lineHeight: 21
+  },
+  dominoButton: {
+    minWidth: 82
+  },
+  dominoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
   },
   gridButton: {
     minWidth: 104
@@ -380,6 +640,14 @@ const styles = StyleSheet.create({
   headerCopy: {
     flex: 1,
     gap: spacing.xs
+  },
+  illegalDominoButton: {
+    borderColor: palette.border
+  },
+  infoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
   },
   meta: {
     color: palette.subtle,
@@ -439,6 +707,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md
   },
+  sectionHeader: {
+    gap: spacing.xs
+  },
+  selectedDominoButton: {
+    backgroundColor: palette.goldSoft,
+    borderColor: palette.gold,
+    borderWidth: 2
+  },
   statusItem: {
     backgroundColor: palette.background,
     borderColor: palette.border,
@@ -467,5 +743,10 @@ const styles = StyleSheet.create({
   },
   trickList: {
     gap: spacing.xs
+  },
+  trickMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md
   }
 });

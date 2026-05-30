@@ -3,7 +3,10 @@ import {
   getEngineTimestamp,
   type EngineContext
 } from "../context.ts";
-import { type Domino } from "../dominoes/domino.ts";
+import {
+  formatDomino,
+  type Domino
+} from "../dominoes/domino.ts";
 import { EngineError } from "../errors.ts";
 import { type BidCall } from "../forty-two/bidding.ts";
 import {
@@ -48,7 +51,11 @@ import {
   getExpectedTrickSeat,
   type DominoSuit
 } from "../forty-two/tricks.ts";
-import { type TrumpSuit } from "../forty-two/trump.ts";
+import {
+  getTrumpDominoRank,
+  isDominoTrump,
+  type TrumpSuit
+} from "../forty-two/trump.ts";
 import { chooseLegalRandomBotDecision } from "../bots/legal-random.ts";
 
 export type LocalGameView =
@@ -88,6 +95,13 @@ export interface LocalHandSummary {
 export interface LocalGameSummary {
   readonly completedAt: string;
   readonly winningTeamId: "teamA" | "teamB";
+}
+
+export interface LocalGameActivityLogEntry {
+  readonly id: string;
+  readonly seat?: SeatIndex;
+  readonly text: string;
+  readonly type: FortyTwoEvent["type"];
 }
 
 export interface LocalGameSession {
@@ -342,6 +356,63 @@ export function getLocalGameView(session: LocalGameSession): LocalGameView {
   return {
     kind: "waiting"
   };
+}
+
+export function getLocalGameCurrentTurnSeat(
+  session: LocalGameSession
+): SeatIndex | null {
+  const state = session.snapshot.snapshot;
+
+  switch (state.phase) {
+    case "setup":
+    case "handComplete":
+    case "gameComplete":
+      return null;
+    case "dealt":
+      return getNextSeat(state.dealer);
+    case "bidding":
+      return state.bidding.currentSeat;
+    case "trump":
+      return state.trump.declarer;
+    case "trickPlay":
+      return getExpectedTrickSeat(state.currentTrick);
+  }
+}
+
+export function getLocalGameActivityLog(
+  session: LocalGameSession,
+  limit = 10
+): readonly LocalGameActivityLogEntry[] {
+  const entries = session.events.flatMap((event) =>
+    createActivityLogEntries(session, event)
+  );
+
+  return entries.slice(Math.max(entries.length - limit, 0));
+}
+
+export function sortDominoesForLocalPlay(
+  dominoes: readonly Domino[],
+  trumpSuit?: TrumpSuit
+): readonly Domino[] {
+  return [...dominoes].sort((left, right) => {
+    const leftIsTrump = trumpSuit ? isDominoTrump(left, trumpSuit) : false;
+    const rightIsTrump = trumpSuit ? isDominoTrump(right, trumpSuit) : false;
+
+    if (leftIsTrump && rightIsTrump && trumpSuit) {
+      return getTrumpDominoRank(right, trumpSuit) -
+        getTrumpDominoRank(left, trumpSuit);
+    }
+
+    if (leftIsTrump !== rightIsTrump) {
+      return leftIsTrump ? -1 : 1;
+    }
+
+    if (left.high !== right.high) {
+      return right.high - left.high;
+    }
+
+    return right.low - left.low;
+  });
 }
 
 export function chooseFirstLegalHumanAction(
@@ -685,6 +756,125 @@ function createDefaultPlayerNames(
     2: playerNames?.[2] ?? "Bot South",
     3: playerNames?.[3] ?? "Bot West"
   };
+}
+
+function createActivityLogEntries(
+  session: LocalGameSession,
+  eventEnvelope: FortyTwoEventEnvelope
+): readonly LocalGameActivityLogEntry[] {
+  const event = eventEnvelope.event;
+
+  switch (event.type) {
+    case "fortyTwo.game.created":
+      return [];
+    case "fortyTwo.hand.dealt":
+      return [
+        {
+          id: eventEnvelope.eventId,
+          text: `Hand ${event.payload.handNumber} dealt by ${getSeatName(session, event.payload.dealer)}.`,
+          type: event.type
+        }
+      ];
+    case "fortyTwo.bid.submitted":
+      return [
+        {
+          id: eventEnvelope.eventId,
+          seat: event.payload.seat,
+          text: `${getSeatName(session, event.payload.seat)} ${formatActivityBid(event.payload.bid)}.`,
+          type: event.type
+        }
+      ];
+    case "fortyTwo.bidding.completed": {
+      const winningBid = event.payload.bidding.highestBid;
+
+      if (!winningBid) {
+        return [];
+      }
+
+      return [
+        {
+          id: eventEnvelope.eventId,
+          seat: winningBid.seat,
+          text: winningBid.forced
+            ? `All passed; ${getSeatName(session, winningBid.seat)} ${winningBid.seat === session.humanSeat ? "were" : "was"} forced to bid ${winningBid.bid.amount}.`
+            : `Bidding closed at ${winningBid.bid.amount} for ${getSeatName(session, winningBid.seat)}.`,
+          type: event.type
+        }
+      ];
+    }
+    case "fortyTwo.trump.called":
+      return [
+        {
+          id: eventEnvelope.eventId,
+          seat: event.payload.contract.declarer,
+          text: `${getSeatName(session, event.payload.contract.declarer)} called ${formatActivityTrumpSuit(event.payload.contract.trumpSuit)} trump.`,
+          type: event.type
+        }
+      ];
+    case "fortyTwo.domino.played": {
+      const playedDomino = event.payload.currentTrick.playedDominoes.at(-1);
+
+      if (!playedDomino) {
+        return [];
+      }
+
+      return [
+        {
+          id: eventEnvelope.eventId,
+          seat: playedDomino.seat,
+          text: `${getSeatName(session, playedDomino.seat)} played ${formatDomino(playedDomino.domino)}.`,
+          type: event.type
+        }
+      ];
+    }
+    case "fortyTwo.trick.completed":
+      return [
+        {
+          id: eventEnvelope.eventId,
+          seat: event.payload.completedTrick.winner,
+          text: `${getSeatName(session, event.payload.completedTrick.winner)} won the trick.`,
+          type: event.type
+        }
+      ];
+    case "fortyTwo.hand.completed": {
+      const handScore = event.payload.handScore;
+      const biddingTeamName = session.snapshot.snapshot.teams[handScore.biddingTeamId].name;
+
+      return [
+        {
+          id: eventEnvelope.eventId,
+          text: handScore.outcome === "made"
+            ? `${biddingTeamName} made the ${handScore.bidAmount} bid with ${handScore.biddingTeamPoints} points.`
+            : `${biddingTeamName} was set on the ${handScore.bidAmount} bid with ${handScore.biddingTeamPoints} points.`,
+          type: event.type
+        }
+      ];
+    }
+    case "fortyTwo.game.completed":
+      return [
+        {
+          id: eventEnvelope.eventId,
+          text: `${session.snapshot.snapshot.teams[event.payload.winningTeamId].name} won the game.`,
+          type: event.type
+        }
+      ];
+  }
+}
+
+function getSeatName(session: LocalGameSession, seat: SeatIndex): string {
+  if (seat === session.humanSeat) {
+    return "You";
+  }
+
+  return session.snapshot.snapshot.players[seat].name;
+}
+
+function formatActivityBid(bid: BidCall): string {
+  return bid.kind === "numeric" ? `bid ${bid.amount}` : "passed";
+}
+
+function formatActivityTrumpSuit(trumpSuit: TrumpSuit): string {
+  return trumpSuit[0]?.toUpperCase() + trumpSuit.slice(1);
 }
 
 function unwrapCommandResult<TEvent extends FortyTwoEvent>(

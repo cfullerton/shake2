@@ -35,7 +35,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
         icon={<Plus color={palette.surface} size={19} />}
         onPress={() => navigation.navigate("NewGame")}
       >
-        New Game
+        Score Real World Game
       </Button>
       <Button
         icon={<Bot color={palette.teal} size={19} />}

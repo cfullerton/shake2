@@ -4,10 +4,14 @@ import test from "node:test";
 import {
   applyLocalHumanAction,
   continueLocalGameSession,
+  createDomino,
   createLocalGameSession,
+  getLocalGameActivityLog,
+  getLocalGameCurrentTurnSeat,
   getLocalGameView,
   replayFortyTwoEvents,
   restartLocalGameSession,
+  sortDominoesForLocalPlay,
   type EngineContext,
   type LocalGameSession,
   type LocalHandSummary
@@ -19,7 +23,35 @@ test("local game session starts a playable game and waits for human input", () =
   const view = getLocalGameView(session);
 
   assert.notEqual(view.kind, "waiting");
+  assert.equal(getLocalGameCurrentTurnSeat(session), session.humanSeat);
   assertReplayMatches(session);
+});
+
+test("local game activity log describes bot actions", () => {
+  const context = createSimulationContext(1);
+  const session = createLocalGameSession({ targetMarks: 7 }, context);
+  const activity = getLocalGameActivityLog(session, 8).map((entry) => entry.text);
+
+  assert.equal(activity.some((entry) => entry.includes("Hand 1 dealt")), true);
+  assert.equal(
+    activity.some((entry) => entry.includes("Bot East") && /passed|bid/.test(entry)),
+    true
+  );
+});
+
+test("sorts local domino hands with trump first and high dominoes descending", () => {
+  const sorted = sortDominoesForLocalPlay(
+    [
+      createDomino(3, 2),
+      createDomino(6, 0),
+      createDomino(5, 5),
+      createDomino(6, 6),
+      createDomino(4, 1)
+    ],
+    "sixes"
+  ).map((domino) => `${domino.high}-${domino.low}`);
+
+  assert.deepEqual(sorted, ["6-6", "6-0", "5-5", "4-1", "3-2"]);
 });
 
 test("local game session supports restart/reset", () => {
