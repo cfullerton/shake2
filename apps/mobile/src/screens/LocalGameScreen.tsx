@@ -65,6 +65,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   );
   const [selectedPlayKey, setSelectedPlayKey] = useState<string | null>(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
+  const [advanceBaseTrickPlays, setAdvanceBaseTrickPlays] = useState<
+    readonly PlayedDominoEntry[]
+  >([]);
   const [revealedAdvancePlays, setRevealedAdvancePlays] = useState<readonly PlayedDominoEntry[]>(
     []
   );
@@ -96,14 +99,12 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const currentHandScore = state.phase === "trickPlay"
     ? scoreCompletedTricks(state.completedTricks)
     : null;
-  const trumpSuitLabel = state.phase === "trickPlay"
-    ? formatTrumpSuit(state.contract.trumpSuit)
-    : null;
   const currentTrickId = state.phase === "trickPlay"
     ? `${state.handNumber}-${state.completedTricks.length}-${state.currentTrick.leader}`
     : null;
   const activityLog = getLocalGameActivityLog(session, 7);
   const turnSeat = getLocalGameCurrentTurnSeat(session);
+  const isTrickPlayView = view.kind === "trickPlay";
   const legalPlayByDominoKey = new Map(
     view.kind === "trickPlay"
       ? view.legalPlays.map((play) => [getDominoKey(play.domino), play])
@@ -112,13 +113,15 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const selectedPlay = view.kind === "trickPlay" && selectedPlayKey
     ? view.legalPlays.find((play) => formatPlayKey(play) === selectedPlayKey) ?? null
     : null;
-  const trickPlaySource = isAdvancing && revealedAdvancePlays.length > 0
-    ? revealedAdvancePlays
+  const trickPlaySource = isAdvancing
+    ? [...advanceBaseTrickPlays, ...revealedAdvancePlays]
     : currentTrick?.playedDominoes ?? [];
-  const currentTrickSourceId = isAdvancing && revealedAdvancePlays.length > 0
+  const currentTrickSourceId = isAdvancing
     ? `advance-${session.events.length}`
     : currentTrickId;
-  const visibleTrickPlays = trickPlaySource.slice(0, visibleTrickPlayCount);
+  const visibleTrickPlays = getCurrentTrickPlayWindow(
+    trickPlaySource.slice(0, visibleTrickPlayCount)
+  );
   const visibleTrickPlayBySeat = new Map(
     visibleTrickPlays.map((play) => [play.seat, play] as const)
   );
@@ -215,6 +218,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       const advanceDelayMs = getAdvanceDelayMs(session, nextSession);
       const newlyPlayedDominoes = getNewPlayedDominoes(session, nextSession);
       setSelectedPlayKey(null);
+      setAdvanceBaseTrickPlays(state.phase === "trickPlay" ? state.currentTrick.playedDominoes : []);
       setRevealedAdvancePlays(newlyPlayedDominoes);
       setSession(nextSession);
       setIsAdvancing(true);
@@ -276,17 +280,42 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
         />
       </View>
 
-      <View style={styles.panel}>
+      <View style={[styles.panel, isTrickPlayView ? styles.compactPanel : null]}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.panelTitle}>Status</Text>
+          <Text style={[styles.panelTitle, isTrickPlayView ? styles.compactPanelTitle : null]}>
+            {isTrickPlayView ? "Table status" : "Status"}
+          </Text>
           <Text style={styles.meta}>Latest: {getLatestActivityText(activityLog)}</Text>
         </View>
-        <View style={styles.infoGrid}>
-          <InfoTile label="Turn" value={formatTurnLabel(state, turnSeat, session.humanSeat)} />
-          <InfoTile label="Dealer" value={formatSeatLabel(state, state.dealer, session.humanSeat)} />
-          <InfoTile label="Current bid" value={formatCurrentBid(state, session.humanSeat)} />
-          <InfoTile label="Trump" value={formatTrumpStatus(state)} />
-          <InfoTile label="Previous trick" value={formatPreviousTrickWinner(state, session.humanSeat)} />
+        <View style={[styles.infoGrid, isTrickPlayView ? styles.compactInfoGrid : null]}>
+          <InfoTile
+            compact={isTrickPlayView}
+            label="Turn"
+            value={formatTurnLabel(state, turnSeat, session.humanSeat)}
+          />
+          <InfoTile
+            compact={isTrickPlayView}
+            label="Dealer"
+            value={formatSeatLabel(state, state.dealer, session.humanSeat)}
+          />
+          <InfoTile
+            compact={isTrickPlayView}
+            label="Current bid"
+            value={formatCurrentBid(state, session.humanSeat)}
+          />
+          <InfoTile compact={isTrickPlayView} label="Trump" value={formatTrumpStatus(state)} />
+          <InfoTile
+            compact={isTrickPlayView}
+            label="Previous trick"
+            value={formatPreviousTrickWinner(state, session.humanSeat)}
+          />
+          {isTrickPlayView ? (
+            <InfoTile
+              compact
+              label="Current score"
+              value={`${state.teams.teamA.name} ${currentHandScore?.teamPoints.teamA ?? 0} · ${state.teams.teamB.name} ${currentHandScore?.teamPoints.teamB ?? 0}`}
+            />
+          ) : null}
         </View>
       </View>
 
@@ -363,23 +392,6 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
 
       {view.kind === "trickPlay" ? (
         <>
-          <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Table</Text>
-            <View style={styles.playStatusGrid}>
-              <View style={styles.statusItem}>
-                <Text style={styles.handLabel}>Trump</Text>
-                <Text style={styles.statusValue}>{trumpSuitLabel}</Text>
-              </View>
-              <View style={styles.statusItem}>
-                <Text style={styles.handLabel}>Current score</Text>
-                <Text style={styles.statusValue}>
-                  {state.teams.teamA.name} {currentHandScore?.teamPoints.teamA ?? 0} ·{" "}
-                  {state.teams.teamB.name} {currentHandScore?.teamPoints.teamB ?? 0}
-                </Text>
-              </View>
-            </View>
-          </View>
-
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Current trick</Text>
             {currentTrick ? (
@@ -751,16 +763,20 @@ function formatPlayKey(play: LegalDominoPlay): string {
 }
 
 function InfoTile({
+  compact = false,
   label,
   value
 }: {
+  readonly compact?: boolean;
   readonly label: string;
   readonly value: string;
 }) {
   return (
-    <View style={styles.statusItem}>
+    <View style={[styles.statusItem, compact ? styles.compactStatusItem : null]}>
       <Text style={styles.handLabel}>{label}</Text>
-      <Text style={styles.statusValue}>{value}</Text>
+      <Text style={[styles.statusValue, compact ? styles.compactStatusValue : null]}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -907,6 +923,22 @@ function countNewBotDominoPlays(
     .length;
 }
 
+function getCurrentTrickPlayWindow(
+  plays: readonly PlayedDominoEntry[]
+): readonly PlayedDominoEntry[] {
+  if (plays.length <= 4) {
+    return plays;
+  }
+
+  const remainder = plays.length % 4;
+
+  if (remainder === 0) {
+    return plays.slice(-4);
+  }
+
+  return plays.slice(-remainder);
+}
+
 const styles = StyleSheet.create({
   activityList: {
     gap: spacing.xs
@@ -915,6 +947,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
+  },
+  compactInfoGrid: {
+    gap: spacing.xs
+  },
+  compactPanel: {
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  compactPanelTitle: {
+    fontSize: 17
+  },
+  compactStatusItem: {
+    minWidth: 116,
+    padding: spacing.xs
+  },
+  compactStatusValue: {
+    fontSize: 14,
+    lineHeight: 18
   },
   copy: {
     color: palette.muted,
@@ -1048,11 +1098,6 @@ const styles = StyleSheet.create({
     height: "33.333%",
     justifyContent: "center",
     width: "33.333%"
-  },
-  playStatusGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
   },
   pressedDominoTile: {
     transform: [{ scale: 0.98 }]

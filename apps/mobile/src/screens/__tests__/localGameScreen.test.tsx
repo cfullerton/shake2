@@ -51,7 +51,7 @@ describe("LocalGameScreen", () => {
       act(() => { jest.runAllTimers(); });
 
       expect(view.getByText("Trick Play")).toBeTruthy();
-      expect(view.getByText("Status")).toBeTruthy();
+      expect(view.getByText("Table status")).toBeTruthy();
       expect(view.getByText("Turn")).toBeTruthy();
       expect(view.getByText("Current bid")).toBeTruthy();
       expect(view.getAllByText("Trump").length).toBeGreaterThan(0);
@@ -110,6 +110,77 @@ describe("LocalGameScreen", () => {
 
       act(() => { jest.runAllTimers(); });
       expect(view.queryByText("Bots are playing…")).toBeNull();
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
+  it("clears revealed table plays when a trick turns over mid-advance", () => {
+    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0.99);
+
+    try {
+      const view = render(
+        <LocalGameScreen
+          navigation={{} as never}
+          route={{ params: { targetMarks: 7 } } as never}
+        />
+      );
+
+      fireEvent.press(view.getByText("Pass"));
+      act(() => { jest.runAllTimers(); });
+
+      fireEvent.press(view.getByText("Call Sixes"));
+      act(() => { jest.runAllTimers(); });
+
+      let foundClearing = false;
+
+      for (let turn = 0; turn < 7; turn += 1) {
+        const legalPlayButton = view.queryAllByLabelText(/^Select \d-\d$/)[0];
+
+        if (!legalPlayButton) {
+          break;
+        }
+
+        const playsVisibleBeforePlay = view.queryAllByLabelText(/played \d-\d$/).length;
+        fireEvent.press(legalPlayButton);
+
+        const playButton = view.queryByText(/^Play \d-\d$/);
+
+        if (!playButton) {
+          break;
+        }
+
+        fireEvent.press(playButton);
+
+        if (playsVisibleBeforePlay > 0) {
+          let previousVisibleCount = view.queryAllByLabelText(/played \d-\d$/).length;
+
+          for (let step = 0; step < 6; step += 1) {
+            if (!view.queryByText("Bots are playing…")) {
+              break;
+            }
+
+            act(() => { jest.advanceTimersByTime(800); });
+
+            const nextVisibleCount = view.queryAllByLabelText(/played \d-\d$/).length;
+
+            if (nextVisibleCount > 0 && nextVisibleCount < previousVisibleCount) {
+              foundClearing = true;
+              break;
+            }
+
+            previousVisibleCount = nextVisibleCount;
+          }
+        }
+
+        act(() => { jest.runAllTimers(); });
+
+        if (foundClearing) {
+          break;
+        }
+      }
+
+      expect(foundClearing).toBe(true);
     } finally {
       randomSpy.mockRestore();
     }
