@@ -33,3 +33,8 @@ export const spacing = {
   lg: 20,
   xl: 28
 } as const;
+
+export const letterSpacing = {
+  caps: 1.2,
+  wide: 0.4
+} as const;

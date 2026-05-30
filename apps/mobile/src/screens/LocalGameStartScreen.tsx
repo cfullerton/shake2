@@ -37,7 +37,7 @@ export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) 
           icon={<Play color={palette.surface} size={18} />}
           onPress={handleStart}
         >
-          Start Local Game
+          Deal 'Em Up
         </Button>
       }
       scroll
@@ -45,13 +45,13 @@ export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) 
       <View style={styles.panel}>
         <Text style={styles.title}>Practice Texas 42</Text>
         <Text style={styles.copy}>
-          Play North with three legal random bots. The engine handles the full deal,
-          bidding, trump, tricks, scoring, and game completion.
+          You play North. Three bot opponents handle their own bids, trump calls,
+          and trick plays. Full Texas 42 rules apply.
         </Text>
       </View>
 
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Game</Text>
+        <Text style={styles.panelTitle}>Setup</Text>
         <TextField
           keyboardType="number-pad"
           label="Target Marks"

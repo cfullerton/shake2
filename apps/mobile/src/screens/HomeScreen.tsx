@@ -8,7 +8,7 @@ import { MarkDots } from "../components/MarkDots";
 import { Screen } from "../components/Screen";
 import type { RootStackParamList } from "../navigation/types";
 import { useGameStore } from "../state/GameStore";
-import { palette, radius, spacing } from "../theme";
+import { letterSpacing, palette, radius, spacing } from "../theme";
 
 type HomeScreenProps = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -27,7 +27,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
         </View>
         <View style={styles.headerText}>
           <Text style={styles.title}>Texas 42 Saloon</Text>
-          <Text style={styles.subtitle}>Score the table or practice against bots.</Text>
+          <Text style={styles.subtitle}>Keep score at the table or saddle up against the bots.</Text>
         </View>
       </View>
 
@@ -35,14 +35,14 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
         icon={<Plus color={palette.surface} size={19} />}
         onPress={() => navigation.navigate("NewGame")}
       >
-        Score Real World Game
+        Score the Table
       </Button>
       <Button
         icon={<Bot color={palette.teal} size={19} />}
         onPress={() => navigation.navigate("LocalGameStart")}
         variant="secondary"
       >
-        Practice vs Bots
+        Practice with Bots
       </Button>
       <Button
         icon={<BookOpen color={palette.teal} size={19} />}
@@ -52,17 +52,21 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
         How to Play
       </Button>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.error}>{error}</Text>
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={styles.loading}>
           <ActivityIndicator color={palette.teal} />
-          <Text style={styles.loadingText}>Loading saved games</Text>
+          <Text style={styles.loadingText}>Shufflin' the books…</Text>
         </View>
       ) : sortedGames.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>No games yet</Text>
-          <Text style={styles.emptyCopy}>Create a scorekeeper game when the table is ready.</Text>
+          <Text style={styles.emptyCopy}>Start a game when the table is ready.</Text>
         </View>
       ) : (
         <View style={styles.games}>
@@ -162,6 +166,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700"
   },
+  errorBanner: {
+    backgroundColor: palette.tealSoft,
+    borderColor: palette.teal,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    padding: spacing.md
+  },
   gameCard: {
     backgroundColor: palette.surface,
     borderColor: palette.border,
@@ -231,8 +242,9 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: palette.paperMuted,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
+    letterSpacing: letterSpacing.caps,
     textTransform: "uppercase"
   },
   status: {

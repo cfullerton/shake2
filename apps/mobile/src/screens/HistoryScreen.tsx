@@ -50,7 +50,7 @@ export function HistoryScreen({ route }: HistoryScreenProps) {
       {entries.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>No hands scored yet</Text>
-          <Text style={styles.emptyCopy}>Award marks from the scorekeeper screen.</Text>
+          <Text style={styles.emptyCopy}>Head back to score each hand.</Text>
         </View>
       ) : (
         <FlatList

@@ -11,7 +11,7 @@ import { SegmentedControl, type Segment } from "../components/SegmentedControl";
 import { TextField } from "../components/TextField";
 import type { RootStackParamList } from "../navigation/types";
 import { useGameStore } from "../state/GameStore";
-import { palette, radius, spacing } from "../theme";
+import { letterSpacing, palette, radius, spacing } from "../theme";
 import { useMemo, useState } from "react";
 
 type ScorekeeperScreenProps = NativeStackScreenProps<RootStackParamList, "Scorekeeper">;
@@ -106,7 +106,7 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
           </Text>
         </View>
         <Text style={[styles.status, activeGame.status === "complete" && styles.completeStatus]}>
-          {activeGame.status === "complete" ? "Complete" : "Active"}
+          {activeGame.status === "complete" ? "Complete" : "In Play"}
         </Text>
       </View>
 
@@ -122,8 +122,8 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
 
       {winningTeam ? (
         <View style={styles.winnerBanner}>
-          <Text style={styles.winnerTitle}>{winningTeam.name} wins</Text>
-          <Text style={styles.winnerCopy}>Undo the latest hand to reopen scoring.</Text>
+          <Text style={styles.winnerTitle}>🤠 {winningTeam.name} wins!</Text>
+          <Text style={styles.winnerCopy}>Undo the last hand to keep the game going.</Text>
         </View>
       ) : null}
 
@@ -163,7 +163,7 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
       </View>
 
       <View style={styles.entryPanel}>
-        <Text style={styles.panelTitle}>Award Marks</Text>
+        <Text style={styles.panelTitle}>Score the Hand</Text>
         <SegmentedControl
           label="Team"
           onChange={setSelectedTeamId}
@@ -187,7 +187,7 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
         <TextField
           label="Note"
           onChangeText={setNote}
-          placeholder="Optional hand note"
+          placeholder="Hand note"
           value={note}
         />
 
@@ -212,6 +212,7 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 12,
     fontWeight: "800",
+    letterSpacing: letterSpacing.caps,
     textTransform: "uppercase"
   },
   dealerName: {
