@@ -35,6 +35,10 @@ The CDK stack in `infra/` defines the development multiplayer environment:
    - Cognito User Pool ID
    - Cognito App Client ID
    - DynamoDB table name
+6. Run the deployed smoke test:
+   ```text
+   npm run smoke:deployed -w @shake2/backend
+   ```
 
 No deployment is run automatically by this repository.
 
@@ -52,6 +56,19 @@ Infrastructure tests synthesize the CDK construct tree locally and assert the ex
 npm run test -w @shake2/infra
 ```
 
+The deployed smoke test requires a deployed stack and Cognito test user configuration:
+
+```text
+AWS_REGION
+SHAKE2_SMOKE_STACK_NAME
+SHAKE2_SMOKE_EMAIL
+SHAKE2_SMOKE_USERNAME
+SHAKE2_SMOKE_PASSWORD
+SHAKE2_SMOKE_CREATE_USER
+```
+
+`docs/status/MULTIPLAYER_DEV_SMOKE_RUNBOOK.md` has the full smoke-test flow.
+
 For manual local resolver experiments, copy `backend/.env.example` and set:
 
 ```text
@@ -68,6 +85,7 @@ Current tests verify:
 - Private hand resolver responses require actor/seat ownership.
 - Cognito `sub` is propagated as the backend multiplayer `playerId`.
 - Rejected player actions persist idempotency results without game-state mutations.
+- The deployed smoke script can validate AppSync auth, Cognito ID-token flow, and Lambda resolver invocation once a dev stack exists.
 
 Required before production:
 

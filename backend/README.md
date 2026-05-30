@@ -54,6 +54,12 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 - `src/functions/shared/deployed-runtime.ts`
   - Shared deployed-runtime wiring for DynamoDB store construction, resolver context, and engine context.
 
+- `src/smoke/deployed-smoke.ts`
+  - Loads CDK stack outputs.
+  - Optionally creates/resets a temporary Cognito smoke user.
+  - Authenticates through Cognito and calls the deployed AppSync API.
+  - Verifies unauthenticated rejection, Cognito actor propagation, and invocation of each deployed resolver.
+
 - `src/dynamodb/store.ts`
   - Defines `MultiplayerStore`.
   - Implements `DynamoDBMultiplayerStore` with AWS SDK v3 DynamoDB DocumentClient commands.
@@ -150,6 +156,17 @@ Optional:
 AWS_REGION
 ```
 
+Deployed smoke-test configuration:
+
+```text
+SHAKE2_SMOKE_STACK_NAME
+SHAKE2_SMOKE_EMAIL
+SHAKE2_SMOKE_USERNAME
+SHAKE2_SMOKE_PASSWORD
+SHAKE2_SMOKE_CREATE_USER
+SHAKE2_SMOKE_GAME_ID
+```
+
 The room game ID index must allow lookup of room metadata by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 
 ## Test Commands
@@ -159,6 +176,7 @@ From the repository root:
 ```text
 npm run test -w @shake2/backend
 npm run typecheck -w @shake2/backend
+npm run smoke:deployed -w @shake2/backend
 npm run synth -w @shake2/infra
 ```
 

@@ -27,6 +27,14 @@ npm run synth -w @shake2/infra
 
 The synth command builds the CDK app and bundles Lambda entrypoints with esbuild. It does not deploy resources.
 
+After deploying a disposable development stack, run the backend smoke test:
+
+```text
+npm run smoke:deployed -w @shake2/backend
+```
+
+See `docs/status/MULTIPLAYER_DEV_SMOKE_RUNBOOK.md` for required environment variables.
+
 ## Configuration
 
 The default stage is `dev`. Override it with CDK context:
