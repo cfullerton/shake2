@@ -118,6 +118,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
     ? `advance-${session.events.length}`
     : currentTrickId;
   const visibleTrickPlays = trickPlaySource.slice(0, visibleTrickPlayCount);
+  const visibleTrickPlayBySeat = new Map(
+    visibleTrickPlays.map((play) => [play.seat, play] as const)
+  );
 
   useEffect(() => {
     visibleTrickPlayCountRef.current = visibleTrickPlayCount;
@@ -389,26 +392,55 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
               </View>
             ) : null}
             {currentTrick && visibleTrickPlays.length > 0 ? (
-              <View style={styles.trickList}>
-                {visibleTrickPlays.map((play) => (
-                  <View
-                    key={`${play.seat}-${formatDomino(play.domino)}`}
-                    style={styles.playedDominoRow}
-                  >
-                    <Text style={styles.meta}>
-                      {formatSeatLabel(state, play.seat, session.humanSeat)} played
-                    </Text>
+              <View style={styles.trickTable} testID="local-game-trick-table">
+                <View style={[styles.trickSeatSlot, styles.trickSeatTop]} testID="local-game-trick-seat-top">
+                  <Text style={styles.handLabel}>South</Text>
+                  {visibleTrickPlayBySeat.get(2) ? (
                     <DominoTile
-                      accessibilityLabel={`${formatSeatLabel(
-                        state,
-                        play.seat,
-                        session.humanSeat
-                      )} played ${formatDomino(play.domino)}`}
-                      domino={play.domino}
+                      accessibilityLabel={`${formatSeatLabel(state, 2, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(2)!.domino)}`}
+                      domino={visibleTrickPlayBySeat.get(2)!.domino}
                       size="small"
                     />
-                  </View>
-                ))}
+                  ) : (
+                    <Text style={styles.meta}>Waiting</Text>
+                  )}
+                </View>
+                <View style={[styles.trickSeatSlot, styles.trickSeatLeft]} testID="local-game-trick-seat-left">
+                  <Text style={styles.handLabel}>East</Text>
+                  {visibleTrickPlayBySeat.get(1) ? (
+                    <DominoTile
+                      accessibilityLabel={`${formatSeatLabel(state, 1, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(1)!.domino)}`}
+                      domino={visibleTrickPlayBySeat.get(1)!.domino}
+                      size="small"
+                    />
+                  ) : (
+                    <Text style={styles.meta}>Waiting</Text>
+                  )}
+                </View>
+                <View style={[styles.trickSeatSlot, styles.trickSeatRight]} testID="local-game-trick-seat-right">
+                  <Text style={styles.handLabel}>West</Text>
+                  {visibleTrickPlayBySeat.get(3) ? (
+                    <DominoTile
+                      accessibilityLabel={`${formatSeatLabel(state, 3, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(3)!.domino)}`}
+                      domino={visibleTrickPlayBySeat.get(3)!.domino}
+                      size="small"
+                    />
+                  ) : (
+                    <Text style={styles.meta}>Waiting</Text>
+                  )}
+                </View>
+                <View style={[styles.trickSeatSlot, styles.trickSeatBottom]} testID="local-game-trick-seat-bottom">
+                  <Text style={styles.handLabel}>Player</Text>
+                  {visibleTrickPlayBySeat.get(0) ? (
+                    <DominoTile
+                      accessibilityLabel={`${formatSeatLabel(state, 0, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(0)!.domino)}`}
+                      domino={visibleTrickPlayBySeat.get(0)!.domino}
+                      size="small"
+                    />
+                  ) : (
+                    <Text style={styles.meta}>Waiting</Text>
+                  )}
+                </View>
               </View>
             ) : (
               <Text style={styles.copy}>
@@ -1005,12 +1037,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: "33.333%"
   },
-  playedDominoRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
   playStatusGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1079,8 +1105,37 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "900"
   },
-  trickList: {
-    gap: spacing.xs
+  trickSeatBottom: {
+    bottom: 0,
+    left: "50%",
+    transform: [{ translateX: -56 }]
+  },
+  trickSeatLeft: {
+    left: 0,
+    top: "50%",
+    transform: [{ translateY: -42 }]
+  },
+  trickSeatRight: {
+    right: 0,
+    top: "50%",
+    transform: [{ translateY: -42 }]
+  },
+  trickSeatSlot: {
+    alignItems: "center",
+    gap: spacing.xs,
+    position: "absolute",
+    width: 112
+  },
+  trickSeatTop: {
+    left: "50%",
+    top: 0,
+    transform: [{ translateX: -56 }]
+  },
+  trickTable: {
+    alignSelf: "center",
+    minHeight: 220,
+    position: "relative",
+    width: "100%"
   },
   trickMetaRow: {
     flexDirection: "row",
