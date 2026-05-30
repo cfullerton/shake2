@@ -18,8 +18,31 @@ export interface BackendErrorResponse {
 
 export interface BackendActor {
   readonly displayName?: string;
-  readonly identitySource: "mock";
+  readonly email?: string;
+  readonly identitySource: "cognito" | "mock";
   readonly playerId: string;
+  readonly username?: string;
+}
+
+export interface AppSyncCognitoIdentityClaims {
+  readonly ["cognito:username"]?: string;
+  readonly email?: string;
+  readonly name?: string;
+  readonly sub?: string;
+  readonly username?: string;
+}
+
+export interface AppSyncCognitoIdentity {
+  readonly claims?: AppSyncCognitoIdentityClaims;
+  readonly sub?: string;
+  readonly username?: string;
+}
+
+export interface MockResolverIdentity {
+  readonly displayName?: string;
+  readonly email?: string;
+  readonly playerId: string;
+  readonly username?: string;
 }
 
 export interface ResolverContext {
