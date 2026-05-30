@@ -30,7 +30,7 @@ import {
   type Trick
 } from "./tricks.ts";
 import {
-  type StandardNumericContract,
+  type Contract,
   type TrumpCallState
 } from "./trump.ts";
 
@@ -68,7 +68,7 @@ export interface FortyTwoBiddingCompletedPayload {
 }
 
 export interface FortyTwoTrumpCalledPayload {
-  readonly contract: StandardNumericContract;
+  readonly contract: Contract;
   readonly currentTrick: Trick;
   readonly trump: TrumpCallState;
 }

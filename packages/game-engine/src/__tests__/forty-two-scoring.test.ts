@@ -10,18 +10,20 @@ import {
   isCountDomino,
   scoreCompletedHand,
   scoreCompletedTricks,
+  standardRules,
+  type Contract,
   type CompletedTrick,
   type Domino,
   type DominoSuit,
   type SeatIndex,
-  type Trick,
-  type WinningBid
+  type Trick
 } from "../index.ts";
 
 test("scores a made bid exactly", () => {
   const score = scoreCompletedHand(
     createCompletedTricks([0, 2, 0, 2, 1, 0, 1]),
-    createWinningBid(0, 30)
+    createContract(0, 30),
+    standardRules
   );
 
   assert.equal(score.biddingTeamId, "teamA");
@@ -39,7 +41,8 @@ test("scores a made bid exactly", () => {
 test("scores a made bid over target", () => {
   const score = scoreCompletedHand(
     createCompletedTricks([0, 2, 0, 2, 0, 1, 1]),
-    createWinningBid(0, 30)
+    createContract(0, 30),
+    standardRules
   );
 
   assert.equal(score.biddingTeamPoints, 40);
@@ -53,7 +56,8 @@ test("scores a made bid over target", () => {
 test("sets a bid missed by one point", () => {
   const score = scoreCompletedHand(
     createCompletedTricks([0, 2, 0, 2, 1, 0, 1]),
-    createWinningBid(0, 31)
+    createContract(0, 31),
+    standardRules
   );
 
   assert.equal(score.biddingTeamPoints, 30);
@@ -67,7 +71,8 @@ test("sets a bid missed by one point", () => {
 test("scores all count dominoes captured by the bidding team", () => {
   const score = scoreCompletedHand(
     createCompletedTricks([0, 2, 0, 2, 0, 1, 1]),
-    createWinningBid(0, 30)
+    createContract(0, 30),
+    standardRules
   );
 
   const biddingTeamCountPoints = score.tricksByTeam.teamA.reduce(
@@ -83,7 +88,8 @@ test("scores all count dominoes captured by the bidding team", () => {
 test("scores no count dominoes captured by the bidding team", () => {
   const score = scoreCompletedHand(
     createCompletedTricks([1, 3, 1, 3, 1, 0, 2]),
-    createWinningBid(0, 30)
+    createContract(0, 30),
+    standardRules
   );
 
   const biddingTeamCountPoints = score.tricksByTeam.teamA.reduce(
@@ -111,7 +117,7 @@ test("scores completed tricks for in-hand progress", () => {
 
 test("proves total hand points equal 42", () => {
   const completedTricks = createCompletedTricks([0, 1, 2, 3, 0, 1, 2]);
-  const score = scoreCompletedHand(completedTricks, createWinningBid(0, 30));
+  const score = scoreCompletedHand(completedTricks, createContract(0, 30), standardRules);
 
   const trickPointTotal = score.trickScores.reduce(
     (total, trickScore) => total + trickScore.trickPoints,
@@ -265,10 +271,15 @@ function createStandardTrickDominoes(): readonly [
   ];
 }
 
-function createWinningBid(seat: SeatIndex, amount: number): WinningBid {
+function createContract(seat: SeatIndex, amount: number): Contract {
   return {
     bid: createNumericBid(amount),
-    forced: false,
-    seat
+    declarer: seat,
+    kind: "standardNumeric",
+    trump: {
+      kind: "pip",
+      suit: "sixes"
+    },
+    trumpSuit: "sixes"
   };
 }

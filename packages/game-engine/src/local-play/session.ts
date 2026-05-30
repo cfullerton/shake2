@@ -52,6 +52,7 @@ import {
   type DominoSuit
 } from "../forty-two/tricks.ts";
 import {
+  getContractTrumpSuit,
   getTrumpDominoRank,
   isDominoTrump,
   type TrumpSuit
@@ -807,7 +808,7 @@ function createActivityLogEntries(
         {
           id: eventEnvelope.eventId,
           seat: event.payload.contract.declarer,
-          text: `${getSeatName(session, event.payload.contract.declarer)} called ${formatActivityTrumpSuit(event.payload.contract.trumpSuit)} trump.`,
+          text: `${getSeatName(session, event.payload.contract.declarer)} called ${formatActivityTrumpSuit(getContractTrumpSuit(event.payload.contract))} trump.`,
           type: event.type
         }
       ];

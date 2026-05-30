@@ -14,6 +14,7 @@ import {
   getTrumpDominoRank,
   getTrumpDominoesHighToLow,
   getTrumpSuitPip,
+  isDominoTrumpForContract,
   isDominoTrump,
   isEngineError,
   submitBid,
@@ -56,8 +57,27 @@ test("creates a standard numeric contract when declarer calls trump", () => {
     },
     declarer: 2,
     kind: "standardNumeric",
-    trumpSuit: "sixes"
+    trump: {
+      kind: "pip",
+      suit: "sixes"
+    }
   });
+});
+
+test("standard numeric contract serializes and round-trips", () => {
+  const bidding = completeBiddingWithDeclarerTwo();
+  const called = callTrump(createTrumpCallState(bidding), 2, "fours");
+  const contract = called.contract;
+
+  if (!contract) {
+    throw new Error("Expected contract to be created.");
+  }
+
+  const roundTripped = JSON.parse(JSON.stringify(contract));
+
+  assert.deepEqual(roundTripped, contract);
+  assert.equal(isDominoTrumpForContract(createDomino(4, 1), contract), true);
+  assert.equal(isDominoTrumpForContract(createDomino(6, 6), contract), false);
 });
 
 test("ranks trump dominoes high-to-low with double highest", () => {

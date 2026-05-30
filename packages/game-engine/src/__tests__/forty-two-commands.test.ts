@@ -47,7 +47,7 @@ test("command happy path runs deal through bidding complete and trump called", (
 
   if (journey.finalSnapshot.snapshot.phase === "trickPlay") {
     assert.equal(journey.finalSnapshot.snapshot.contract.declarer, 1);
-    assert.equal(journey.finalSnapshot.snapshot.contract.trumpSuit, "sixes");
+    assert.equal(journey.finalSnapshot.snapshot.contract.trump.suit, "sixes");
     assert.equal(journey.finalSnapshot.snapshot.currentTrick.leader, 1);
   }
 });

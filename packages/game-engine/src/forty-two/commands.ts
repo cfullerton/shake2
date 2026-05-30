@@ -42,10 +42,11 @@ import {
 } from "./seats.ts";
 import {
   callTrump,
-  createTrumpCallState
+  createTrumpCallState,
+  getContractTrumpSuit
 } from "./trump.ts";
 import {
-  determineTrickWinner,
+  determineTrickWinnerForContract,
   isTrickComplete,
   playDominoToTrick,
   startTrick
@@ -329,7 +330,7 @@ export function handlePlayFortyTwoDominoCommand(
         : {}),
       seat: action.action.payload.seat,
       trick: snapshot.snapshot.currentTrick,
-      trumpSuit: snapshot.snapshot.contract.trumpSuit
+      trumpSuit: getContractTrumpSuit(snapshot.snapshot.contract)
     });
     const playedEvent = createEventEnvelope(
       snapshot,
@@ -356,9 +357,9 @@ export function handlePlayFortyTwoDominoCommand(
       };
     }
 
-    const winner = determineTrickWinner(
+    const winner = determineTrickWinnerForContract(
       playResult.trick,
-      snapshot.snapshot.contract.trumpSuit
+      snapshot.snapshot.contract
     );
     const trickCompletedEvent = createEventEnvelope(
       nextSnapshot,
@@ -382,15 +383,6 @@ export function handlePlayFortyTwoDominoCommand(
       nextSnapshot.snapshot.phase === "trickPlay" &&
       nextSnapshot.snapshot.completedTricks.length === FORTY_TWO_TRICKS_PER_HAND
     ) {
-      const winningBid = nextSnapshot.snapshot.bidding.highestBid;
-
-      if (!winningBid) {
-        throw new EngineError(
-          "INVALID_PHASE",
-          "A completed hand requires a winning bid."
-        );
-      }
-
       const handCompletedEvent = createEventEnvelope(
         nextSnapshot,
         action,
@@ -399,7 +391,8 @@ export function handlePlayFortyTwoDominoCommand(
             completedTricks: nextSnapshot.snapshot.completedTricks,
             handScore: scoreCompletedHand(
               nextSnapshot.snapshot.completedTricks,
-              winningBid
+              nextSnapshot.snapshot.contract,
+              nextSnapshot.snapshot.rules
             )
           },
           type: "fortyTwo.hand.completed"
