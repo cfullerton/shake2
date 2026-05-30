@@ -17,6 +17,7 @@ import {
   type DealFortyTwoHandAction,
   type FortyTwoAction,
   type FortyTwoActionEnvelope,
+  type PlayFortyTwoDominoAction,
   type SubmitFortyTwoBidAction
 } from "./actions.ts";
 import {
@@ -37,7 +38,41 @@ import {
   callTrump,
   createTrumpCallState
 } from "./trump.ts";
-import { startTrick } from "./tricks.ts";
+import {
+  determineTrickWinner,
+  isTrickComplete,
+  playDominoToTrick,
+  startTrick
+} from "./tricks.ts";
+
+type FortyTwoGameCreatedEvent = Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.game.created" }
+>;
+type FortyTwoHandDealtEvent = Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.hand.dealt" }
+>;
+type FortyTwoBidSubmittedEvent = Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.bid.submitted" }
+>;
+type FortyTwoBiddingCompletedEvent = Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.bidding.completed" }
+>;
+type FortyTwoTrumpCalledEvent = Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.trump.called" }
+>;
+type FortyTwoDominoPlayedEvent = Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.domino.played" }
+>;
+type FortyTwoTrickCompletedEvent = Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.trick.completed" }
+>;
 
 export type FortyTwoCommandResult<TEvent extends FortyTwoEvent = FortyTwoEvent> =
   | {
@@ -53,7 +88,7 @@ export type FortyTwoCommandResult<TEvent extends FortyTwoEvent = FortyTwoEvent> 
 export function handleCreateFortyTwoGameCommand(
   action: FortyTwoActionEnvelope<CreateFortyTwoGameAction>,
   context: Pick<EngineContext, "newId" | "now">
-): FortyTwoCommandResult<Extract<FortyTwoEvent, { readonly type: "fortyTwo.game.created" }>> {
+): FortyTwoCommandResult<FortyTwoGameCreatedEvent> {
   return runFortyTwoCommand(() => {
     assertActionEnvelope(action);
     const initialSnapshot = createInitialFortyTwoSnapshot(
@@ -100,7 +135,7 @@ export function handleDealFortyTwoHandCommand(
   snapshot: FortyTwoSnapshotEnvelope,
   action: FortyTwoActionEnvelope<DealFortyTwoHandAction>,
   context: Pick<EngineContext, "newId" | "now" | "random">
-): FortyTwoCommandResult<Extract<FortyTwoEvent, { readonly type: "fortyTwo.hand.dealt" }>> {
+): FortyTwoCommandResult<FortyTwoHandDealtEvent> {
   return runFortyTwoCommand(() => {
     assertActionForSnapshot(snapshot, action);
 
@@ -140,7 +175,7 @@ export function handleSubmitFortyTwoBidCommand(
   snapshot: FortyTwoSnapshotEnvelope,
   action: FortyTwoActionEnvelope<SubmitFortyTwoBidAction>,
   context: Pick<EngineContext, "newId" | "now">
-): FortyTwoCommandResult<Extract<FortyTwoEvent, { readonly type: "fortyTwo.bid.submitted" }>> {
+): FortyTwoCommandResult<FortyTwoBidSubmittedEvent> {
   return runFortyTwoCommand(() => {
     assertActionForSnapshot(snapshot, action);
     assertActorSeat(action, action.action.payload.seat);
@@ -179,7 +214,7 @@ export function handleCompleteFortyTwoBiddingCommand(
   snapshot: FortyTwoSnapshotEnvelope,
   action: FortyTwoActionEnvelope<CompleteFortyTwoBiddingAction>,
   context: Pick<EngineContext, "newId" | "now">
-): FortyTwoCommandResult<Extract<FortyTwoEvent, { readonly type: "fortyTwo.bidding.completed" }>> {
+): FortyTwoCommandResult<FortyTwoBiddingCompletedEvent> {
   return runFortyTwoCommand(() => {
     assertActionForSnapshot(snapshot, action);
 
@@ -212,7 +247,7 @@ export function handleCallFortyTwoTrumpCommand(
   snapshot: FortyTwoSnapshotEnvelope,
   action: FortyTwoActionEnvelope<CallFortyTwoTrumpAction>,
   context: Pick<EngineContext, "newId" | "now">
-): FortyTwoCommandResult<Extract<FortyTwoEvent, { readonly type: "fortyTwo.trump.called" }>> {
+): FortyTwoCommandResult<FortyTwoTrumpCalledEvent> {
   return runFortyTwoCommand(() => {
     assertActionForSnapshot(snapshot, action);
 
@@ -250,6 +285,75 @@ export function handleCallFortyTwoTrumpCommand(
   });
 }
 
+export function handlePlayFortyTwoDominoCommand(
+  snapshot: FortyTwoSnapshotEnvelope,
+  action: FortyTwoActionEnvelope<PlayFortyTwoDominoAction>,
+  context: Pick<EngineContext, "newId" | "now">
+): FortyTwoCommandResult<FortyTwoDominoPlayedEvent | FortyTwoTrickCompletedEvent> {
+  return runFortyTwoCommand(() => {
+    assertActionForSnapshot(snapshot, action);
+
+    if (snapshot.snapshot.phase !== "trickPlay") {
+      throw new EngineError("INVALID_PHASE", "Dominoes can only be played during trick play.");
+    }
+
+    assertActorSeat(action, action.action.payload.seat);
+
+    const playResult = playDominoToTrick({
+      domino: action.action.payload.domino,
+      hands: snapshot.snapshot.hands,
+      ...(action.action.payload.ledSuit
+        ? { ledSuit: action.action.payload.ledSuit }
+        : {}),
+      seat: action.action.payload.seat,
+      trick: snapshot.snapshot.currentTrick,
+      trumpSuit: snapshot.snapshot.contract.trumpSuit
+    });
+    const playedEvent = createEventEnvelope(
+      snapshot,
+      action,
+      {
+        payload: {
+          currentTrick: playResult.trick,
+          hands: playResult.hands
+        },
+        type: "fortyTwo.domino.played"
+      },
+      context
+    );
+
+    if (!isTrickComplete(playResult.trick)) {
+      return applyCommandEvent(snapshot, playedEvent);
+    }
+
+    const snapshotAfterPlay = applyFortyTwoEvent(snapshot, playedEvent);
+    const winner = determineTrickWinner(
+      playResult.trick,
+      snapshot.snapshot.contract.trumpSuit
+    );
+    const trickCompletedEvent = createEventEnvelope(
+      snapshotAfterPlay,
+      action,
+      {
+        payload: {
+          completedTrick: {
+            trick: playResult.trick,
+            winner
+          },
+          currentTrick: startTrick(winner)
+        },
+        type: "fortyTwo.trick.completed"
+      },
+      context
+    );
+
+    return applyCommandEvents<FortyTwoDominoPlayedEvent | FortyTwoTrickCompletedEvent>(
+      snapshot,
+      [playedEvent, trickCompletedEvent]
+    );
+  });
+}
+
 function runFortyTwoCommand<TEvent extends FortyTwoEvent>(
   run: () => FortyTwoCommandResult<TEvent>
 ): FortyTwoCommandResult<TEvent> {
@@ -271,10 +375,19 @@ function applyCommandEvent<TEvent extends FortyTwoEvent>(
   snapshot: FortyTwoSnapshotEnvelope,
   event: FortyTwoEventEnvelope<TEvent>
 ): FortyTwoCommandResult<TEvent> {
+  return applyCommandEvents(snapshot, [event]);
+}
+
+function applyCommandEvents<TEvent extends FortyTwoEvent>(
+  snapshot: FortyTwoSnapshotEnvelope,
+  events: readonly FortyTwoEventEnvelope<TEvent>[]
+): FortyTwoCommandResult<TEvent> {
+  const nextSnapshot = events.reduce(applyFortyTwoEvent, snapshot);
+
   return {
-    events: [event],
+    events,
     ok: true,
-    snapshot: applyFortyTwoEvent(snapshot, event)
+    snapshot: nextSnapshot
   };
 }
 

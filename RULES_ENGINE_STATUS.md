@@ -41,6 +41,7 @@ packages/game-engine/src
     |-- forty-two-bidding.test.ts
     |-- forty-two-commands.test.ts
     |-- forty-two-deal.test.ts
+    |-- forty-two-play-command.test.ts
     |-- forty-two-reducer.test.ts
     |-- forty-two-scoring.test.ts
     |-- forty-two-state.test.ts
@@ -84,6 +85,10 @@ The mobile app still uses the scorekeeper engine, not the full Texas 42 rules mo
 - Event application and deterministic replay helpers for accepted Forty Two events.
 - First Forty Two command handlers for create game, deal hand, submit bid, complete bidding, and call trump.
 - Command handlers validate phase, stale snapshot/event metadata, and actor seat where applicable.
+- Play-domino command validation and event emission.
+- Automatic trick completion when the fourth domino is played.
+- Trick winner derivation through the existing trick winner helper.
+- Completed tricks are stored in `FortyTwoState`, and the next trick leader is set to the trick winner.
 
 ## Test Status
 
@@ -116,6 +121,10 @@ Important covered invariants:
 - Command happy path through deal, bidding, bidding completion, and trump call.
 - Command failure coverage for invalid phase, invalid declarer/actor, and invalid bid.
 - Command-emitted events replay to the same state produced by command application.
+- Play-command coverage for a valid four-play trick lifecycle.
+- Play-command failures for invalid turn, missing domino, and must-follow-suit.
+- Play-command winner coverage for trump and led-suit winners.
+- Play-command replay coverage for completed-trick state.
 
 Latest known verification before this report:
 
@@ -146,17 +155,16 @@ Completed or mostly completed:
 
 Still missing from the plan:
 
-- Command validation for domino play, trick completion, hand completion, and game completion actions.
-- Integration between trick completion and next-trick leader.
+- Command validation for hand completion and game completion actions.
 - Dealer rotation and game-completion logic after a full rules hand.
 
-This means the repository has implemented several later rules primitives and accepted-event scaffolding while still missing the command layer that would produce those events.
+This means the repository has implemented several later rules primitives and accepted-event scaffolding, with command coverage now extending through trick completion but not hand completion.
 
 ## Known Gaps
 
 - `FortyTwoState` phase shapes exist, but no phase machine connects deal, bidding, trump, tricks, hand scoring, and marks.
-- The first command slice validates and emits events through trump call; play, trick completion, hand completion, and game completion commands are still missing.
-- The reducer applies already-accepted events, but it does not yet derive trick winners, hand completion, or next dealers.
+- Commands validate and emit events through play and automatic trick completion; hand completion and game completion commands are still missing.
+- The reducer applies already-accepted events, but it does not yet derive hand completion, marks, next dealers, or game completion.
 - Rule constants now route through `standardRules`, but existing modules still expose compatibility constants.
 - No local practice screen or app flow consumes the rules engine.
 - No multiplayer-safe authority model is implemented in code.
@@ -170,28 +178,26 @@ This means the repository has implemented several later rules primitives and acc
 
 - The rules modules are individually tested, but there is no end-to-end hand lifecycle test from deal through hand scoring.
 - `scoreCompletedHand` trusts caller-provided trick winners. The trick winner helper exists, but scoring does not yet derive winners from tricks and trump in an orchestrated flow.
-- The trick model removes played dominoes from hands, but completed tricks are not yet accumulated through a command-driven hand lifecycle.
+- The trick model removes played dominoes from hands and completed tricks now accumulate through commands, but seven-trick hand completion is not orchestrated yet.
 - The bidding, trump, trick, and scoring states are separate shapes. `FortyTwoState` can represent phases, but without command validation future callers could still compose invalid accepted-event streams.
 - Constants are now behind `RuleConfig`, but variant-specific behavior still needs command-level enforcement.
-- Current full-rules replay is deterministic for accepted events, and the first command slice proves command-emitted events replay to the same state. Later gameplay commands still need that proof.
+- Current full-rules replay is deterministic for accepted events, and command slices through trick completion prove command-emitted events replay to the same state. Hand/game completion commands still need that proof.
 - Full-hand mark awards are calculated, but not applied to a match score or game-complete state.
 - Dealer rotation after a rules hand is not implemented outside scorekeeper mode.
 - Test fixtures are becoming repetitive and may hide coupling as the engine grows.
 
 ## Recommended Next Work
 
-1. Add `PLAY_DOMINO` command validation and event emission.
-2. Wire trick completion so commands derive the winner, capture points, store the completed trick, and set the next leader.
-3. Wire hand completion so seven completed tricks produce a hand score, mark awards, next dealer, and optional game completion.
-4. Move repeated rules test fixtures into `packages/game-engine/src/test-utils`.
-5. Add integration tests for a full seven-trick hand lifecycle.
-6. Map full-rules events into the shared Action/Event/Snapshot contracts once local command validation is stable.
-7. Defer AWS, multiplayer rooms, bots, tournaments, and UI until the local rules command/reducer path is stable.
+1. Wire hand completion so seven completed tricks produce a hand score, mark awards, next dealer, and optional game completion.
+2. Move repeated rules test fixtures into `packages/game-engine/src/test-utils`.
+3. Add integration tests for a full seven-trick hand lifecycle.
+4. Map full-rules events into the shared Action/Event/Snapshot contracts once local command validation is stable.
+5. Defer AWS, multiplayer rooms, bots, tournaments, and UI until the local rules command/reducer path is stable.
 
 ## Architecture Notes
 
 - The current separation between scorekeeper mode and full rules mode is still correct.
 - The rules engine is pure TypeScript and remains UI-independent.
-- The current implementation favors small functional modules, serializable state shapes, accepted-event replay, and narrow command slices over an early monolithic reducer. That has kept tests focused, but the next milestone needs gameplay commands.
+- The current implementation favors small functional modules, serializable state shapes, accepted-event replay, and narrow command slices over an early monolithic reducer. That has kept tests focused, but the next milestone needs hand-completion commands.
 - The docs describe a future server-authoritative multiplayer engine. The code is not there yet, but the pure deterministic module boundary is compatible with that direction.
-- The biggest remaining architecture deviation is sequence: later rule primitives were implemented before all command validation. `RuleConfig`, `FortyTwoState`, event envelopes, replay, and the first command slice now exist, so the next correction should validate play/trick/hand actions into those events.
+- The biggest remaining architecture deviation is sequence: later rule primitives were implemented before all command validation. `RuleConfig`, `FortyTwoState`, event envelopes, replay, setup/bidding/trump commands, and play/trick-completion commands now exist, so the next correction should validate hand/game completion into those events.

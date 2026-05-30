@@ -117,6 +117,11 @@ export type CallFortyTwoTrumpAction = Extract<
   { readonly type: "fortyTwo.trump.call" }
 >;
 
+export type PlayFortyTwoDominoAction = Extract<
+  FortyTwoAction,
+  { readonly type: "fortyTwo.domino.play" }
+>;
+
 export interface FortyTwoActionEnvelope<
   TAction extends FortyTwoAction = FortyTwoAction
 > {
