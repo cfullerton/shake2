@@ -91,6 +91,7 @@ describe("LocalGameScreen", () => {
 
       fireEvent.press(view.getByLabelText("Select 3-0"));
       fireEvent.press(view.getByText("Play 3-0"));
+      expect(view.queryByLabelText(/^You \(South\) played 3-0$/)).toBeTruthy();
 
       const immediatePlayCount = view.queryAllByLabelText(/played \d-\d$/).length;
 
@@ -144,11 +145,11 @@ describe("LocalGameScreen", () => {
 
         fireEvent.press(playButton);
 
-        const hasNoVisibleCurrentPlays = view.queryAllByLabelText(/played \d-\d$/).length === 0;
-        const showsNewLead = Boolean(view.queryByText("You lead this trick."));
+        const hasVisibleCurrentPlays = view.queryAllByLabelText(/played \d-\d$/).length > 0;
+        const showsHumanPlay = Boolean(view.queryByLabelText(/^You \(South\) played \d-\d$/));
         const isAnimatingBots = Boolean(view.queryByText("Bots are playing…"));
 
-        if (hasNoVisibleCurrentPlays && showsNewLead && isAnimatingBots) {
+        if (hasVisibleCurrentPlays && showsHumanPlay && isAnimatingBots) {
           foundLeadWinAnimation = true;
 
           act(() => { jest.advanceTimersByTime(800); });

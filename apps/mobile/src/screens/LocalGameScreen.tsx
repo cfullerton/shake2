@@ -38,6 +38,10 @@ const BOT_PLAY_DELAY_MS = 800;
 
 const seatNames = ["North", "East", "South", "West"] as const;
 type DominoTileSize = "regular" | "small";
+type PlayedDominoEntry = {
+  readonly seat: SeatIndex;
+  readonly domino: Domino;
+};
 const pipCellsByValue: Record<Pip, readonly number[]> = {
   0: [],
   1: [4],
@@ -60,6 +64,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   );
   const [selectedPlayKey, setSelectedPlayKey] = useState<string | null>(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
+  const [revealedAdvancePlays, setRevealedAdvancePlays] = useState<readonly PlayedDominoEntry[]>(
+    []
+  );
   const [visibleTrickPlayCount, setVisibleTrickPlayCount] = useState(0);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trickRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,9 +111,13 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const selectedPlay = view.kind === "trickPlay" && selectedPlayKey
     ? view.legalPlays.find((play) => formatPlayKey(play) === selectedPlayKey) ?? null
     : null;
-  const visibleTrickPlays = currentTrick
-    ? currentTrick.playedDominoes.slice(0, visibleTrickPlayCount)
-    : [];
+  const trickPlaySource = isAdvancing && revealedAdvancePlays.length > 0
+    ? revealedAdvancePlays
+    : currentTrick?.playedDominoes ?? [];
+  const currentTrickSourceId = isAdvancing && revealedAdvancePlays.length > 0
+    ? `advance-${session.events.length}`
+    : currentTrickId;
+  const visibleTrickPlays = trickPlaySource.slice(0, visibleTrickPlayCount);
 
   useEffect(() => {
     visibleTrickPlayCountRef.current = visibleTrickPlayCount;
@@ -118,15 +129,15 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       trickRevealTimerRef.current = null;
     }
 
-    if (!currentTrick || !currentTrickId) {
+    if (!currentTrickSourceId) {
       lastRenderedTrickIdRef.current = null;
       visibleTrickPlayCountRef.current = 0;
       setVisibleTrickPlayCount(0);
       return;
     }
 
-    const totalPlayCount = currentTrick.playedDominoes.length;
-    const sameTrick = currentTrickId === lastRenderedTrickIdRef.current;
+    const totalPlayCount = trickPlaySource.length;
+    const sameTrick = currentTrickSourceId === lastRenderedTrickIdRef.current;
     let nextVisibleCount = sameTrick
       ? Math.min(visibleTrickPlayCountRef.current, totalPlayCount)
       : 0;
@@ -137,7 +148,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
     }
 
     if (!isAdvancing) {
-      lastRenderedTrickIdRef.current = currentTrickId;
+      lastRenderedTrickIdRef.current = currentTrickSourceId;
       if (nextVisibleCount !== totalPlayCount) {
         visibleTrickPlayCountRef.current = totalPlayCount;
         setVisibleTrickPlayCount(totalPlayCount);
@@ -147,7 +158,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
 
     if (
       nextVisibleCount < totalPlayCount &&
-      currentTrick.playedDominoes[nextVisibleCount]?.seat === session.humanSeat
+      trickPlaySource[nextVisibleCount]?.seat === session.humanSeat
     ) {
       nextVisibleCount += 1;
       visibleTrickPlayCountRef.current = nextVisibleCount;
@@ -158,13 +169,13 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       const revealNextBotPlay = () => {
         const latestCount = Math.min(
           visibleTrickPlayCountRef.current + 1,
-          currentTrick.playedDominoes.length
+          trickPlaySource.length
         );
 
         visibleTrickPlayCountRef.current = latestCount;
         setVisibleTrickPlayCount(latestCount);
 
-        if (latestCount < currentTrick.playedDominoes.length) {
+        if (latestCount < trickPlaySource.length) {
           trickRevealTimerRef.current = setTimeout(revealNextBotPlay, BOT_PLAY_DELAY_MS);
         } else {
           trickRevealTimerRef.current = null;
@@ -174,8 +185,8 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       trickRevealTimerRef.current = setTimeout(revealNextBotPlay, BOT_PLAY_DELAY_MS);
     }
 
-    lastRenderedTrickIdRef.current = currentTrickId;
-  }, [currentTrick, currentTrickId, isAdvancing, session.humanSeat]);
+    lastRenderedTrickIdRef.current = currentTrickSourceId;
+  }, [currentTrickSourceId, isAdvancing, session.humanSeat, trickPlaySource]);
 
   const phaseTitle = useMemo(() => {
     switch (view.kind) {
@@ -198,7 +209,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
     try {
       const nextSession = run();
       const advanceDelayMs = getAdvanceDelayMs(session, nextSession);
+      const newlyPlayedDominoes = getNewPlayedDominoes(session, nextSession);
       setSelectedPlayKey(null);
+      setRevealedAdvancePlays(newlyPlayedDominoes);
       setSession(nextSession);
       setIsAdvancing(true);
 
@@ -821,24 +834,32 @@ function getAdvanceDelayMs(
   return BOT_PLAY_DELAY_MS * Math.max(1, botPlaysToReveal);
 }
 
-function countNewBotDominoPlays(
+function getNewPlayedDominoes(
   previousSession: LocalGameSession,
   nextSession: LocalGameSession
-): number {
+): readonly PlayedDominoEntry[] {
   if (nextSession.events.length <= previousSession.events.length) {
-    return 0;
+    return [];
   }
 
   return nextSession.events
     .slice(previousSession.events.length)
-    .filter((eventEnvelope) => {
+    .flatMap((eventEnvelope) => {
       if (eventEnvelope.event.type !== "fortyTwo.domino.played") {
-        return false;
+        return [];
       }
 
       const playedDomino = eventEnvelope.event.payload.currentTrick.playedDominoes.at(-1);
-      return Boolean(playedDomino && playedDomino.seat !== nextSession.humanSeat);
-    })
+      return playedDomino ? [playedDomino] : [];
+    });
+}
+
+function countNewBotDominoPlays(
+  previousSession: LocalGameSession,
+  nextSession: LocalGameSession
+): number {
+  return getNewPlayedDominoes(previousSession, nextSession)
+    .filter((play) => play.seat !== nextSession.humanSeat)
     .length;
 }
 
