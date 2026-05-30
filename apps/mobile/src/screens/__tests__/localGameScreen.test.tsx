@@ -91,6 +91,7 @@ describe("LocalGameScreen", () => {
 
       fireEvent.press(view.getByLabelText("Select 3-0"));
       fireEvent.press(view.getByText("Play 3-0"));
+      expect(view.queryByLabelText(/^You \([A-Za-z]+\) played 3-0$/)).toBeTruthy();
 
       const immediatePlayCount = view.queryAllByLabelText(/played \d-\d$/).length;
 
@@ -103,7 +104,7 @@ describe("LocalGameScreen", () => {
       expect(afterFirstRevealCount).toBeLessThanOrEqual(immediatePlayCount + 1);
 
       act(() => { jest.runAllTimers(); });
-      expect(view.queryAllByLabelText(/played \d-\d$/).length).toBeGreaterThanOrEqual(afterFirstRevealCount);
+      expect(view.queryByText("Bots are playing…")).toBeNull();
     } finally {
       randomSpy.mockRestore();
     }
@@ -144,11 +145,10 @@ describe("LocalGameScreen", () => {
 
         fireEvent.press(playButton);
 
-        const hasNoVisibleCurrentPlays = view.queryAllByLabelText(/played \d-\d$/).length === 0;
-        const showsNewLead = Boolean(view.queryByText("You lead this trick."));
+        const hasVisibleCurrentPlays = view.queryAllByLabelText(/played \d-\d$/).length > 0;
         const isAnimatingBots = Boolean(view.queryByText("Bots are playing…"));
 
-        if (hasNoVisibleCurrentPlays && showsNewLead && isAnimatingBots) {
+        if (hasVisibleCurrentPlays && isAnimatingBots) {
           foundLeadWinAnimation = true;
 
           act(() => { jest.advanceTimersByTime(800); });
