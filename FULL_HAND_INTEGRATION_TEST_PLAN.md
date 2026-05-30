@@ -2,6 +2,12 @@
 
 Last updated: 2026-05-30
 
+## Status
+
+Implemented in `packages/game-engine/src/__tests__/forty-two-full-hand-integration.test.ts`.
+
+The suite now exercises complete hands from `CREATE_GAME` and `DEAL_HAND` through command-layer bidding, trump calls, 28 legal plays, automatic hand completion, scoring, mark awards, dealer rotation, game completion, and replay validation.
+
 ## Purpose
 
 Add command-level integration tests that prove a full local Texas 42 hand can run from game creation through deal, bidding, trump call, seven tricks, hand scoring, mark awards, next-hand setup, and optional game completion.
@@ -18,7 +24,7 @@ Existing tests already cover:
 - Automatic hand completion after seven completed tricks from crafted `trickPlay` snapshots.
 - Made/set mark awards, dealer rotation, game completion, and replay for those crafted full-hand snapshots.
 
-The main gap is that no test currently runs the whole hand from `CREATE_GAME` and `DEAL_HAND` through all 28 legal plays using command handlers only.
+The original main gap was that no test ran the whole hand from `CREATE_GAME` and `DEAL_HAND` through all 28 legal plays using command handlers only. That gap is now covered for the scenarios below, though the fixture helpers still live inside the test file.
 
 ## Test Harness Work
 
@@ -129,8 +135,9 @@ Every full-hand integration test should assert:
 
 This plan is complete when:
 
-- At least three command-level full-hand integration tests exist: made bid, set bid, and game complete.
-- The six-trick non-completion guard exists.
-- Replay equality is proven for every full-hand success case.
-- Tests run in the game-engine package without UI or network dependencies.
-- `npm run test -w @shake2/game-engine` and `npm run typecheck -w @shake2/game-engine` pass.
+- At least three command-level full-hand integration tests exist: made bid, set bid, and game complete. Done.
+- The six-trick non-completion guard exists. Done.
+- The invalid final-trick play guard exists. Done.
+- Replay equality is proven for every full-hand success case. Done.
+- Tests run in the game-engine package without UI or network dependencies. Done.
+- `npm run test -w @shake2/game-engine` and `npm run typecheck -w @shake2/game-engine` pass. Done.

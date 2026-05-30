@@ -41,6 +41,7 @@ packages/game-engine/src
     |-- forty-two-bidding.test.ts
     |-- forty-two-commands.test.ts
     |-- forty-two-deal.test.ts
+    |-- forty-two-full-hand-integration.test.ts
     |-- forty-two-play-command.test.ts
     |-- forty-two-reducer.test.ts
     |-- forty-two-scoring.test.ts
@@ -136,6 +137,8 @@ Important covered invariants:
 - Dealer rotation after a non-terminal hand.
 - Game completion at target marks.
 - Replay coverage for post-hand state.
+- End-to-end command-layer full-hand integration coverage from game creation and deal through bidding, trump, all 28 plays, hand completion, mark awards, dealer rotation, game completion, and replay.
+- Full-hand integration cases for normal made bids, exact 42 bids, set-by-one bids, trump-heavy hands, no-trump-played led-suit tricks, all-pass dealer-forced bidding, multiple dealer rotations, and target-mark game completion.
 
 Latest known verification before this report:
 
@@ -144,7 +147,7 @@ npm run typecheck
 npm test
 ```
 
-Both passed after the hand-completion command/reducer work.
+Both passed after the full-hand integration test work.
 
 ## Current M2 Plan Alignment
 
@@ -170,14 +173,12 @@ Completed or mostly completed:
 Still missing from the plan:
 
 - A standalone `COMPLETE_HAND` command is not implemented; hand completion is currently automatic after the seventh completed trick.
-- Full command integration tests should still start from `CREATE_GAME` and use the dealt hands end-to-end instead of jumping directly into crafted `trickPlay` fixtures.
 - Shared deterministic full-hand test fixtures should be extracted once the integration cases settle.
 
-This means the repository has implemented the core local hand lifecycle, but it still needs a more comprehensive integration-test harness before UI or server-authoritative multiplayer should depend on it.
+This means the repository has implemented and tested the core local hand lifecycle through the command layer, but fixtures should still be consolidated before UI or server-authoritative multiplayer depends on it.
 
 ## Known Gaps
 
-- The happy path is command/reducer-driven through a complete hand, but current full-hand tests start from crafted trick-play snapshots rather than `CREATE_GAME -> DEAL_HAND -> ...`.
 - There is no standalone `COMPLETE_HAND` command; this is acceptable for the current automatic lifecycle but should be an explicit ADR or implementation note if retained.
 - Rule constants now route through `standardRules`, but existing modules still expose compatibility constants.
 - No local practice screen or app flow consumes the rules engine.
@@ -186,12 +187,12 @@ This means the repository has implemented the core local hand lifecycle, but it 
 - No bots or bot decision interface.
 - No variant contracts such as mark bids, 84, plunge, splash, nello, sevens, or follow-me.
 - No runtime schema validation for serialized full-game snapshots or accepted-event payloads yet.
-- No package-local test utilities for deterministic hands; tests currently build fixtures inline.
+- No package-local test utilities for deterministic hands; integration tests currently build fixtures inline.
 - No persistence adapter exists for full-rules snapshots/events.
 
 ## Technical Risks
 
-- The rules modules are individually tested, but there is not yet an end-to-end command test from actual dealt hands through hand scoring.
+- The rules modules now have end-to-end command tests from actual dealt hands through hand scoring, but the deterministic fixture helpers are still test-local.
 - `scoreCompletedHand` trusts caller-provided trick winners. The trick winner helper exists, but scoring does not yet derive winners from tricks and trump in an orchestrated flow.
 - The play command derives trick winners before scoring, but accepted events can still contain externally supplied trick winners; server-authoritative validation must reject forged or inconsistent streams before persistence.
 - The bidding, trump, trick, scoring, and next-hand transitions are connected for the local command path, but accepted-event replay intentionally trusts accepted events.
@@ -202,9 +203,9 @@ This means the repository has implemented the core local hand lifecycle, but it 
 
 ## Recommended Next Work
 
-1. Add integration tests for a full seven-trick hand lifecycle starting from `CREATE_GAME` and `DEAL_HAND`.
-2. Move repeated rules test fixtures into `packages/game-engine/src/test-utils`.
-3. Document the automatic hand-completion decision in an ADR or implementation note if a standalone `COMPLETE_HAND` command remains intentionally omitted.
+1. Move repeated rules test fixtures into `packages/game-engine/src/test-utils`.
+2. Document the automatic hand-completion decision in an ADR or implementation note if a standalone `COMPLETE_HAND` command remains intentionally omitted.
+3. Add accepted-event validation or command-side consistency checks before any server-authoritative persistence path.
 4. Map full-rules events into the shared Action/Event/Snapshot contracts once local command validation is stable.
 5. Defer AWS, multiplayer rooms, bots, tournaments, and UI until the local rules command/reducer path is stable.
 
