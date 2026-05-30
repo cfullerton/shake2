@@ -31,13 +31,13 @@ Recommendation: track this as an accepted temporary development dependency risk,
 
 Current saved games are not sensitive, but future auth tokens, refresh tokens, private room secrets, invite tokens, or user identifiers must not be stored in AsyncStorage unless the platform guidance explicitly permits it. Use secure token handling through the auth provider/platform storage.
 
-2. User input has no length limits.
+2. User input limits are local-only.
 
-Game names, team names, player names, and notes can be arbitrarily long. This is mostly a UX/performance issue today; in multiplayer it becomes a validation and abuse concern.
+Game names, team names, player names, notes, target marks, timestamps, and mark awards now have engine-level validation. Future multiplayer must duplicate/enforce equivalent limits server-side.
 
-3. Local persisted data validation is shallow.
+3. Local persisted data recovery is minimal.
 
-`loadPersistedGames` checks only a few top-level fields. Corrupt or maliciously edited nested data can enter the app and cause logic/rendering issues.
+The persistence codec validates nested saved-game shape and drops invalid data. There is still no quarantine, audit, or user-facing recovery path.
 
 4. Client-side validation would be insufficient for multiplayer.
 
@@ -72,9 +72,9 @@ The project has no data classification for player names, game history, stats, in
 ## Recommended Security Tasks
 
 1. Add a dependency-audit note to CI once CI exists, but do not force downgrade Expo.
-2. Add input length limits for game/team/player names and hand notes.
+2. Mirror scorekeeper input limits in UI affordances and future server validation.
 3. Replace local ID generation with an injectable ID provider and use `crypto.randomUUID` where available.
-4. Add strict runtime validation for persisted local data.
+4. Add user-facing recovery for invalid local persistence data.
 5. Create a security-focused multiplayer action authorization matrix.
 6. Define data classes: public profile data, private account data, room membership data, game event data, analytics data.
 7. Decide token/session storage strategy for Cognito on iOS before implementing auth.

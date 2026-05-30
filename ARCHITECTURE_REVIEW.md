@@ -10,8 +10,10 @@ The current architecture is a good Milestone 1 scorekeeper prototype, but it is 
 
 - The monorepo layout matches the intended app/package separation for `apps/mobile`, `packages/game-engine`, and `packages/shared`.
 - The engine is pure TypeScript and independent of React Native, Expo, AsyncStorage, and AWS.
+- Scorekeeper engine code is split into command, selector, dealer, validation, persistence, and type modules.
 - Navigation is simple and understandable for M1.
 - Scorekeeper state is serializable JSON.
+- Local persistence now has a versioned envelope and migrates the original raw-array format.
 - Basic engine tests exist, and they cover the most important current business behavior.
 - Local persistence is isolated in `apps/mobile/src/storage/gameStorage.ts`, not scattered through screens.
 
@@ -33,9 +35,9 @@ Current commands track marks and dealer. There is no domino model, shuffle/deal,
 
 `ScorekeeperGame` is useful for M1, but not enough for a server snapshot. Future state needs room/session metadata, player identities, seats, connection state, current phase, hand state, trick state, bidding state, action history, and variant config.
 
-5. Local persistence has no schema envelope.
+5. Local persistence is still snapshot-only.
 
-AsyncStorage stores an array directly. Once data ships to users, migrations become painful. Add a versioned document now.
+AsyncStorage now stores a versioned document, but it still persists mutable snapshots rather than immutable events. That is fine for local scorekeeping, but it is not the multiplayer persistence model.
 
 6. `packages/shared` is not carrying contracts.
 
@@ -108,7 +110,7 @@ The same pure engine should be usable on the server for validation and optionall
 
 1. Add ADR-0002 for the M1 local-first scorekeeper deviation from the original AWS architecture.
 2. Add ADR-0003 for event-sourced server-authoritative multiplayer state.
-3. Add a versioned local persistence envelope before any more fields are shipped.
-4. Add engine subfolders and domain boundaries before implementing domino rules.
+3. Add a user-facing local data reset/recovery path before App Store release.
+4. Continue refining engine domain boundaries before implementing domino rules.
 5. Define multiplayer action/event/snapshot types before building `/backend`.
 6. Add CI with typecheck, engine tests, and audit reporting.

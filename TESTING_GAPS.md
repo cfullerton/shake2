@@ -16,6 +16,9 @@ Covered today:
 - Detect winner.
 - Undo latest score.
 - Reject zero-mark awards.
+- Reject over-target mark awards.
+- Reject invalid target marks, timestamps, and overlong labels/notes.
+- Serialize, parse, and migrate versioned scorekeeper persistence data.
 
 Manual/browser verification has been performed for the app flow, but it is not automated.
 
@@ -25,9 +28,9 @@ Manual/browser verification has been performed for the app flow, but it is not a
 
 Screens and components have no React Native Testing Library coverage. Navigation, form validation, button disabled states, and rendering edge cases are untested.
 
-2. No persistence tests.
+2. No AsyncStorage integration tests.
 
-AsyncStorage load/save behavior has no tests for happy path, parse failure, corrupt shapes, migration, or storage write failure.
+The pure persistence codec has tests, but the React Native AsyncStorage wrapper has no tests for read/write failures or platform integration.
 
 3. No navigation tests.
 
@@ -63,13 +66,10 @@ No checks for large history lists, many saved games, slow AsyncStorage, or low-e
 
 ## Engine Test Gaps
 
-- Awarding marks beyond target behavior.
 - Undo on empty history behavior.
 - Complete-game behavior and error path.
-- Invalid target marks.
 - Invalid IDs/timestamps.
 - Sanitizing empty game/team/player names.
-- Backward compatibility for score entries without `dealer`.
 - Deterministic replay from an event sequence, once events exist.
 - Variant configuration once rules are added.
 
