@@ -8,7 +8,7 @@ describe("LocalGameScreen", () => {
   });
 
   afterEach(() => {
-    jest.runAllTimers();
+    act(() => { jest.runOnlyPendingTimers(); });
     jest.useRealTimers();
   });
 
@@ -67,6 +67,43 @@ describe("LocalGameScreen", () => {
 
       expect(view.getByText("3-0 selected")).toBeTruthy();
       expect(view.getByText("Play 3-0")).toBeTruthy();
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
+  it("reveals bot plays in the current trick one at a time", () => {
+    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0.99);
+
+    try {
+      const view = render(
+        <LocalGameScreen
+          navigation={{} as never}
+          route={{ params: { targetMarks: 7 } } as never}
+        />
+      );
+
+      fireEvent.press(view.getByText("Pass"));
+      act(() => { jest.runAllTimers(); });
+
+      fireEvent.press(view.getByText("Call Sixes"));
+      act(() => { jest.runAllTimers(); });
+
+      fireEvent.press(view.getByLabelText("Select 3-0"));
+      fireEvent.press(view.getByText("Play 3-0"));
+
+      const immediatePlayCount = view.queryAllByLabelText(/played \d-\d$/).length;
+
+      act(() => { jest.advanceTimersByTime(799); });
+      expect(view.queryAllByLabelText(/played \d-\d$/).length).toBe(immediatePlayCount);
+
+      act(() => { jest.advanceTimersByTime(1); });
+      const afterFirstRevealCount = view.queryAllByLabelText(/played \d-\d$/).length;
+      expect(afterFirstRevealCount).toBeGreaterThan(immediatePlayCount);
+      expect(afterFirstRevealCount).toBeLessThanOrEqual(immediatePlayCount + 1);
+
+      act(() => { jest.runAllTimers(); });
+      expect(view.queryAllByLabelText(/played \d-\d$/).length).toBeGreaterThanOrEqual(afterFirstRevealCount);
     } finally {
       randomSpy.mockRestore();
     }
