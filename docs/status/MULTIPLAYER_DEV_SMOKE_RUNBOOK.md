@@ -37,9 +37,11 @@ Set the smoke variables in your shell, or copy `backend/.env.example` to `backen
 export AWS_REGION=us-east-1
 export SHAKE2_SMOKE_STACK_NAME=shake2-dev-multiplayer-infra
 export SHAKE2_SMOKE_EMAIL=smoke@example.com
-export SHAKE2_SMOKE_USERNAME=smoke@example.com
+export SHAKE2_SMOKE_USERNAME=smoke-user
 export SHAKE2_SMOKE_PASSWORD='temporary-password'
 ```
+
+Use a non-email smoke username. The Cognito pool stores email as a required verified attribute/alias; the username itself is only a sign-in handle. The backend uses Cognito `sub` as the multiplayer `playerId`, so changing the username format has no gameplay or ownership implication.
 
 If the script should create or reset the smoke Cognito user:
 

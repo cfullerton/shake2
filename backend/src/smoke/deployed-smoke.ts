@@ -124,8 +124,10 @@ export async function runDeployedSmoke(
 
   if (failed.length > 0) {
     throw new DeployedSmokeError(
-      `Deployed multiplayer smoke failed: ${
-        failed.map((failure) => failure.title).join(", ")
+      `Deployed multiplayer smoke failed:\n${
+        failed.map((failure) =>
+          `- ${failure.title}: ${failure.details}`
+        ).join("\n")
       }`
     );
   }
@@ -395,7 +397,7 @@ export function evaluateSmokeCheck(
     return {
       details: ok
         ? "Resolver returned INVALID_ACTOR from authenticated Cognito identity."
-        : `Expected INVALID_ACTOR response, got HTTP ${result.httpStatus}.`,
+        : `Expected INVALID_ACTOR response. ${summarizeSmokeHttpResult(result)}`,
       ok,
       title: check.title
     };
@@ -406,7 +408,7 @@ export function evaluateSmokeCheck(
   return {
     details: ok
       ? "Resolver reached Lambda/DynamoDB path and returned a GraphQL error for missing smoke data."
-      : `Expected GraphQL error for missing smoke data, got HTTP ${result.httpStatus}.`,
+      : `Expected GraphQL error for missing smoke data. ${summarizeSmokeHttpResult(result)}`,
     ok,
     title: check.title
   };
@@ -510,6 +512,10 @@ function getSubmitGameActionPayload(
 
 function hasGraphqlErrors(body: GraphqlResponseBody | null): boolean {
   return Array.isArray(body?.errors) && body.errors.length > 0;
+}
+
+function summarizeSmokeHttpResult(result: SmokeHttpResult): string {
+  return `HTTP ${result.httpStatus}; body ${JSON.stringify(result.body)}`;
 }
 
 function requireStackOutput(outputs: readonly Output[], key: string): string {

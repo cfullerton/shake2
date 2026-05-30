@@ -181,6 +181,19 @@ test("evaluates expected smoke GraphQL results", () => {
     }).ok,
     true
   );
+  assert.match(
+    evaluateSmokeCheck(invalidActor!, {
+      body: {
+        errors: [
+          {
+            message: "Cannot return null for non-nullable field SubmitGameActionResult.events."
+          }
+        ]
+      },
+      httpStatus: 200
+    }).details,
+    /Expected INVALID_ACTOR response.*SubmitGameActionResult\.events/u
+  );
   assert.equal(
     evaluateSmokeCheck(snapshot!, {
       body: {
