@@ -391,57 +391,66 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                 </Text>
               </View>
             ) : null}
-            {currentTrick && visibleTrickPlays.length > 0 ? (
-              <View style={styles.trickTable} testID="local-game-trick-table">
-                <View style={[styles.trickSeatSlot, styles.trickSeatTop]} testID="local-game-trick-seat-top">
-                  <Text style={styles.handLabel}>South</Text>
-                  {visibleTrickPlayBySeat.get(2) ? (
-                    <DominoTile
-                      accessibilityLabel={`${formatSeatLabel(state, 2, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(2)!.domino)}`}
-                      domino={visibleTrickPlayBySeat.get(2)!.domino}
-                      size="small"
-                    />
-                  ) : (
-                    <Text style={styles.meta}>Waiting</Text>
-                  )}
+            {currentTrick ? (
+              <>
+                <View style={styles.trickTable} testID="local-game-trick-table">
+                  <View style={[styles.trickSeatSlot, styles.trickSeatTop]} testID="local-game-trick-seat-top">
+                    <Text style={styles.handLabel}>South</Text>
+                    {visibleTrickPlayBySeat.get(2) ? (
+                      <DominoTile
+                        accessibilityLabel={`${formatSeatLabel(state, 2, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(2)!.domino)}`}
+                        domino={visibleTrickPlayBySeat.get(2)!.domino}
+                        size="small"
+                      />
+                    ) : (
+                      <Text style={styles.meta}>Waiting</Text>
+                    )}
+                  </View>
+                  <View style={[styles.trickSeatSlot, styles.trickSeatLeft]} testID="local-game-trick-seat-left">
+                    <Text style={styles.handLabel}>East</Text>
+                    {visibleTrickPlayBySeat.get(1) ? (
+                      <DominoTile
+                        accessibilityLabel={`${formatSeatLabel(state, 1, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(1)!.domino)}`}
+                        domino={visibleTrickPlayBySeat.get(1)!.domino}
+                        size="small"
+                      />
+                    ) : (
+                      <Text style={styles.meta}>Waiting</Text>
+                    )}
+                  </View>
+                  <View style={[styles.trickSeatSlot, styles.trickSeatRight]} testID="local-game-trick-seat-right">
+                    <Text style={styles.handLabel}>West</Text>
+                    {visibleTrickPlayBySeat.get(3) ? (
+                      <DominoTile
+                        accessibilityLabel={`${formatSeatLabel(state, 3, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(3)!.domino)}`}
+                        domino={visibleTrickPlayBySeat.get(3)!.domino}
+                        size="small"
+                      />
+                    ) : (
+                      <Text style={styles.meta}>Waiting</Text>
+                    )}
+                  </View>
+                  <View style={[styles.trickSeatSlot, styles.trickSeatBottom]} testID="local-game-trick-seat-bottom">
+                    <Text style={styles.handLabel}>Player</Text>
+                    {visibleTrickPlayBySeat.get(0) ? (
+                      <DominoTile
+                        accessibilityLabel={`${formatSeatLabel(state, 0, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(0)!.domino)}`}
+                        domino={visibleTrickPlayBySeat.get(0)!.domino}
+                        size="small"
+                      />
+                    ) : (
+                      <Text style={styles.meta}>Waiting</Text>
+                    )}
+                  </View>
                 </View>
-                <View style={[styles.trickSeatSlot, styles.trickSeatLeft]} testID="local-game-trick-seat-left">
-                  <Text style={styles.handLabel}>East</Text>
-                  {visibleTrickPlayBySeat.get(1) ? (
-                    <DominoTile
-                      accessibilityLabel={`${formatSeatLabel(state, 1, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(1)!.domino)}`}
-                      domino={visibleTrickPlayBySeat.get(1)!.domino}
-                      size="small"
-                    />
-                  ) : (
-                    <Text style={styles.meta}>Waiting</Text>
-                  )}
-                </View>
-                <View style={[styles.trickSeatSlot, styles.trickSeatRight]} testID="local-game-trick-seat-right">
-                  <Text style={styles.handLabel}>West</Text>
-                  {visibleTrickPlayBySeat.get(3) ? (
-                    <DominoTile
-                      accessibilityLabel={`${formatSeatLabel(state, 3, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(3)!.domino)}`}
-                      domino={visibleTrickPlayBySeat.get(3)!.domino}
-                      size="small"
-                    />
-                  ) : (
-                    <Text style={styles.meta}>Waiting</Text>
-                  )}
-                </View>
-                <View style={[styles.trickSeatSlot, styles.trickSeatBottom]} testID="local-game-trick-seat-bottom">
-                  <Text style={styles.handLabel}>Player</Text>
-                  {visibleTrickPlayBySeat.get(0) ? (
-                    <DominoTile
-                      accessibilityLabel={`${formatSeatLabel(state, 0, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(0)!.domino)}`}
-                      domino={visibleTrickPlayBySeat.get(0)!.domino}
-                      size="small"
-                    />
-                  ) : (
-                    <Text style={styles.meta}>Waiting</Text>
-                  )}
-                </View>
-              </View>
+                {visibleTrickPlays.length === 0 ? (
+                  <Text style={styles.copy}>
+                    {turnSeat === session.humanSeat
+                      ? "You lead this trick."
+                      : `${formatSeatLabel(state, turnSeat, session.humanSeat)} leads this trick.`}
+                  </Text>
+                ) : null}
+              </>
             ) : (
               <Text style={styles.copy}>
                 {turnSeat === session.humanSeat
