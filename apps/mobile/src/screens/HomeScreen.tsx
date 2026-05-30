@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { SEAT_LABELS } from "@shake2/game-engine";
-import { Plus, Trophy } from "lucide-react-native";
+import { Bot, Plus, Trophy } from "lucide-react-native";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "../components/Button";
@@ -36,6 +36,13 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
         onPress={() => navigation.navigate("NewGame")}
       >
         New Game
+      </Button>
+      <Button
+        icon={<Bot color={palette.teal} size={19} />}
+        onPress={() => navigation.navigate("LocalGameStart")}
+        variant="secondary"
+      >
+        Practice vs Bots
       </Button>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

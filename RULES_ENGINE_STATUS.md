@@ -6,7 +6,7 @@ Last reviewed: 2026-05-30
 
 The rules engine has moved beyond scorekeeper-only support and now contains the core local Texas 42 rule primitives for dominoes, seating, dealing, numeric bidding, trump, trick legality, trick winners, full-hand scoring, mark awards, dealer advancement, and game completion.
 
-The implementation is now a focused local command/reducer path through `PLAY_DOMINO`: a fourth play completes a trick, the seventh completed trick completes the hand, scoring is applied, marks are awarded, and the game completes when target marks are reached. It is still not wired into UI, persistence, multiplayer, AWS, bots, variants, or a server-authoritative runtime.
+The implementation is now a focused local command/reducer path through `PLAY_DOMINO`: a fourth play completes a trick, the seventh completed trick completes the hand, scoring is applied, marks are awarded, and the game completes when target marks are reached. M3 Phase 1 adds a local playable session layer, legal-random bots, and a minimal mobile practice flow. It is still not wired into persistence, multiplayer, AWS, advanced bots, variants, or a server-authoritative runtime.
 
 ## Current Package Boundary
 
@@ -16,6 +16,8 @@ Current rules-related layout:
 
 ```text
 packages/game-engine/src
+|-- bots/
+|   `-- legal-random.ts
 |-- context.ts
 |-- errors.ts
 |-- dominoes/
@@ -28,6 +30,7 @@ packages/game-engine/src
 |   |-- commands.ts
 |   |-- deal.ts
 |   |-- events.ts
+|   |-- legal-actions.ts
 |   |-- reducer.ts
 |   |-- rules-config.ts
 |   |-- scoring.ts
@@ -35,6 +38,8 @@ packages/game-engine/src
 |   |-- state.ts
 |   |-- tricks.ts
 |   `-- trump.ts
+|-- local-play/
+|   `-- session.ts
 `-- __tests__/
     |-- dominoes.test.ts
     |-- engine-primitives.test.ts
@@ -47,10 +52,11 @@ packages/game-engine/src
     |-- forty-two-scoring.test.ts
     |-- forty-two-state.test.ts
     |-- forty-two-tricks.test.ts
-    `-- forty-two-trump.test.ts
+    |-- forty-two-trump.test.ts
+    `-- local-play-session.test.ts
 ```
 
-The mobile app still uses the scorekeeper engine, not the full Texas 42 rules modules.
+The mobile app now has two local modes: the original scorekeeper flow and a minimal local practice flow backed by the full Texas 42 rules modules.
 
 ## Implemented Rules Engine Capabilities
 
@@ -96,6 +102,10 @@ The mobile app still uses the scorekeeper engine, not the full Texas 42 rules mo
 - Non-terminal hand completion prepares the next hand by rotating dealer, incrementing hand number, clearing current-hand data, and returning to setup.
 - Target-mark detection and `GAME_COMPLETED` event emission.
 - Terminal game state records the winning team and completion timestamp.
+- Legal-action selectors for bids, trump calls, and domino plays.
+- Legal-random bot that only chooses actions exposed as legal by the engine.
+- Local game-session layer that creates games, manages human/bot seats, advances bot turns, dispatches engine commands, exposes session views, supports hand continuation, and supports restart.
+- Minimal mobile local-practice screens for start, bidding, trump selection, trick play, hand summary, and game summary.
 
 ## Test Status
 
@@ -139,6 +149,8 @@ Important covered invariants:
 - Replay coverage for post-hand state.
 - End-to-end command-layer full-hand integration coverage from game creation and deal through bidding, trump, all 28 plays, hand completion, mark awards, dealer rotation, game completion, and replay.
 - Full-hand integration cases for normal made bids, exact 42 bids, set-by-one bids, trump-heavy hands, no-trump-played led-suit tricks, all-pass dealer-forced bidding, multiple dealer rotations, and target-mark game completion.
+- Local session tests for start, restart/reset, dealer rotation, 100 completed simulated hands, and 25 completed simulated games.
+- Simulation assertions for replay equality, possible hand scores, mark awards, and game completion.
 
 Latest known verification before this report:
 
@@ -147,7 +159,7 @@ npm run typecheck
 npm test
 ```
 
-Both passed after the full-hand integration test work.
+Both passed after the M3 Phase 1 local playable slice.
 
 ## Current M2 Plan Alignment
 
@@ -169,11 +181,14 @@ Completed or mostly completed:
 - Accepted-event envelopes and reducer replay.
 - Command validation through create, deal, bid, complete bidding, call trump, and play domino.
 - Automatic trick completion, hand completion, mark awards, next-hand setup, and game completion from the play command.
+- Local playable session with legal-random bots.
+- Minimal mobile practice UI for human-vs-bot local games.
 
 Still missing from the plan:
 
 - A standalone `COMPLETE_HAND` command is not implemented; hand completion is currently automatic after the seventh completed trick.
 - Shared deterministic full-hand test fixtures should be extracted once the integration cases settle.
+- Local practice state is in-memory only and is not persisted.
 
 This means the repository has implemented and tested the core local hand lifecycle through the command layer, but fixtures should still be consolidated before UI or server-authoritative multiplayer depends on it.
 
@@ -181,10 +196,10 @@ This means the repository has implemented and tested the core local hand lifecyc
 
 - There is no standalone `COMPLETE_HAND` command; this is acceptable for the current automatic lifecycle but should be an explicit ADR or implementation note if retained.
 - Rule constants now route through `standardRules`, but existing modules still expose compatibility constants.
-- No local practice screen or app flow consumes the rules engine.
+- Local practice screen consumes the rules engine, but only as an in-memory vertical slice.
 - No multiplayer-safe authority model is implemented in code.
 - No AWS, AppSync, DynamoDB, Cognito, room state, or reconnect handling.
-- No bots or bot decision interface.
+- Only legal-random bots exist; no heuristic or advanced strategy exists.
 - No variant contracts such as mark bids, 84, plunge, splash, nello, sevens, or follow-me.
 - No runtime schema validation for serialized full-game snapshots or accepted-event payloads yet.
 - No package-local test utilities for deterministic hands; integration tests currently build fixtures inline.
@@ -200,14 +215,15 @@ This means the repository has implemented and tested the core local hand lifecyc
 - Current full-rules replay is deterministic for accepted events, and command-emitted events replay to the same state through post-hand and game-complete outcomes.
 - Test fixtures are becoming repetitive and may hide coupling as the engine grows.
 - Game completion currently follows automatic hand completion; a future manual adjudication or admin correction path would need separate command design.
+- The mobile local-practice UI intentionally exposes a simple single-screen flow and does not persist in-progress games.
 
 ## Recommended Next Work
 
 1. Move repeated rules test fixtures into `packages/game-engine/src/test-utils`.
 2. Document the automatic hand-completion decision in an ADR or implementation note if a standalone `COMPLETE_HAND` command remains intentionally omitted.
 3. Add accepted-event validation or command-side consistency checks before any server-authoritative persistence path.
-4. Map full-rules events into the shared Action/Event/Snapshot contracts once local command validation is stable.
-5. Defer AWS, multiplayer rooms, bots, tournaments, and UI until the local rules command/reducer path is stable.
+4. Add local-practice persistence or explicit resume/discard UX if practice games should survive app restarts.
+5. Defer AWS, multiplayer rooms, advanced bots, tournaments, and analytics until the local rules command/reducer path is stable.
 
 ## Architecture Notes
 

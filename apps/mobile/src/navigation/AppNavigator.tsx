@@ -2,6 +2,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { HistoryScreen } from "../screens/HistoryScreen";
 import { HomeScreen } from "../screens/HomeScreen";
+import { LocalGameScreen } from "../screens/LocalGameScreen";
+import { LocalGameStartScreen } from "../screens/LocalGameStartScreen";
 import { NewGameScreen } from "../screens/NewGameScreen";
 import { ScorekeeperScreen } from "../screens/ScorekeeperScreen";
 import { TeamSetupScreen } from "../screens/TeamSetupScreen";
@@ -31,6 +33,16 @@ export function AppNavigator() {
         component={HomeScreen}
         name="Home"
         options={{ title: "Shake 2" }}
+      />
+      <Stack.Screen
+        component={LocalGameStartScreen}
+        name="LocalGameStart"
+        options={{ title: "Local Game" }}
+      />
+      <Stack.Screen
+        component={LocalGameScreen}
+        name="LocalGame"
+        options={{ title: "Practice Game" }}
       />
       <Stack.Screen
         component={NewGameScreen}

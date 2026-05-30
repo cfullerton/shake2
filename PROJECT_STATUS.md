@@ -8,6 +8,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 
 - `apps/mobile` contains the Expo app, React Navigation stack, screens, local state provider, AsyncStorage persistence, shared UI components, and theme tokens.
 - `packages/game-engine` contains pure TypeScript scorekeeper domain logic, validation, selectors, persistence codecs, and Node test coverage.
+- `packages/game-engine` also contains the full Texas 42 local rules engine, legal-action selectors, legal-random bots, and an in-memory local practice session layer.
 - `packages/shared` contains initial versioned Action/Event/Snapshot contracts for scorekeeper and future server use.
 - `.github/workflows/ci.yml` runs install, typecheck, tests, and audit reporting on pull requests and pushes to `main`.
 - There is no `backend` workspace yet, despite the original architecture docs naming AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB.
@@ -69,10 +70,13 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - Dealer tracking with clockwise rotation after every scored hand.
 - Undo latest score, including dealer restoration.
 - History screen showing scored hands, marks, winning team for the hand, timestamp, note, and dealer.
+- Local practice start screen for playing a full Texas 42 game against three legal-random bots.
+- Local practice active game screen for bidding, trump selection, trick play, hand summary, game summary, restart, and next-hand flow.
 - Local persistence through AsyncStorage using a versioned scorekeeper snapshot envelope.
 - Legacy migration from the original raw saved-game array format.
 - Hardened scorekeeper validation for target marks, mark awards, timestamps, IDs, names, and notes.
 - Pure TypeScript scorekeeper engine with tests for creation, mark awards, dealer rotation, undo, winner detection, validation, and persistence codecs.
+- Pure TypeScript full-rules engine with tests for deal, bidding, trump, legal play, trick winners, hand scoring, replay, local session orchestration, legal-random bots, 100 completed simulated hands, and 25 completed simulated games.
 - Initial shared contracts for `GameAction`, `GameEvent`, `GameSnapshot`, `GameActionResult`, and `GameErrorCode`.
 - React Native Testing Library coverage for core scorekeeper flows and AsyncStorage persistence wrapper behavior.
 - GitHub Actions CI for install, typecheck, tests, and non-blocking audit reporting.
@@ -80,9 +84,9 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 
 ## Features Partially Implemented
 
-- Game engine: currently covers scorekeeper-only state, not legal Texas 42 play, bidding, trump, tricks, domino hands, or bid evaluation.
+- Game engine: full local Texas 42 play now exists for standard numeric bids and pip-suit trump, but does not implement variants or advanced bot strategy.
 - Game state model: current scorekeeper shape is serializable, but the app does not yet apply shared actions/events or replay an event log.
-- Persistence: local JSON persistence has schema versioning and legacy migration, but there is no user-facing corruption recovery, delete/archive flow, or cloud sync.
+- Persistence: local JSON persistence has schema versioning and legacy migration for scorekeeper games, but local practice games are currently in-memory only.
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.
 - UI system: reusable components exist, but there is no formal design system, accessibility pass, or cross-device visual regression coverage.
 - Shared package: contracts exist, but they are initial scorekeeper-oriented TypeScript contracts, not a backend schema or runtime validator.
@@ -101,7 +105,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 
 ## Technical Debt
 
-- The engine has initial scorekeeper modules, but it still needs full-game rules modules, command results, event application, and variant configuration.
+- Full-rules fixtures and local-session helpers are still young and should be consolidated before multiplayer work.
 - Shared contracts define action/event/snapshot shapes, but no engine command currently emits or applies those events.
 - Persistence has a versioned envelope, but no backup/quarantine strategy or user-controlled reset path.
 - There is no centralized error taxonomy. UI currently catches generic `Error` messages from engine/storage.
@@ -115,7 +119,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 1. Finish M1 hardening: add user-facing corrupt-data recovery and delete/archive/rename for saved games.
 2. Mirror engine validation limits in the UI with input bounds, counters, and clearer form errors.
 3. Connect engine command results to shared events so local replay can be proven before multiplayer.
-4. Build M2 rules engine as pure TypeScript: domino model, deal, bids, trump, legal play validation, trick winner, hand scoring, and regional variant config.
+4. Harden M3 local practice: persist or explicitly discard practice sessions, improve local game UI states, and extract reusable simulation fixtures.
 5. Expand contract tests around duplicate actions, stale sequences, reconnect snapshots, and unsupported schemas.
 6. Introduce AWS Amplify Gen 2 only after contracts are stable enough to avoid baking prototype state shapes into DynamoDB.
 
