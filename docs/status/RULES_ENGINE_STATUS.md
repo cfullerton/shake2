@@ -82,13 +82,14 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Deal model that gives exactly 7 dominoes to each of 4 seats.
 - Numeric bidding with pass, 30-42 bids, increasing bid validation, one bid per player, all-pass forced dealer bid, and declarer selection.
 - Trump suit model for blanks, ones, twos, threes, fours, fives, and sixes.
-- Standard numeric contract model after declarer calls trump.
+- Contract model uses a discriminated `Contract` union (currently `standardNumeric` only) after declarer calls trump.
+- Standard numeric contracts store trump as nested selection: `trump: { kind: "pip"; suit: TrumpSuit }`.
 - Trump identity and trump ranking with double highest.
 - Trick model with leader, led domino, led suit, and played dominoes.
 - Canonical led-suit selection for local play: a non-trump domino always leads its higher pip suit.
 - Legal play validation for turn order, hand ownership, led-suit legality, and follow-suit.
-- Trick winner determination by highest trump, then highest led-suit domino.
-- Completed hand scoring by winning team.
+- Contract-aware trick winner determination (`determineTrickWinnerForContract`) currently preserving highest-trump then highest-led-suit behavior for `standardNumeric`.
+- Contract-aware hand scoring (`scoreCompletedHand(completedTricks, contract, rules)`) for `standardNumeric`.
 - One point per completed trick.
 - Captured count-domino points per trick.
 - Total hand-point invariant of 42.
@@ -104,7 +105,7 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Command handlers validate phase, stale snapshot/event metadata, and actor seat where applicable.
 - Play-domino command validation and event emission.
 - Automatic trick completion when the fourth domino is played.
-- Trick winner derivation through the existing trick winner helper.
+- Trick winner derivation through contract-aware trick winner helpers.
 - Completed tricks are stored in `FortyTwoState`, and the next trick leader is set to the trick winner.
 - Automatic hand completion when the seventh trick is completed.
 - `HAND_COMPLETED` event emission with a full `HandScore`.
@@ -126,7 +127,7 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Multiplayer storage records split room metadata, trusted event records, public latest snapshots, private hand records, and action idempotency records.
 - Multiplayer storage restore rebuilds an authoritative in-memory session from records and verifies the trusted event log can replay to the restored snapshot.
 - Multiplayer reconnect views return a redacted player snapshot plus accepted, rejected, and unknown pending action IDs.
-- Validated Forty Two replay checks accepted event envelopes and recomputes derived bid, trump, play, trick-winner, and hand-score data before restore.
+- Validated Forty Two replay checks accepted event envelopes and recomputes derived bid, contract/trump, play, trick-winner, and hand-score data before restore, rejecting unsupported contract kinds.
 - Runtime multiplayer boundary parsers validate action envelopes, room records, event records, public snapshot records, private hand records, action idempotency records, and client reconnect state before command, restore, or reconnect code trusts them.
 - Backend-neutral multiplayer write plans describe future conditional persistence writes for game start, accepted actions, and rejected actions. Accepted write plans validate event replay before emitting records.
 
@@ -158,7 +159,7 @@ Important covered invariants:
 - Deterministic Forty Two event replay across all core event types.
 - Snapshot version and event sequence advancement during event application.
 - Out-of-sequence event rejection.
-- Command happy path through deal, bidding, bidding completion, and trump call.
+- Command happy path through deal, bidding, bidding completion, trump call, and contract creation.
 - Command failure coverage for invalid phase, invalid declarer/actor, and invalid bid.
 - Command-emitted events replay to the same state produced by command application.
 - Play-command coverage for a valid four-play trick lifecycle.
@@ -170,6 +171,8 @@ Important covered invariants:
 - Dealer rotation after a non-terminal hand.
 - Game completion at target marks.
 - Replay coverage for post-hand state.
+- Standard numeric contract JSON round-trip coverage through replay/snapshot surfaces.
+- Validated replay rejection coverage for unsupported/unknown contract kinds.
 - End-to-end command-layer full-hand integration coverage from game creation and deal through bidding, trump, all 28 plays, hand completion, mark awards, dealer rotation, game completion, and replay.
 - Full-hand integration cases for normal made bids, exact 42 bids, set-by-one bids, trump-heavy hands, no-trump-played led-suit tricks, all-pass dealer-forced bidding, multiple dealer rotations, and target-mark game completion.
 - Local session tests for start, restart/reset, dealer rotation, 100 completed simulated hands, and 25 completed simulated games.
@@ -202,10 +205,10 @@ Completed or mostly completed:
 - Deterministic shuffle.
 - Deal model and hand ownership.
 - Numeric bidding.
-- Trump call and trump ranking.
+- Trump call, contract union plumbing, and contract-aware trump ranking.
 - Trick play validation.
-- Trick winner determination.
-- Hand scoring and numeric bid outcome.
+- Contract-aware trick winner determination.
+- Contract-aware hand scoring and numeric bid outcome.
 - Accepted-event envelopes and reducer replay.
 - Command validation through create, deal, bid, complete bidding, call trump, and play domino.
 - Automatic trick completion, hand completion, mark awards, next-hand setup, and game completion from the play command.
@@ -228,7 +231,7 @@ This means the repository has implemented and tested the core local hand lifecyc
 - A multiplayer-safe authority, storage, schema, and write-plan model has started in code, but it is backend-neutral only.
 - No AWS, AppSync, DynamoDB, Cognito, physical durable room state, or deployed reconnect endpoint exists.
 - Only legal-random bots exist; no heuristic or advanced strategy exists.
-- No variant contracts such as mark bids, 84, plunge, splash, nello, sevens, or follow-me.
+- No non-`standardNumeric` variant contracts such as mark bids, 84, plunge, splash, nello, sevens, follow-me, or no-trump.
 - Runtime validation now exists for accepted Forty Two event replay, multiplayer action/storage/reconnect boundary payloads, and accepted-event write planning. Version migrations and physical adapter compatibility tests are still missing.
 - No package-local test utilities for deterministic hands; integration tests currently build fixtures inline.
 - No physical persistence adapter exists for full-rules snapshots/events.
@@ -238,9 +241,9 @@ This means the repository has implemented and tested the core local hand lifecyc
 ## Technical Risks
 
 - The rules modules now have end-to-end command tests from actual dealt hands through hand scoring, but the deterministic fixture helpers are still test-local.
-- `scoreCompletedHand` trusts caller-provided trick winners. Validated replay now recomputes trick winners before restore, but direct scoring callers still need to remain trusted or separately validated.
+- `scoreCompletedHand(completedTricks, contract, rules)` trusts caller-provided trick winners. Validated replay now recomputes trick winners before restore, but direct scoring callers still need to remain trusted or separately validated.
 - The play command derives trick winners before scoring, restored accepted-event streams reject forged trick winners and forged hand scores, and write plans validate accepted streams before persistence records are emitted.
-- The bidding, trump, trick, scoring, and next-hand transitions are connected for the local command path, but accepted-event replay intentionally trusts accepted events.
+- The bidding, contract/trump, trick, scoring, and next-hand transitions are connected for the local command path, but accepted-event replay intentionally trusts accepted events.
 - Constants are now behind `RuleConfig`, but variant-specific behavior still needs command-level enforcement.
 - Current full-rules replay is deterministic for accepted events, and command-emitted events replay to the same state through post-hand and game-complete outcomes.
 - Test fixtures are becoming repetitive and may hide coupling as the engine grows.
