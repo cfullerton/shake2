@@ -15,9 +15,11 @@ import {
   scoreCompletedTricks,
   sortDominoesForLocalPlay,
   submitLocalGameBid,
+  type CompletedTrick,
   type Domino,
   type EngineContext,
   type FortyTwoState,
+  type FortyTwoTeamId,
   type LegalDominoPlay,
   type Pip,
   type LocalGameSession,
@@ -25,7 +27,7 @@ import {
   type TrumpSuit
 } from "@shake2/game-engine";
 import { Play, RotateCcw } from "lucide-react-native";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
@@ -76,6 +78,8 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const trickRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRenderedTrickIdRef = useRef<string | null>(null);
   const visibleTrickPlayCountRef = useRef(0);
+  const trickEntranceAnimsRef = useRef<Map<string, Animated.Value>>(new Map());
+  const startedTrickAnimKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     return () => {
@@ -91,6 +95,47 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const view = getLocalGameView(session);
   const state = session.snapshot.snapshot;
   const humanHand = "hands" in state ? state.hands[session.humanSeat] : [];
+
+  const completedTricksForDisplay: readonly CompletedTrick[] =
+    state.phase === "trickPlay" || state.phase === "handComplete"
+      ? state.completedTricks
+      : [];
+  const completedTrickCount = completedTricksForDisplay.length;
+
+  // Eagerly create Animated.Values so WonDominoesSection can read them on first render
+  for (let i = 0; i < completedTrickCount; i += 1) {
+    const key = `${state.handNumber}-${i}`;
+    if (!trickEntranceAnimsRef.current.has(key)) {
+      trickEntranceAnimsRef.current.set(key, new Animated.Value(0));
+    }
+  }
+
+  // Start entrance springs for newly created animation values
+  useEffect(() => {
+    for (let i = 0; i < completedTrickCount; i += 1) {
+      const key = `${state.handNumber}-${i}`;
+      if (!startedTrickAnimKeysRef.current.has(key)) {
+        startedTrickAnimKeysRef.current.add(key);
+        const anim = trickEntranceAnimsRef.current.get(key);
+        if (anim) {
+          Animated.spring(anim, {
+            friction: 6,
+            tension: 80,
+            toValue: 1,
+            useNativeDriver: false
+          }).start();
+        }
+      }
+    }
+  }, [completedTrickCount, state.handNumber]);
+
+  // Clear animation tracking when a new hand begins
+  useEffect(() => {
+    return () => {
+      trickEntranceAnimsRef.current.clear();
+      startedTrickAnimKeysRef.current.clear();
+    };
+  }, [state.handNumber]);
   const activeTrumpSuit = state.phase === "trickPlay"
     ? state.contract.trumpSuit
     : undefined;
@@ -555,6 +600,27 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
         </View>
       )}
 
+      {completedTricksForDisplay.length > 0 ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Won Dominoes</Text>
+          <WonDominoesSection
+            completedTricks={completedTricksForDisplay}
+            handNumber={state.handNumber}
+            teamId="teamA"
+            teamName={state.teams.teamA.name}
+            trickAnimations={trickEntranceAnimsRef.current}
+          />
+          <View style={styles.wonDominoesDivider} />
+          <WonDominoesSection
+            completedTricks={completedTricksForDisplay}
+            handNumber={state.handNumber}
+            teamId="teamB"
+            teamName={state.teams.teamB.name}
+            trickAnimations={trickEntranceAnimsRef.current}
+          />
+        </View>
+      ) : null}
+
       {view.kind === "handSummary" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>
@@ -777,6 +843,67 @@ function InfoTile({
       <Text style={[styles.statusValue, compact ? styles.compactStatusValue : null]}>
         {value}
       </Text>
+    </View>
+  );
+}
+
+function WonDominoesSection({
+  completedTricks,
+  handNumber,
+  teamId,
+  teamName,
+  trickAnimations
+}: {
+  readonly completedTricks: readonly CompletedTrick[];
+  readonly handNumber: number;
+  readonly teamId: FortyTwoTeamId;
+  readonly teamName: string;
+  readonly trickAnimations: ReadonlyMap<string, Animated.Value>;
+}) {
+  const teamTrickEntries = completedTricks
+    .map((t, i) => ({ index: i, trick: t }))
+    .filter(({ trick }) => getTeamForSeat(trick.winner) === teamId);
+
+  return (
+    <View style={styles.wonTeamSection}>
+      <Text style={styles.handLabel}>
+        {teamName} · {teamTrickEntries.length} trick{teamTrickEntries.length !== 1 ? "s" : ""}
+      </Text>
+      {teamTrickEntries.length === 0 ? (
+        <Text style={styles.meta}>No tricks yet</Text>
+      ) : (
+        <View style={styles.wonTricksList}>
+          {teamTrickEntries.map(({ index, trick }) => {
+            const key = `${handNumber}-${index}`;
+            const anim = trickAnimations.get(key);
+            const animStyle = anim
+              ? {
+                  opacity: anim,
+                  transform: [
+                    {
+                      translateY: anim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-16, 0]
+                      })
+                    }
+                  ]
+                }
+              : undefined;
+            return (
+              <Animated.View key={key} style={[styles.wonTrickPile, animStyle]}>
+                {trick.trick.playedDominoes.map((play) => (
+                  <DominoTile
+                    accessibilityLabel={`${formatDomino(play.domino)} won by ${teamName}`}
+                    domino={play.domino}
+                    key={getDominoKey(play.domino)}
+                    size="small"
+                  />
+                ))}
+              </Animated.View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
@@ -1198,5 +1325,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.md
+  },
+  wonDominoesDivider: {
+    backgroundColor: palette.border,
+    height: 1
+  },
+  wonTeamSection: {
+    gap: spacing.sm
+  },
+  wonTrickPile: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
+  },
+  wonTricksList: {
+    gap: spacing.sm
   }
 });
