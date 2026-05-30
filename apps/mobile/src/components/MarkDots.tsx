@@ -31,20 +31,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.sm,
-    minHeight: 18
+    minHeight: 22
   },
   dot: {
-    borderRadius: 5,
-    height: 10,
-    width: 10
+    borderRadius: 8,
+    height: 16,
+    width: 16
   },
   dots: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 5
+    gap: 6
   },
   emptyDot: {
-    backgroundColor: palette.border
+    borderColor: palette.border,
+    borderWidth: 2
   },
   filledDot: {
     backgroundColor: palette.gold

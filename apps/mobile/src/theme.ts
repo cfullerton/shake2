@@ -1,6 +1,8 @@
 export const palette = {
   background: "#20110E",
   border: "#B98542",
+  crimson: "#A9352C",
+  crimsonSoft: "#F4C6B8",
   denim: "#2E5F7D",
   denimSoft: "#D5E2E8",
   felt: "#23483A",
@@ -15,15 +17,18 @@ export const palette = {
   subtle: "#8A6B52",
   surface: "#FFF1D0",
   surfaceAlt: "#F6DDB0",
-  teal: "#A9352C",
-  tealSoft: "#F4C6B8",
   wood: "#321913",
   woodLight: "#59301F"
 } as const;
 
 export const radius = {
   sm: 6,
-  md: 8
+  md: 12
+} as const;
+
+export const fonts = {
+  display: "Cinzel_700Bold",
+  displayRegular: "Cinzel_400Regular"
 } as const;
 
 export const spacing = {

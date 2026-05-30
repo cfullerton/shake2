@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     color: palette.surface
   },
   selectedSegment: {
-    backgroundColor: palette.teal
+    backgroundColor: palette.crimson
   },
   track: {
     backgroundColor: palette.surfaceAlt,
