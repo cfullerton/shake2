@@ -1,3 +1,4 @@
+export * from "./appsync/contracts.ts";
 export * from "./auth/identity.ts";
 export * from "./dynamodb/store.ts";
 export * from "./errors/errors.ts";
