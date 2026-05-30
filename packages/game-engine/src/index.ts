@@ -22,6 +22,7 @@ export * from "./local-play/session.ts";
 export * from "./multiplayer/schema.ts";
 export * from "./multiplayer/session.ts";
 export * from "./multiplayer/storage.ts";
+export * from "./multiplayer/write-plan.ts";
 export * from "./scorekeeper/commands.ts";
 export * from "./scorekeeper/dealer.ts";
 export * from "./scorekeeper/persistence.ts";
