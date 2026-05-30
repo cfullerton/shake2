@@ -9,6 +9,7 @@
   "scripts": {
     "start": "npm run start -w @shake2/mobile",
     "android": "npm run android -w @shake2/mobile",
+    "build:web": "npm run build:web -w @shake2/mobile",
     "ios": "npm run ios -w @shake2/mobile",
     "web": "npm run web -w @shake2/mobile",
     "test": "npm run test --workspaces --if-present",

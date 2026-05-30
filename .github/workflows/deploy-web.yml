@@ -1,0 +1,85 @@
+name: Deploy Web
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build and deploy Expo web
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+      AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.AWS_CLOUDFRONT_DISTRIBUTION_ID }}
+      WEB_DIST_DIR: apps/mobile/dist/web
+
+    steps:
+      - name: Check required variables
+        run: |
+          : "${AWS_REGION:?Set GitHub repository variable AWS_REGION}"
+          : "${AWS_ROLE_TO_ASSUME:?Set GitHub repository variable AWS_ROLE_TO_ASSUME}"
+          : "${AWS_S3_BUCKET:?Set GitHub repository variable AWS_S3_BUCKET}"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: npm
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build web app
+        run: npm run build:web
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-session-name: shake2-web-deploy
+
+      - name: Upload immutable assets
+        run: |
+          aws s3 sync "$WEB_DIST_DIR" "s3://$AWS_S3_BUCKET" \
+            --delete \
+            --exclude "index.html" \
+            --exclude "metadata.json" \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload entry files
+        run: |
+          aws s3 sync "$WEB_DIST_DIR" "s3://$AWS_S3_BUCKET" \
+            --exclude "*" \
+            --include "index.html" \
+            --include "metadata.json" \
+            --cache-control "no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront
+        if: ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID != '' }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$AWS_CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/*"

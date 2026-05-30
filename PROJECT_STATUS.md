@@ -11,6 +11,8 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - `packages/game-engine` also contains the full Texas 42 local rules engine, legal-action selectors, legal-random bots, and an in-memory local practice session layer.
 - `packages/shared` contains initial versioned Action/Event/Snapshot contracts for scorekeeper and future server use.
 - `.github/workflows/ci.yml` runs install, typecheck, tests, and audit reporting on pull requests and pushes to `main`.
+- `.github/workflows/deploy-web.yml` builds the Expo web bundle and deploys static assets to AWS S3/CloudFront with GitHub OIDC.
+- `infra/aws/web-hosting.yml` provisions static web hosting resources and a least-privilege GitHub Actions deploy role.
 - There is no `backend` workspace yet, despite the original architecture docs naming AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB.
 - App state is client-owned today. The mobile app loads/saves games from AsyncStorage and applies game-engine functions locally.
 - The game engine is serializable and UI-independent, but it is still a scorekeeper model, not a full Texas 42 rules engine.
@@ -51,10 +53,14 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 |           |-- contracts/
 |           `-- index.ts
 |-- docs/
+|-- infra/
+|   `-- aws/
+|       `-- web-hosting.yml
 |-- adr/
 |-- .github/
 |   `-- workflows/
-|       `-- ci.yml
+|       |-- ci.yml
+|       `-- deploy-web.yml
 |-- package.json
 |-- package-lock.json
 `-- tsconfig.base.json
@@ -80,6 +86,8 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - Initial shared contracts for `GameAction`, `GameEvent`, `GameSnapshot`, `GameActionResult`, and `GameErrorCode`.
 - React Native Testing Library coverage for core scorekeeper flows and AsyncStorage persistence wrapper behavior.
 - GitHub Actions CI for install, typecheck, tests, and non-blocking audit reporting.
+- GitHub Actions web deployment workflow for Expo web export to AWS S3/CloudFront using OIDC.
+- CloudFormation template and runbook for static AWS web hosting.
 - ADRs documenting local-first M1, server-authoritative event target architecture, and the scorekeeper mode boundary.
 
 ## Features Partially Implemented
@@ -90,6 +98,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.
 - UI system: reusable components exist, but there is no formal design system, accessibility pass, or cross-device visual regression coverage.
 - Shared package: contracts exist, but they are initial scorekeeper-oriented TypeScript contracts, not a backend schema or runtime validator.
+- Web hosting: AWS S3/CloudFront hosting infrastructure and workflow exist, but no production AWS stack has been deployed from this environment.
 - CI: basic workflow exists, but there is no lint, coverage threshold, visual test, iOS device test, or required audit pass yet.
 
 ## Known Issues
@@ -111,7 +120,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - There is no centralized error taxonomy. UI currently catches generic `Error` messages from engine/storage.
 - Package build outputs (`packages/game-engine/dist`) are generated locally and ignored, but the package `main` still points at `src/index.ts`; this is fine for Metro path aliases, weak for external package consumers.
 - No linting, formatting, pre-commit hooks, or test coverage thresholds.
-- No environment/config strategy for future AWS endpoints.
+- AWS static web hosting now has deployment docs, but there is still no broader environment/config strategy for future app backend endpoints.
 - No app icon/adaptive icon assets configured.
 
 ## Recommended Next Milestones
@@ -127,6 +136,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 
 - Original docs include `/backend`; the current repo has no backend workspace.
 - Original stack includes AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB; current implementation is local-only with AsyncStorage.
+- The repo now includes a narrow AWS static web hosting path using S3, CloudFront, and GitHub OIDC before any Amplify/AppSync backend exists.
 - Original game-state docs require server authority and reconnect support; current state is client-authoritative and offline-local.
 - Original database docs mention immutable events; current local persistence still stores mutable full game snapshots, although shared event contracts now exist.
 - The current app includes Expo web dependencies for browser smoke testing, though the product target remains iOS-first mobile.
