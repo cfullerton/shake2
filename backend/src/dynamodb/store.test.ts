@@ -109,6 +109,81 @@ test("loads a single idempotency result by action ID", async () => {
   });
 });
 
+test("loads a public snapshot record without private hands", async () => {
+  const context = createTestContext();
+  const records = createMultiplayerStorageRecords(createStartedSession(context));
+  const client = createMockDynamoClient(records);
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+  const result = await store.loadPublicSnapshot({
+    gameId: "game-1"
+  });
+  const get = getCommandInput(client.commands[0], GetCommand);
+
+  assert.deepEqual(result, records.snapshot);
+  assert.deepEqual(get.Key, {
+    pk: "GAME#game-1",
+    sk: "SNAPSHOT#LATEST"
+  });
+  assert.doesNotMatch(JSON.stringify(result), /"hands"/);
+  assert.doesNotMatch(JSON.stringify(result), /"viewerHand"/);
+});
+
+test("loads a private hand record by game and seat", async () => {
+  const context = createTestContext();
+  const records = createMultiplayerStorageRecords(createStartedSession(context));
+  const client = createMockDynamoClient(records);
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+  const result = await store.loadPrivateHand({
+    gameId: "game-1",
+    seatIndex: 0
+  });
+  const get = getCommandInput(client.commands[0], GetCommand);
+
+  assert.equal(result.playerId, "player-0");
+  assert.equal(result.seatIndex, 0);
+  assert.equal(result.hand.length, 7);
+  assert.deepEqual(get.Key, {
+    pk: "GAME#game-1",
+    sk: "PRIVATE_HAND#0"
+  });
+});
+
+test("loads reconnect records with only the actor private hand and pending results", async () => {
+  const context = createTestContext();
+  const session = submitSeatBid(
+    createStartedSession(context),
+    1,
+    "bid-1",
+    context
+  );
+  const records = createMultiplayerStorageRecords(session);
+  const client = createMockDynamoClient(records);
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+  const result = await store.loadReconnectRecords({
+    actorPlayerId: "player-1",
+    gameId: "game-1",
+    pendingActionIds: ["bid-1", "missing-action"]
+  });
+
+  assert.deepEqual(result.snapshot, records.snapshot);
+  assert.equal(result.privateHand?.playerId, "player-1");
+  assert.equal(result.privateHand?.seatIndex, 1);
+  assert.deepEqual(result.idempotency.map((record) => record.actionId), ["bid-1"]);
+  assert.equal(
+    result.privateHand?.hand.length,
+    records.privateHands.find((record) => record.seatIndex === 1)?.hand.length
+  );
+});
+
 test("returns null when idempotency result is missing", async () => {
   const context = createTestContext();
   const records = createMultiplayerStorageRecords(createStartedSession(context));
@@ -252,7 +327,38 @@ class MockDynamoClient implements DynamoDBDocumentClientLike {
 
     if (command instanceof GetCommand) {
       const input = getCommandInput(command, GetCommand);
-      const key = input.Key as { readonly pk?: string } | undefined;
+      const key = input.Key as {
+        readonly pk?: string;
+        readonly sk?: string;
+      } | undefined;
+
+      if (key?.pk === "GAME#game-1" && key.sk === "SNAPSHOT#LATEST") {
+        return {
+          $metadata: {},
+          Item: this.records.snapshot
+        };
+      }
+
+      if (
+        key?.pk === "GAME#game-1" &&
+        typeof key.sk === "string" &&
+        key.sk.startsWith("PRIVATE_HAND#")
+      ) {
+        const seatIndex = Number(key.sk.replace("PRIVATE_HAND#", ""));
+        const item = this.records.privateHands.find((record) =>
+          record.seatIndex === seatIndex
+        );
+
+        return item
+          ? {
+              $metadata: {},
+              Item: item
+            }
+          : {
+              $metadata: {}
+            };
+      }
+
       const actionId = typeof key?.pk === "string"
         ? key.pk.replace("ACTION#", "")
         : "";

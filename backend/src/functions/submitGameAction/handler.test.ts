@@ -8,6 +8,7 @@ import {
   type CommitWritePlanInput,
   type LoadGameSnapshotInput,
   type LoadIdempotencyResultInput,
+  type MultiplayerReconnectRecords,
   type MultiplayerStore
 } from "../../dynamodb/store.ts";
 import {
@@ -23,8 +24,10 @@ import {
   type EngineContext,
   type MultiplayerActionIdempotencyRecord,
   type MultiplayerGameSession,
+  type MultiplayerPrivateHandRecord,
   type MultiplayerResult,
   type MultiplayerRoom,
+  type MultiplayerSnapshotRecord,
   type MultiplayerStoredGameRecords,
   type MultiplayerSubmitActionResult,
   type SeatIndex
@@ -376,6 +379,18 @@ function createMockStore(records: MultiplayerStoredGameRecords): MockStore {
         loadedGames.push(input);
         return records;
       },
+      async loadPublicSnapshot(): Promise<MultiplayerSnapshotRecord> {
+        return records.snapshot;
+      },
+      async loadPrivateHand(): Promise<MultiplayerPrivateHandRecord> {
+        const privateHand = records.privateHands[0];
+
+        if (!privateHand) {
+          throw new Error("Expected private hand.");
+        }
+
+        return privateHand;
+      },
       async loadIdempotencyResult(
         input
       ): Promise<MultiplayerActionIdempotencyRecord | null> {
@@ -383,6 +398,15 @@ function createMockStore(records: MultiplayerStoredGameRecords): MockStore {
         return records.idempotency.find(
           (record) => record.actionId === input.actionId
         ) ?? null;
+      },
+      async loadReconnectRecords(): Promise<MultiplayerReconnectRecords> {
+        const privateHand = records.privateHands[0];
+
+        return {
+          idempotency: records.idempotency,
+          ...(privateHand ? { privateHand } : {}),
+          snapshot: records.snapshot
+        };
       },
       async commitWritePlan(input): Promise<void> {
         commits.push(input);

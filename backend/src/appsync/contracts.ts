@@ -4,9 +4,11 @@ import {
   getDominoKey,
   type Domino,
   type FortyTwoEventEnvelope,
+  type MultiplayerActionIdempotencyRecord,
   type MultiplayerClientSyncState,
   type MultiplayerPrivateHandRecord,
   type MultiplayerReconnectView,
+  type MultiplayerSnapshotRecord,
   type MultiplayerVisibleSnapshotEnvelope,
   type SeatIndex
 } from "../game-engine.ts";
@@ -130,6 +132,12 @@ export interface AppSyncGameUpdatedNotification {
   readonly snapshotVersion: number;
 }
 
+export interface AppSyncReconnectRecords {
+  readonly idempotency: readonly MultiplayerActionIdempotencyRecord[];
+  readonly privateHand?: MultiplayerPrivateHandRecord;
+  readonly snapshot: MultiplayerSnapshotRecord;
+}
+
 export function createSubmitGameActionResolverEvent(
   input: AppSyncSubmitGameActionInput,
   identity: unknown,
@@ -192,6 +200,36 @@ export function mapReconnectViewToAppSyncResponse(
     serverSnapshotVersion: view.serverSnapshotVersion,
     snapshot: toPublicGameSnapshot(view.view.snapshot),
     unknownPendingActionIds: view.unknownPendingActionIds
+  };
+}
+
+export function mapReconnectRecordsToAppSyncResponse(
+  records: AppSyncReconnectRecords,
+  actor: BackendActor,
+  clientState: MultiplayerClientSyncState
+): AppSyncReconnectView {
+  const privateHand = records.privateHand
+    ? mapPrivateHandRecordToAppSyncResponse(
+        records.privateHand,
+        actor,
+        records.privateHand.seatIndex
+      )
+    : undefined;
+  const pending = classifyPendingActions(
+    records.idempotency,
+    actor.playerId,
+    clientState.pendingActionIds ?? []
+  );
+
+  return {
+    ...pending,
+    ...(privateHand ? { privateHand } : {}),
+    requiresSnapshotRefresh:
+      clientState.lastAppliedEventSequence !== records.snapshot.lastEventSequence ||
+      clientState.snapshotVersion !== records.snapshot.snapshotVersion,
+    serverLastEventSequence: records.snapshot.lastEventSequence,
+    serverSnapshotVersion: records.snapshot.snapshotVersion,
+    snapshot: toPublicGameSnapshot(records.snapshot.payload)
   };
 }
 
@@ -306,6 +344,45 @@ function createPrivateHandFromPlayerView(
     handNumber: readNumberField(state, "handNumber"),
     seatIndex: viewerSeat,
     updatedAt: view.view.snapshot.generatedAt
+  };
+}
+
+function classifyPendingActions(
+  records: readonly MultiplayerActionIdempotencyRecord[],
+  playerId: string,
+  pendingActionIds: readonly string[]
+): Pick<
+  AppSyncReconnectView,
+  "acceptedPendingActionIds" | "rejectedPendingActions" | "unknownPendingActionIds"
+> {
+  const recordsByActionId = new Map(records.map((record) => [record.actionId, record]));
+  const acceptedPendingActionIds: string[] = [];
+  const rejectedPendingActions: AppSyncPendingActionRejection[] = [];
+  const unknownPendingActionIds: string[] = [];
+
+  for (const actionId of pendingActionIds) {
+    const record = recordsByActionId.get(actionId);
+
+    if (!record || record.actorId !== playerId) {
+      unknownPendingActionIds.push(actionId);
+      continue;
+    }
+
+    if (record.accepted) {
+      acceptedPendingActionIds.push(actionId);
+      continue;
+    }
+
+    rejectedPendingActions.push({
+      actionId,
+      errorCode: record.errorCode ?? "INVALID_ACTION"
+    });
+  }
+
+  return {
+    acceptedPendingActionIds,
+    rejectedPendingActions,
+    unknownPendingActionIds
   };
 }
 
