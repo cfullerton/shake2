@@ -27,11 +27,17 @@ import {
 } from "./events.ts";
 import { applyFortyTwoEvent } from "./reducer.ts";
 import {
+  FORTY_TWO_TRICKS_PER_HAND,
+  scoreCompletedHand
+} from "./scoring.ts";
+import {
   createInitialFortyTwoSnapshot,
   type FortyTwoSnapshotEnvelope
 } from "./state.ts";
 import {
+  FORTY_TWO_TEAM_IDS,
   assertSeatIndex,
+  type FortyTwoTeamId,
   type SeatIndex
 } from "./seats.ts";
 import {
@@ -73,6 +79,19 @@ type FortyTwoTrickCompletedEvent = Extract<
   FortyTwoEvent,
   { readonly type: "fortyTwo.trick.completed" }
 >;
+type FortyTwoHandCompletedEvent = Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.hand.completed" }
+>;
+type FortyTwoGameCompletedEvent = Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.game.completed" }
+>;
+type FortyTwoPlayDominoEvent =
+  | FortyTwoDominoPlayedEvent
+  | FortyTwoTrickCompletedEvent
+  | FortyTwoHandCompletedEvent
+  | FortyTwoGameCompletedEvent;
 
 export type FortyTwoCommandResult<TEvent extends FortyTwoEvent = FortyTwoEvent> =
   | {
@@ -289,7 +308,7 @@ export function handlePlayFortyTwoDominoCommand(
   snapshot: FortyTwoSnapshotEnvelope,
   action: FortyTwoActionEnvelope<PlayFortyTwoDominoAction>,
   context: Pick<EngineContext, "newId" | "now">
-): FortyTwoCommandResult<FortyTwoDominoPlayedEvent | FortyTwoTrickCompletedEvent> {
+): FortyTwoCommandResult<FortyTwoPlayDominoEvent> {
   return runFortyTwoCommand(() => {
     assertActionForSnapshot(snapshot, action);
 
@@ -321,18 +340,25 @@ export function handlePlayFortyTwoDominoCommand(
       },
       context
     );
+    const events: FortyTwoEventEnvelope<FortyTwoPlayDominoEvent>[] = [
+      playedEvent
+    ];
+    let nextSnapshot = applyFortyTwoEvent(snapshot, playedEvent);
 
     if (!isTrickComplete(playResult.trick)) {
-      return applyCommandEvent(snapshot, playedEvent);
+      return {
+        events,
+        ok: true,
+        snapshot: nextSnapshot
+      };
     }
 
-    const snapshotAfterPlay = applyFortyTwoEvent(snapshot, playedEvent);
     const winner = determineTrickWinner(
       playResult.trick,
       snapshot.snapshot.contract.trumpSuit
     );
     const trickCompletedEvent = createEventEnvelope(
-      snapshotAfterPlay,
+      nextSnapshot,
       action,
       {
         payload: {
@@ -346,12 +372,78 @@ export function handlePlayFortyTwoDominoCommand(
       },
       context
     );
+    events.push(trickCompletedEvent);
+    nextSnapshot = applyFortyTwoEvent(nextSnapshot, trickCompletedEvent);
 
-    return applyCommandEvents<FortyTwoDominoPlayedEvent | FortyTwoTrickCompletedEvent>(
-      snapshot,
-      [playedEvent, trickCompletedEvent]
-    );
+    if (
+      nextSnapshot.snapshot.phase === "trickPlay" &&
+      nextSnapshot.snapshot.completedTricks.length === FORTY_TWO_TRICKS_PER_HAND
+    ) {
+      const winningBid = nextSnapshot.snapshot.bidding.highestBid;
+
+      if (!winningBid) {
+        throw new EngineError(
+          "INVALID_PHASE",
+          "A completed hand requires a winning bid."
+        );
+      }
+
+      const handCompletedEvent = createEventEnvelope(
+        nextSnapshot,
+        action,
+        {
+          payload: {
+            completedTricks: nextSnapshot.snapshot.completedTricks,
+            handScore: scoreCompletedHand(
+              nextSnapshot.snapshot.completedTricks,
+              winningBid
+            )
+          },
+          type: "fortyTwo.hand.completed"
+        },
+        context
+      );
+      events.push(handCompletedEvent);
+      nextSnapshot = applyFortyTwoEvent(nextSnapshot, handCompletedEvent);
+
+      const winningTeamId = getGameWinningTeamId(
+        nextSnapshot.snapshot.marks,
+        nextSnapshot.snapshot.rules.targetMarks
+      );
+
+      if (winningTeamId) {
+        const completedAt = getEngineTimestamp(context);
+        const gameCompletedEvent = createEventEnvelope(
+          nextSnapshot,
+          action,
+          {
+            payload: {
+              completedAt,
+              winningTeamId
+            },
+            type: "fortyTwo.game.completed"
+          },
+          context,
+          completedAt
+        );
+        events.push(gameCompletedEvent);
+        nextSnapshot = applyFortyTwoEvent(nextSnapshot, gameCompletedEvent);
+      }
+    }
+
+    return {
+      events,
+      ok: true,
+      snapshot: nextSnapshot
+    };
   });
+}
+
+function getGameWinningTeamId(
+  marks: Readonly<Record<FortyTwoTeamId, number>>,
+  targetMarks: number
+): FortyTwoTeamId | null {
+  return FORTY_TWO_TEAM_IDS.find((teamId) => marks[teamId] >= targetMarks) ?? null;
 }
 
 function runFortyTwoCommand<TEvent extends FortyTwoEvent>(

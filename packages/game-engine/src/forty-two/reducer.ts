@@ -4,6 +4,10 @@ import {
   type FortyTwoEventEnvelope
 } from "./events.ts";
 import {
+  FORTY_TWO_TEAM_IDS,
+  getNextDealerSeat
+} from "./seats.ts";
+import {
   FORTY_TWO_STATE_SCHEMA_VERSION,
   type FortyTwoGameCompleteState,
   type FortyTwoHandCompleteState,
@@ -147,12 +151,24 @@ function applyEventToState(
     }
 
     case "fortyTwo.hand.completed": {
-      const nextState: FortyTwoHandCompleteState = {
-        ...createStateBase(state, "handComplete", event.serverCreatedAt, {
-          marks: addMarks(state.marks, event.event.payload.handScore.markAwards)
+      const marks = addMarks(state.marks, event.event.payload.handScore.markAwards);
+
+      if (isTargetMarksReached(marks, state.rules.targetMarks)) {
+        const nextState: FortyTwoHandCompleteState = {
+          ...createStateBase(state, "handComplete", event.serverCreatedAt, { marks }),
+          completedTricks: event.event.payload.completedTricks,
+          handScore: event.event.payload.handScore
+        };
+
+        return nextState;
+      }
+
+      const nextState: FortyTwoSetupState = {
+        ...createStateBase(state, "setup", event.serverCreatedAt, {
+          marks
         }),
-        completedTricks: event.event.payload.completedTricks,
-        handScore: event.event.payload.handScore
+        dealer: getNextDealerSeat(state.dealer),
+        handNumber: state.handNumber + 1
       };
 
       return nextState;
@@ -265,4 +281,11 @@ function addMarks(
     teamA: currentMarks.teamA + awardedMarks.teamA,
     teamB: currentMarks.teamB + awardedMarks.teamB
   };
+}
+
+function isTargetMarksReached(
+  marks: FortyTwoMarks,
+  targetMarks: number
+): boolean {
+  return FORTY_TWO_TEAM_IDS.some((teamId) => marks[teamId] >= targetMarks);
 }
