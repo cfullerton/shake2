@@ -26,6 +26,7 @@ Most project documentation lives under this directory. `AGENTS.md` intentionally
 - `reviews/NEXT_10_TASKS.md`
 - `reviews/V2_REVIEW.md`
 - `reviews/V2_GAP_ANALYSIS.md`
+- `reviews/VARIANT_READINESS_REVIEW.md`
 
 ## Plans
 
