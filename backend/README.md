@@ -167,6 +167,8 @@ SHAKE2_SMOKE_CREATE_USER
 SHAKE2_SMOKE_GAME_ID
 ```
 
+The deployed smoke runner automatically loads `backend/.env` when present, then lets explicit shell environment variables override those values. Keep real `.env` files local only.
+
 The room game ID index must allow lookup of room metadata by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 
 ## Test Commands

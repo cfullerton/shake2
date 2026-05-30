@@ -31,7 +31,7 @@ No deploy command runs automatically.
 
 ## Smoke Test
 
-Set the smoke variables in your shell. Do not commit real values.
+Set the smoke variables in your shell, or copy `backend/.env.example` to `backend/.env` and edit the local file. The smoke runner loads `backend/.env` automatically when present. Do not commit real values.
 
 ```text
 export AWS_REGION=us-east-1

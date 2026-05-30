@@ -9,6 +9,9 @@ import {
   CognitoIdentityProviderClient,
   InitiateAuthCommand
 } from "@aws-sdk/client-cognito-identity-provider";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface DeployedSmokeEnvironment {
   readonly AWS_REGION?: string;
@@ -85,7 +88,7 @@ export class DeployedSmokeError extends Error {
 }
 
 export async function runDeployedSmoke(
-  env: DeployedSmokeEnvironment = process.env
+  env: DeployedSmokeEnvironment = loadDeployedSmokeEnvironment()
 ): Promise<readonly SmokeCheckEvaluation[]> {
   const config = resolveDeployedSmokeConfig(env);
   const cloudFormation = new CloudFormationClient({
@@ -128,6 +131,46 @@ export async function runDeployedSmoke(
   }
 
   return evaluations;
+}
+
+export function loadDeployedSmokeEnvironment(
+  baseEnv: DeployedSmokeEnvironment = process.env,
+  cwd = process.cwd()
+): DeployedSmokeEnvironment {
+  return {
+    ...readOptionalDotEnvFile(findDotEnvPath(cwd)),
+    ...baseEnv
+  };
+}
+
+export function parseDotEnvFile(contents: string): DeployedSmokeEnvironment {
+  const parsed: Record<string, string> = {};
+
+  for (const line of contents.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+
+    if (trimmed.length === 0 || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const normalized = trimmed.startsWith("export ")
+      ? trimmed.slice("export ".length).trim()
+      : trimmed;
+    const separatorIndex = normalized.indexOf("=");
+
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = normalized.slice(0, separatorIndex).trim();
+    const value = normalized.slice(separatorIndex + 1).trim();
+
+    if (isSmokeEnvironmentKey(key)) {
+      parsed[key] = unquoteDotEnvValue(value);
+    }
+  }
+
+  return parsed;
 }
 
 export function resolveDeployedSmokeConfig(
@@ -485,6 +528,51 @@ function requireEnv(value: string | undefined, name: string): string {
 
 function getErrorName(error: unknown): string | undefined {
   return error instanceof Error ? error.name : undefined;
+}
+
+function readOptionalDotEnvFile(path: string | null): DeployedSmokeEnvironment {
+  if (!path) {
+    return {};
+  }
+
+  return parseDotEnvFile(readFileSync(path, "utf8"));
+}
+
+function findDotEnvPath(cwd: string): string | null {
+  for (const candidate of [
+    join(cwd, ".env"),
+    join(cwd, "backend", ".env"),
+    fileURLToPath(new URL("../../../../.env", import.meta.url))
+  ]) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function isSmokeEnvironmentKey(key: string): key is keyof DeployedSmokeEnvironment {
+  return [
+    "AWS_REGION",
+    "SHAKE2_SMOKE_CREATE_USER",
+    "SHAKE2_SMOKE_EMAIL",
+    "SHAKE2_SMOKE_GAME_ID",
+    "SHAKE2_SMOKE_PASSWORD",
+    "SHAKE2_SMOKE_STACK_NAME",
+    "SHAKE2_SMOKE_USERNAME"
+  ].includes(key);
+}
+
+function unquoteDotEnvValue(value: string): string {
+  if (
+    (value.startsWith("\"") && value.endsWith("\"")) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

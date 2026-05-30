@@ -5,7 +5,9 @@ import {
   DeployedSmokeError,
   createSmokeChecks,
   evaluateSmokeCheck,
+  loadDeployedSmokeEnvironment,
   parseMultiplayerStackOutputs,
+  parseDotEnvFile,
   resolveDeployedSmokeConfig
 } from "./deployed-smoke.ts";
 
@@ -70,6 +72,40 @@ test("resolves deployed smoke config from env without logging secrets", () => {
     userEmail: "smoke@example.com",
     username: "smoke-user"
   });
+});
+
+test("loads deployed smoke config from dotenv-style contents", () => {
+  assert.deepEqual(
+    parseDotEnvFile(`
+      # comments and unrelated values are ignored
+      AWS_REGION=us-east-2
+      export SHAKE2_SMOKE_STACK_NAME=shake2-dev-multiplayer-infra
+      SHAKE2_SMOKE_EMAIL="smoke@example.com"
+      SHAKE2_SMOKE_USERNAME='smoke-user'
+      SHAKE2_SMOKE_PASSWORD='temporary password'
+      SHAKE2_SMOKE_CREATE_USER=true
+      UNRELATED_SECRET=do-not-read
+    `),
+    {
+      AWS_REGION: "us-east-2",
+      SHAKE2_SMOKE_CREATE_USER: "true",
+      SHAKE2_SMOKE_EMAIL: "smoke@example.com",
+      SHAKE2_SMOKE_PASSWORD: "temporary password",
+      SHAKE2_SMOKE_STACK_NAME: "shake2-dev-multiplayer-infra",
+      SHAKE2_SMOKE_USERNAME: "smoke-user"
+    }
+  );
+});
+
+test("explicit environment overrides dotenv values", () => {
+  const loaded = loadDeployedSmokeEnvironment(
+    {
+      SHAKE2_SMOKE_EMAIL: "env@example.com"
+    },
+    "/path/that/does/not/exist"
+  );
+
+  assert.equal(loaded.SHAKE2_SMOKE_EMAIL, "env@example.com");
 });
 
 test("creates smoke checks for all current AppSync resolvers", () => {
