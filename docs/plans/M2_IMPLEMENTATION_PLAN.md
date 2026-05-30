@@ -8,7 +8,7 @@ M2 should be engine-first and local-only. Do not add AWS, multiplayer, bots, inf
 
 There is a scope mismatch in the docs:
 
-- `ROADMAP.md` describes M2 as bidding, trump, tricks, scoring, and validation.
+- `docs/project/ROADMAP.md` describes M2 as bidding, trump, tricks, scoring, and validation.
 - `docs/v2/V2_ROADMAP.md` defines M2 as the physical Texas 42 domain model, with full local hand rules in the next phase.
 
 This plan breaks the work into small Codex-sized phases. Phases 1-7 complete the strict v2 M2 domain model. Phases 8-14 extend into the top-level "Rules Engine" meaning of M2. Stop after Phase 7 if the project wants to follow the v2 roadmap literally.

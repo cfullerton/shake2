@@ -80,7 +80,7 @@ M2 should prefer Small and Medium tasks first. Large tasks should start only aft
 
 ## Technical Risks
 
-- Scope mismatch: top-level `ROADMAP.md` makes M2 sound like full rules, while v2 splits physical domain model into M2 and full local hand rules into M3.
+- Scope mismatch: `docs/project/ROADMAP.md` makes M2 sound like full rules, while v2 splits physical domain model into M2 and full local hand rules into M3.
 - Rule ambiguity: Texas 42 has regional variants, especially around bidding, trump, doubles, nello/sevens/splash/plunge, and mark scoring.
 - Contract drift: existing shared contracts do not match v2 envelope names and fields.
 - Event model timing: forcing all existing scorekeeper code into event sourcing before domino rules could slow M2; waiting too long could make replay harder.

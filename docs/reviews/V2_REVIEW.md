@@ -48,7 +48,7 @@ The main risk is scope gravity. The v2 package contains enough AWS, AppSync, Dyn
 
 ## Missing Details
 
-- M2 scope is inconsistent across docs. `ROADMAP.md` says M2 is "Bidding, trump, tricks, scoring, validation"; `docs/v2/V2_ROADMAP.md` says M2 is the physical domain model and M3 is full rules. This needs a working definition before implementation.
+- M2 scope is inconsistent across docs. `docs/project/ROADMAP.md` says M2 is "Bidding, trump, tricks, scoring, validation"; `docs/v2/V2_ROADMAP.md` says M2 is the physical domain model and M3 is full rules. This needs a working definition before implementation.
 - The SeatIndex model needs an explicit mapping to current string seats and partnerships.
 - Domino serialization needs a canonical key/string format for snapshots, events, tests, and future API payloads.
 - The docs do not define a deterministic shuffle algorithm, seed shape, or whether tests should use a seeded PRNG helper versus an injected ordered random stream.
