@@ -817,57 +817,29 @@ function getAdvanceDelayMs(
   previousSession: LocalGameSession,
   nextSession: LocalGameSession
 ): number {
-  const botPlaysToReveal = countNewCurrentTrickBotPlays(previousSession, nextSession);
+  const botPlaysToReveal = countNewBotDominoPlays(previousSession, nextSession);
   return BOT_PLAY_DELAY_MS * Math.max(1, botPlaysToReveal);
 }
 
-function countNewCurrentTrickBotPlays(
+function countNewBotDominoPlays(
   previousSession: LocalGameSession,
   nextSession: LocalGameSession
 ): number {
-  const previousTrickState = getCurrentTrickPlaybackState(previousSession);
-  const nextTrickState = getCurrentTrickPlaybackState(nextSession);
-
-  if (!nextTrickState) {
+  if (nextSession.events.length <= previousSession.events.length) {
     return 0;
   }
 
-  const previouslyVisibleCount = previousTrickState?.trickId === nextTrickState.trickId
-    ? previousTrickState.playedDominoes.length
-    : 0;
+  return nextSession.events
+    .slice(previousSession.events.length)
+    .filter((eventEnvelope) => {
+      if (eventEnvelope.event.type !== "fortyTwo.domino.played") {
+        return false;
+      }
 
-  if (previouslyVisibleCount >= nextTrickState.playedDominoes.length) {
-    return 0;
-  }
-
-  return nextTrickState.playedDominoes
-    .slice(previouslyVisibleCount)
-    .filter((play) => play.seat !== nextSession.humanSeat)
+      const playedDomino = eventEnvelope.event.payload.currentTrick.playedDominoes.at(-1);
+      return Boolean(playedDomino && playedDomino.seat !== nextSession.humanSeat);
+    })
     .length;
-}
-
-function getCurrentTrickPlaybackState(
-  session: LocalGameSession
-): {
-  readonly playedDominoes: readonly {
-    readonly domino: Domino;
-    readonly seat: SeatIndex;
-  }[];
-  readonly trickId: string;
-} | null {
-  const state = session.snapshot.snapshot;
-
-  if (state.phase !== "trickPlay") {
-    return null;
-  }
-
-  return {
-    playedDominoes: state.currentTrick.playedDominoes.map((play) => ({
-      domino: play.domino,
-      seat: play.seat
-    })),
-    trickId: `${state.handNumber}-${state.completedTricks.length}-${state.currentTrick.leader}`
-  };
 }
 
 const styles = StyleSheet.create({
