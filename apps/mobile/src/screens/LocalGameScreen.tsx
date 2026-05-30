@@ -30,7 +30,7 @@ import { useMemo, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { Screen } from "../components/Screen";
 import type { RootStackParamList } from "../navigation/types";
-import { palette, radius, spacing } from "../theme";
+import { letterSpacing, palette, radius, spacing } from "../theme";
 
 type LocalGameScreenProps = NativeStackScreenProps<RootStackParamList, "LocalGame">;
 
@@ -95,7 +95,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       case "gameSummary":
         return "Game Complete";
       case "waiting":
-        return "Advancing";
+        return "Dealing…";
     }
   }, [view.kind]);
 
@@ -131,7 +131,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
     >
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>Local Texas 42</Text>
+          <Text style={styles.title}>Texas 42</Text>
           <Text style={styles.subtitle}>
             Hand {state.handNumber} · Dealer {seatNames[state.dealer]} · First to{" "}
             {state.rules.targetMarks}
@@ -170,7 +170,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       {view.kind === "bidding" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Your bid</Text>
-          <Text style={styles.copy}>Choose a pass or a legal numeric bid.</Text>
+          <Text style={styles.copy}>Pick a pass or bid.</Text>
           <View style={styles.handPreview}>
             <Text style={styles.handLabel}>Your hand</Text>
             <View style={styles.dominoGrid} testID="local-game-human-hand">
@@ -369,7 +369,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       ) : (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Activity</Text>
-          <Text style={styles.copy}>No table activity yet.</Text>
+          <Text style={styles.copy}>
+          Nothing yet—bots are thinking.
+        </Text>
         </View>
       )}
 
@@ -447,9 +449,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
 
       {view.kind === "waiting" ? (
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Resolving table</Text>
+          <Text style={styles.panelTitle}>Dealing…</Text>
           <Text style={styles.copy}>
-            Bots are taking legal actions. Refresh if the table does not advance.
+            Bots are thinking. Tap to advance if the table stalls.
           </Text>
           <Button
             accessibilityLabel="Refresh local game"
@@ -458,7 +460,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
             }
             variant="secondary"
           >
-            Refresh Table
+            Advance Table
           </Button>
         </View>
       ) : null}
@@ -777,6 +779,7 @@ const styles = StyleSheet.create({
     color: palette.subtle,
     fontSize: 12,
     fontWeight: "900",
+    letterSpacing: letterSpacing.caps,
     textTransform: "uppercase"
   },
   handPreview: {
