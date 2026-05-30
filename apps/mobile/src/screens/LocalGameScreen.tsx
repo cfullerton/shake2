@@ -14,15 +14,17 @@ import {
   scoreCompletedTricks,
   sortDominoesForLocalPlay,
   submitLocalGameBid,
+  type Domino,
   type EngineContext,
   type FortyTwoState,
   type LegalDominoPlay,
+  type Pip,
   type LocalGameSession,
   type SeatIndex,
   type TrumpSuit
 } from "@shake2/game-engine";
 import { Play, RotateCcw } from "lucide-react-native";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useMemo, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
@@ -33,6 +35,16 @@ import { palette, radius, spacing } from "../theme";
 type LocalGameScreenProps = NativeStackScreenProps<RootStackParamList, "LocalGame">;
 
 const seatNames = ["North", "East", "South", "West"] as const;
+type DominoTileSize = "regular" | "small";
+const pipCellsByValue: Record<Pip, readonly number[]> = {
+  0: [],
+  1: [4],
+  2: [0, 8],
+  3: [0, 4, 8],
+  4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8],
+  6: [0, 2, 3, 5, 6, 8]
+};
 
 export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const contextRef = useRef<EngineContext>(createMobileEngineContext());
@@ -52,7 +64,6 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
     ? state.contract.trumpSuit
     : undefined;
   const sortedHumanHand = sortDominoesForLocalPlay(humanHand, activeTrumpSuit);
-  const humanHandText = sortedHumanHand.map(formatDomino).join("  ");
   const currentTrick = state.phase === "trickPlay" ? state.currentTrick : null;
   const currentHandScore = state.phase === "trickPlay"
     ? scoreCompletedTricks(state.completedTricks)
@@ -162,9 +173,15 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           <Text style={styles.copy}>Choose a pass or a legal numeric bid.</Text>
           <View style={styles.handPreview}>
             <Text style={styles.handLabel}>Your hand</Text>
-            <Text style={styles.handText} testID="local-game-human-hand">
-              {humanHandText}
-            </Text>
+            <View style={styles.dominoGrid} testID="local-game-human-hand">
+              {sortedHumanHand.map((domino) => (
+                <DominoTile
+                  accessibilityLabel={`Domino ${formatDomino(domino)}`}
+                  domino={domino}
+                  key={getDominoKey(domino)}
+                />
+              ))}
+            </View>
           </View>
           <View style={styles.buttonGrid}>
             {view.legalBids.map((option) => (
@@ -253,10 +270,23 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
             {currentTrick && currentTrick.playedDominoes.length > 0 ? (
               <View style={styles.trickList}>
                 {currentTrick.playedDominoes.map((play) => (
-                  <Text key={`${play.seat}-${formatDomino(play.domino)}`} style={styles.meta}>
-                    {formatSeatLabel(state, play.seat, session.humanSeat)} played{" "}
-                    {formatDomino(play.domino)}
-                  </Text>
+                  <View
+                    key={`${play.seat}-${formatDomino(play.domino)}`}
+                    style={styles.playedDominoRow}
+                  >
+                    <Text style={styles.meta}>
+                      {formatSeatLabel(state, play.seat, session.humanSeat)} played
+                    </Text>
+                    <DominoTile
+                      accessibilityLabel={`${formatSeatLabel(
+                        state,
+                        play.seat,
+                        session.humanSeat
+                      )} played ${formatDomino(play.domino)}`}
+                      domino={play.domino}
+                      size="small"
+                    />
+                  </View>
                 ))}
               </View>
             ) : (
@@ -285,28 +315,22 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                 const isSelected = selectedPlayKey === playKey;
 
                 return (
-                  <Button
+                  <DominoTile
                     accessibilityLabel={
                       legalPlay
                         ? `Select ${formatDomino(domino)}`
                         : `${formatDomino(domino)} cannot be played now`
                     }
                     disabled={!legalPlay}
+                    domino={domino}
                     key={dominoKey}
                     onPress={() => {
                       if (legalPlay) {
                         setSelectedPlayKey(playKey);
                       }
                     }}
-                    style={[
-                      styles.dominoButton,
-                      isSelected ? styles.selectedDominoButton : null,
-                      !legalPlay ? styles.illegalDominoButton : null
-                    ]}
-                    variant={legalPlay ? "secondary" : "ghost"}
-                  >
-                    {formatDomino(domino)}
-                  </Button>
+                    selected={isSelected}
+                  />
                 );
               })}
             </View>
@@ -439,6 +463,86 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
         </View>
       ) : null}
     </Screen>
+  );
+}
+
+function DominoTile({
+  accessibilityLabel,
+  disabled = false,
+  domino,
+  onPress,
+  selected = false,
+  size = "regular"
+}: {
+  readonly accessibilityLabel: string;
+  readonly disabled?: boolean;
+  readonly domino: Domino;
+  readonly onPress?: () => void;
+  readonly selected?: boolean;
+  readonly size?: DominoTileSize;
+}) {
+  const pressableDisabled = disabled || !onPress;
+
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={onPress ? "button" : "image"}
+      accessibilityState={{
+        disabled: disabled || undefined,
+        selected: selected || undefined
+      }}
+      disabled={pressableDisabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.dominoTile,
+        size === "small" ? styles.dominoTileSmall : null,
+        selected ? styles.selectedDominoTile : null,
+        disabled ? styles.illegalDominoTile : null,
+        pressed && !pressableDisabled ? styles.pressedDominoTile : null
+      ]}
+      testID={`local-game-domino-${formatDomino(domino)}`}
+    >
+      <DominoHalf pip={domino.high} size={size} />
+      <View
+        style={[
+          styles.dominoDivider,
+          size === "small" ? styles.dominoDividerSmall : null
+        ]}
+      />
+      <DominoHalf pip={domino.low} size={size} />
+    </Pressable>
+  );
+}
+
+function DominoHalf({
+  pip,
+  size
+}: {
+  readonly pip: Pip;
+  readonly size: DominoTileSize;
+}) {
+  const filledCells = pipCellsByValue[pip];
+
+  return (
+    <View
+      style={[
+        styles.dominoHalf,
+        size === "small" ? styles.dominoHalfSmall : null
+      ]}
+    >
+      {Array.from({ length: 9 }, (_, cell) => (
+        <View key={cell} style={styles.pipCell}>
+          {filledCells.includes(cell) ? (
+            <View
+              style={[
+                styles.dominoPip,
+                size === "small" ? styles.dominoPipSmall : null
+              ]}
+            />
+          ) : null}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -605,22 +709,69 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21
   },
-  dominoButton: {
-    minWidth: 82
+  dominoDivider: {
+    backgroundColor: palette.border,
+    height: 48,
+    width: 1
+  },
+  dominoDividerSmall: {
+    height: 32
   },
   dominoGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
   },
+  dominoHalf: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    height: 48,
+    justifyContent: "center",
+    width: 48
+  },
+  dominoHalfSmall: {
+    height: 32,
+    width: 32
+  },
+  dominoPip: {
+    backgroundColor: palette.ink,
+    borderRadius: 4,
+    height: 8,
+    width: 8
+  },
+  dominoPipSmall: {
+    borderRadius: 3,
+    height: 6,
+    width: 6
+  },
+  dominoTile: {
+    alignItems: "center",
+    backgroundColor: palette.surface,
+    borderColor: palette.ink,
+    borderRadius: radius.sm,
+    borderWidth: 2,
+    flexDirection: "row",
+    gap: 5,
+    height: 64,
+    justifyContent: "center",
+    padding: 5,
+    shadowColor: palette.ink,
+    shadowOffset: { height: 1, width: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    width: 118
+  },
+  dominoTileSmall: {
+    borderWidth: 1,
+    gap: 3,
+    height: 44,
+    padding: 3,
+    shadowOpacity: 0,
+    width: 82
+  },
   gridButton: {
     minWidth: 104
-  },
-  handText: {
-    color: palette.ink,
-    fontSize: 16,
-    fontWeight: "800",
-    lineHeight: 24
   },
   handLabel: {
     color: palette.subtle,
@@ -641,8 +792,9 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xs
   },
-  illegalDominoButton: {
-    borderColor: palette.border
+  illegalDominoTile: {
+    borderColor: palette.border,
+    opacity: 0.34
   },
   infoGrid: {
     flexDirection: "row",
@@ -678,10 +830,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 6
   },
+  pipCell: {
+    alignItems: "center",
+    height: "33.333%",
+    justifyContent: "center",
+    width: "33.333%"
+  },
+  playedDominoRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
   playStatusGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
+  },
+  pressedDominoTile: {
+    transform: [{ scale: 0.98 }]
   },
   scoreLabel: {
     color: palette.ink,
@@ -710,10 +877,12 @@ const styles = StyleSheet.create({
   sectionHeader: {
     gap: spacing.xs
   },
-  selectedDominoButton: {
+  selectedDominoTile: {
     backgroundColor: palette.goldSoft,
     borderColor: palette.gold,
-    borderWidth: 2
+    shadowColor: palette.goldDark,
+    shadowOpacity: 0.22,
+    shadowRadius: 4
   },
   statusItem: {
     backgroundColor: palette.background,

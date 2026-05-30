@@ -17,9 +17,8 @@ describe("LocalGameScreen", () => {
       expect(view.getByText("Bidding")).toBeTruthy();
       expect(view.getByText("Your bid")).toBeTruthy();
       expect(view.getByText("Your hand")).toBeTruthy();
-      expect(view.getByTestId("local-game-human-hand").props.children).toMatch(
-        /\d-\d/
-      );
+      expect(view.getByTestId("local-game-human-hand")).toBeTruthy();
+      expect(view.getAllByLabelText(/^Domino \d-\d$/)).toHaveLength(7);
     } finally {
       randomSpy.mockRestore();
     }
@@ -50,6 +49,7 @@ describe("LocalGameScreen", () => {
       expect(view.getByText("Previous trick")).toBeTruthy();
       expect(view.getByText("Activity")).toBeTruthy();
       expect(view.queryAllByText(/ as /).length).toBe(0);
+      expect(view.getByTestId("local-game-domino-3-0")).toBeTruthy();
 
       fireEvent.press(view.getByLabelText("Select 3-0"));
 
