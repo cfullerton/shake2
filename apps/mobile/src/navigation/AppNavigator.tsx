@@ -23,7 +23,7 @@ export function AppNavigator() {
         headerStyle: {
           backgroundColor: palette.background
         },
-        headerTintColor: palette.ink,
+        headerTintColor: palette.paper,
         headerTitleStyle: {
           fontWeight: "800"
         }

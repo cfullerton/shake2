@@ -50,8 +50,8 @@ const styles = StyleSheet.create({
     flex: 1
   },
   footer: {
-    backgroundColor: palette.background,
-    borderTopColor: palette.border,
+    backgroundColor: palette.wood,
+    borderTopColor: palette.woodLight,
     borderTopWidth: StyleSheet.hairlineWidth,
     gap: spacing.sm,
     padding: spacing.lg

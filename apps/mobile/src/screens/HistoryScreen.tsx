@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   emptyCopy: {
-    color: palette.muted,
+    color: palette.paperMuted,
     fontSize: 16,
     lineHeight: 22,
     textAlign: "center"
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   emptyTitle: {
-    color: palette.ink,
+    color: palette.paper,
     fontSize: 22,
     fontWeight: "800",
     textAlign: "center"

@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     color: palette.surface
   },
   secondary: {
-    backgroundColor: palette.surface,
+    backgroundColor: palette.surfaceAlt,
     borderColor: palette.border,
     borderWidth: 1
   },

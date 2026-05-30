@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
   },
   dominoTile: {
     alignItems: "center",
-    backgroundColor: palette.surface,
+    backgroundColor: palette.paper,
     borderColor: palette.ink,
     borderRadius: radius.sm,
     borderWidth: 2,
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4
   },
   statusItem: {
-    backgroundColor: palette.background,
+    backgroundColor: palette.surfaceAlt,
     borderColor: palette.border,
     borderRadius: radius.sm,
     borderWidth: 1,
@@ -901,12 +901,12 @@ const styles = StyleSheet.create({
     lineHeight: 22
   },
   subtitle: {
-    color: palette.muted,
+    color: palette.paperMuted,
     fontSize: 15,
     lineHeight: 20
   },
   title: {
-    color: palette.ink,
+    color: palette.paper,
     fontSize: 26,
     fontWeight: "900"
   },

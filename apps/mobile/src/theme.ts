@@ -1,16 +1,24 @@
 export const palette = {
-  background: "#F7F8F3",
-  border: "#D8DDD4",
-  gold: "#D69B2D",
-  goldDark: "#7A4A05",
-  goldSoft: "#FFF1C7",
-  ink: "#1F2A2E",
-  muted: "#52605F",
-  red: "#B6403A",
-  subtle: "#87908D",
-  surface: "#FFFFFF",
-  teal: "#0F766E",
-  tealSoft: "#DDEDEA"
+  background: "#20110E",
+  border: "#B98542",
+  denim: "#2E5F7D",
+  denimSoft: "#D5E2E8",
+  felt: "#23483A",
+  gold: "#D99A2B",
+  goldDark: "#5A2B0B",
+  goldSoft: "#FFE0A3",
+  ink: "#28160F",
+  muted: "#65442E",
+  paper: "#FFF1D0",
+  paperMuted: "#E9CDA0",
+  red: "#8F2923",
+  subtle: "#8A6B52",
+  surface: "#FFF1D0",
+  surfaceAlt: "#F6DDB0",
+  teal: "#A9352C",
+  tealSoft: "#F4C6B8",
+  wood: "#321913",
+  woodLight: "#59301F"
 } as const;
 
 export const radius = {

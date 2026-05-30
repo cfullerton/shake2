@@ -24,7 +24,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs
   },
   input: {
-    backgroundColor: palette.surface,
+    backgroundColor: palette.surfaceAlt,
     borderColor: palette.border,
     borderRadius: radius.sm,
     borderWidth: 1,

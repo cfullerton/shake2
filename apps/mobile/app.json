@@ -7,7 +7,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#F7F8F3"
+      "backgroundColor": "#20110E"
     },
     "ios": {
       "supportsTablet": true

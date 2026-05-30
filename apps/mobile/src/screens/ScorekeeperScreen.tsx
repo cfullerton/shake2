@@ -252,13 +252,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6
   },
   emptyCopy: {
-    color: palette.muted,
+    color: palette.paperMuted,
     fontSize: 16,
     lineHeight: 22,
     textAlign: "center"
   },
   emptyTitle: {
-    color: palette.ink,
+    color: palette.paper,
     fontSize: 22,
     fontWeight: "800",
     textAlign: "center"
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   subtitle: {
-    color: palette.muted,
+    color: palette.paperMuted,
     fontSize: 15,
     fontWeight: "700"
   },
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     gap: 3
   },
   title: {
-    color: palette.ink,
+    color: palette.paper,
     fontSize: 27,
     fontWeight: "900"
   },

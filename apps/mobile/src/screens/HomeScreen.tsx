@@ -26,8 +26,8 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
           <Trophy color={palette.surface} size={28} />
         </View>
         <View style={styles.headerText}>
-          <Text style={styles.title}>Texas 42 Scorekeeper</Text>
-          <Text style={styles.subtitle}>Track marks, undo hands, and resume locally.</Text>
+          <Text style={styles.title}>Texas 42 Saloon</Text>
+          <Text style={styles.subtitle}>Score the table or practice against bots.</Text>
         </View>
       </View>
 
@@ -119,7 +119,9 @@ const styles = StyleSheet.create({
   brandMark: {
     alignItems: "center",
     backgroundColor: palette.teal,
+    borderColor: palette.gold,
     borderRadius: radius.md,
+    borderWidth: 1,
     height: 56,
     justifyContent: "center",
     width: 56
@@ -199,7 +201,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl
   },
   loadingText: {
-    color: palette.muted,
+    color: palette.paperMuted,
     fontSize: 15,
     fontWeight: "700"
   },
@@ -221,7 +223,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   sectionTitle: {
-    color: palette.muted,
+    color: palette.paperMuted,
     fontSize: 13,
     fontWeight: "800",
     textTransform: "uppercase"
@@ -237,7 +239,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5
   },
   subtitle: {
-    color: palette.muted,
+    color: palette.paperMuted,
     fontSize: 15,
     lineHeight: 20
   },
@@ -251,7 +253,7 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   title: {
-    color: palette.ink,
+    color: palette.paper,
     fontSize: 28,
     fontWeight: "900"
   }
