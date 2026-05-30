@@ -22,6 +22,11 @@ import {
   type FortyTwoTrumpPhaseState
 } from "../forty-two/state.ts";
 import {
+  assertFortyTwoEventEnvelope,
+  assertFortyTwoSnapshotEnvelope,
+  replayValidatedFortyTwoEvents
+} from "../forty-two/validation.ts";
+import {
   createMultiplayerVisibleSnapshot,
   getMultiplayerPlayerView,
   type MultiplayerActionResultIndex,
@@ -172,6 +177,9 @@ export function restoreMultiplayerSessionFromRecords(
     const events = sortEventRecords(records.events).map((record) => record.envelope);
     const snapshot = restoreSnapshotFromRecords(records.snapshot, records.privateHands);
     const initialSnapshot = restoreInitialSnapshot(events);
+    const replayedSnapshot = replayValidatedFortyTwoEvents(initialSnapshot, events);
+
+    assertSnapshotsMatch(replayedSnapshot, snapshot);
 
     return {
       actionResults: restoreActionResults(records.idempotency, events),
@@ -366,10 +374,22 @@ function restoreSnapshotFromRecords(
   record: MultiplayerSnapshotRecord,
   privateHands: readonly MultiplayerPrivateHandRecord[]
 ): FortyTwoSnapshotEnvelope {
-  return {
+  const snapshot = {
     ...record.payload,
     snapshot: restoreStateFromRecords(record.payload.snapshot, privateHands)
   };
+
+  assertFortyTwoSnapshotEnvelope(snapshot);
+
+  if (
+    record.gameId !== snapshot.gameId ||
+    record.lastEventSequence !== snapshot.lastEventSequence ||
+    record.snapshotVersion !== snapshot.snapshotVersion
+  ) {
+    throw new EngineError("INVALID_ACTION", "Snapshot record metadata does not match payload.");
+  }
+
+  return snapshot;
 }
 
 function restoreStateFromRecords(
@@ -437,6 +457,10 @@ function restoreInitialSnapshot(
 ): FortyTwoSnapshotEnvelope {
   const firstEvent = events[0];
 
+  for (const event of events) {
+    assertFortyTwoEventEnvelope(event);
+  }
+
   if (!firstEvent || firstEvent.event.type !== "fortyTwo.game.created") {
     throw new EngineError(
       "GAME_NOT_FOUND",
@@ -467,6 +491,18 @@ function restoreInitialSnapshot(
     },
     snapshotVersion: 0
   };
+}
+
+function assertSnapshotsMatch(
+  replayedSnapshot: FortyTwoSnapshotEnvelope,
+  storedSnapshot: FortyTwoSnapshotEnvelope
+): void {
+  if (!deepEqual(replayedSnapshot, storedSnapshot)) {
+    throw new EngineError(
+      "INVALID_ACTION",
+      "Stored multiplayer snapshot does not match validated event replay."
+    );
+  }
 }
 
 function restoreActionResults(
@@ -587,4 +623,42 @@ function toEngineErrorCode(value: string | undefined): EngineErrorCode {
   }
 
   return value as EngineErrorCode;
+}
+
+function deepEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) {
+    return true;
+  }
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) {
+      return false;
+    }
+
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    return left.every((value, index) => deepEqual(value, right[index]));
+  }
+
+  if (
+    typeof left === "object" &&
+    left !== null &&
+    typeof right === "object" &&
+    right !== null
+  ) {
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const leftKeys = Object.keys(leftRecord).sort();
+    const rightKeys = Object.keys(rightRecord).sort();
+
+    if (!deepEqual(leftKeys, rightKeys)) {
+      return false;
+    }
+
+    return leftKeys.every((key) => deepEqual(leftRecord[key], rightRecord[key]));
+  }
+
+  return false;
 }

@@ -202,6 +202,53 @@ test("multiplayer storage restore rejects missing private hands", () => {
   }
 });
 
+test("multiplayer storage restore rejects forged trusted event records", () => {
+  const context = createTestContext();
+  const session = createStartedSession(context);
+  const records = createMultiplayerStorageRecords(session);
+  const forgedRecords: MultiplayerStoredGameRecords = {
+    ...records,
+    events: records.events.map((record) => {
+      if (record.envelope.event.type !== "fortyTwo.hand.dealt") {
+        return record;
+      }
+
+      const duplicatedDomino = record.envelope.event.payload.hands[0][0];
+
+      if (!duplicatedDomino) {
+        throw new Error("Expected dealt domino.");
+      }
+
+      return {
+        ...record,
+        envelope: {
+          ...record.envelope,
+          event: {
+            ...record.envelope.event,
+            payload: {
+              ...record.envelope.event.payload,
+              hands: {
+                ...record.envelope.event.payload.hands,
+                1: [
+                  duplicatedDomino,
+                  ...record.envelope.event.payload.hands[1].slice(1)
+                ]
+              }
+            }
+          }
+        }
+      };
+    })
+  };
+  const restored = restoreMultiplayerSessionFromRecords(forgedRecords);
+
+  assert.equal(restored.ok, false);
+
+  if (!restored.ok) {
+    assert.equal(restored.error.code, "INVALID_DOMINO");
+  }
+});
+
 function createStartedSession(context: EngineContext): MultiplayerGameSession {
   return unwrapResult(
     startMultiplayerGame(
