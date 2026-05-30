@@ -8,7 +8,7 @@ Multiplayer is ready for the next backend-design slice, but not ready for produc
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The largest remaining gap is physical infrastructure: no Cognito identity, AppSync API, Lambda resolver, DynamoDB adapter, subscription fanout, deployed reconnect endpoint, or multiplayer UI exists yet.
+The first DynamoDB adapter contract slice now converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace and testable `submitGameAction` Lambda-style resolver shell now exist. The largest remaining gap is still physical infrastructure: no Cognito identity, public AppSync API, deployed DynamoDB client adapter, subscription fanout, deployed reconnect endpoint, or multiplayer UI exists yet.
 
 ## Current Multiplayer Architecture
 
@@ -18,6 +18,14 @@ Current multiplayer code is backend-neutral and lives under `packages/game-engin
 - `storage.ts`: durable record shapes for room metadata, trusted event records, public snapshots, private hands, and action results; restore/reconnect helpers.
 - `schema.ts`: runtime parsers for action envelopes, storage records, public snapshots, private hands, idempotency records, and client reconnect state.
 - `write-plan.ts`: backend-neutral persistence write intentions for game start, accepted actions, and rejected actions.
+- `dynamodb-adapter.ts`: pure DynamoDB transaction-intent conversion for write plans, with conditional-write expressions for room state, snapshot version, event append, and action idempotency conflicts.
+
+Backend shell code now lives under `backend`.
+
+- `src/functions/submitGameAction/handler.ts`: AppSync-like Lambda resolver shell for submit-game-action requests.
+- `src/dynamodb/store.ts`: `MultiplayerStore` interface for loading stored game records, loading idempotency results, and committing write plans.
+- `src/auth/identity.ts`: mocked/auth-neutral actor extraction boundary.
+- `src/types/index.ts`: backend-local request, response, actor, resolver-context, and error types.
 
 Current authority model:
 
@@ -39,12 +47,14 @@ Production multiplayer blockers:
    - Need guest/anonymous account decision.
 
 2. Physical persistence adapter
-   - No DynamoDB transaction adapter exists.
-   - Need translation from write plans to conditional writes.
-   - Need adapter tests for contention, duplicate action IDs, stale snapshots, and partial failures.
+   - DynamoDB transaction intent shapes now exist and are tested.
+   - A Lambda-style resolver shell can delegate transaction intents to `MultiplayerStore` mocks.
+   - No AWS SDK/AppSync production adapter executes those transaction intents yet.
+   - Need physical adapter tests for AWS error mapping, transaction cancellation reasons, partial failures, and retry handling.
 
 3. AppSync or realtime transport
    - No GraphQL schema/resolvers/subscriptions exist.
+   - The `submitGameAction` Lambda handler exists as a testable shell, but it is not connected to AppSync.
    - No subscription gap detection is wired into the app.
    - No deployed reconnect query exists.
 
@@ -268,18 +278,19 @@ Production-quality casual multiplayer:
 
 ## Recommended Next Slices
 
-1. DynamoDB adapter contract tests
-   - Translate write plans to DynamoDB transaction items.
-   - Test conditional failures for stale snapshots, duplicate event records, duplicate action IDs, and room status mismatch.
+1. Physical DynamoDB adapter shell
+   - Translate tested transaction intents into AWS SDK `TransactWriteItems` calls.
+   - Map conditional-check failures back to stable `EngineError` codes.
+   - Keep the AWS SDK dependency inside `backend`, not `packages/game-engine`.
 
-2. Backend workspace scaffold
-   - Add `/backend` or Amplify Gen 2 workspace.
-   - Add Lambda resolver package that imports `@shake2/game-engine`.
-   - No public API yet.
+2. AppSync schema draft
+   - Define `submitGameAction` mutation shape against the existing resolver response.
+   - Define room/snapshot queries without exposing private hand records.
+   - Keep schema draft undeployed until auth and persistence are ready.
 
-3. AppSync schema draft
-   - Define mutations/queries/subscriptions.
-   - Explicitly separate public views from server-only records.
+3. Backend reconnect resolver shell
+   - Add a testable resolver around `getMultiplayerReconnectView`.
+   - Return redacted player views and accepted/rejected/unknown pending actions.
 
 4. Reconnect client model
    - Add pending action queue and gap detection in the app without real network transport.

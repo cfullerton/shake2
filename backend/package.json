@@ -1,0 +1,16 @@
+{
+  "name": "@shake2/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/backend/src/index.js",
+  "types": "dist/backend/src/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"dist/backend/src/**/*.test.js\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@shake2/game-engine": "file:../packages/game-engine"
+  }
+}
