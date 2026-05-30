@@ -9,6 +9,7 @@ import {
   getCompletedTrickCountPoints,
   isCountDomino,
   scoreCompletedHand,
+  scoreCompletedTricks,
   type CompletedTrick,
   type Domino,
   type DominoSuit,
@@ -93,6 +94,19 @@ test("scores no count dominoes captured by the bidding team", () => {
   assert.equal(biddingTeamCountPoints, 0);
   assert.equal(score.biddingTeamPoints, 2);
   assert.equal(score.outcome, "set");
+});
+
+test("scores completed tricks for in-hand progress", () => {
+  const score = scoreCompletedTricks(
+    createCompletedTricks([0, 1, 2, 3, 0, 1, 2]).slice(0, 2)
+  );
+
+  assert.equal(score.teamPoints.teamA, 6);
+  assert.equal(score.teamPoints.teamB, 6);
+  assert.equal(score.teamTrickCounts.teamA, 1);
+  assert.equal(score.teamTrickCounts.teamB, 1);
+  assert.equal(score.totalPoints, 12);
+  assert.equal(score.trickScores.length, 2);
 });
 
 test("proves total hand points equal 42", () => {

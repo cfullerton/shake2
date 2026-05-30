@@ -62,6 +62,14 @@ export interface HandScore {
   readonly tricksByTeam: Readonly<Record<FortyTwoTeamId, readonly CompletedTrickScore[]>>;
 }
 
+export interface CurrentHandPointScore {
+  readonly teamPoints: TeamPointTotals;
+  readonly teamTrickCounts: TeamPointTotals;
+  readonly totalPoints: number;
+  readonly trickScores: readonly CompletedTrickScore[];
+  readonly tricksByTeam: Readonly<Record<FortyTwoTeamId, readonly CompletedTrickScore[]>>;
+}
+
 export function scoreCompletedTrick(
   completedTrick: CompletedTrick
 ): CompletedTrickScore {
@@ -83,20 +91,10 @@ export function scoreCompletedTrick(
   };
 }
 
-export function scoreCompletedHand(
-  completedTricks: readonly CompletedTrick[],
-  winningBid: WinningBid
-): HandScore {
-  if (completedTricks.length !== FORTY_TWO_TRICKS_PER_HAND) {
-    throw new EngineError(
-      "INVALID_PHASE",
-      `A completed hand must have ${FORTY_TWO_TRICKS_PER_HAND} tricks.`
-    );
-  }
-
+export function scoreCompletedTricks(
+  completedTricks: readonly CompletedTrick[]
+): CurrentHandPointScore {
   const trickScores = completedTricks.map(scoreCompletedTrick);
-  assertCompleteHandDominoes(trickScores);
-
   const teamPoints = createEmptyTeamTotals();
   const teamTrickCounts = createEmptyTeamTotals();
   const tricksByTeam: Record<FortyTwoTeamId, CompletedTrickScore[]> = {
@@ -110,9 +108,30 @@ export function scoreCompletedHand(
     tricksByTeam[trickScore.winningTeamId].push(trickScore);
   }
 
-  const totalPoints = sumTeamTotals(teamPoints);
+  return {
+    teamPoints,
+    teamTrickCounts,
+    totalPoints: sumTeamTotals(teamPoints),
+    trickScores,
+    tricksByTeam
+  };
+}
 
-  if (totalPoints !== FORTY_TWO_HAND_TOTAL_POINTS) {
+export function scoreCompletedHand(
+  completedTricks: readonly CompletedTrick[],
+  winningBid: WinningBid
+): HandScore {
+  if (completedTricks.length !== FORTY_TWO_TRICKS_PER_HAND) {
+    throw new EngineError(
+      "INVALID_PHASE",
+      `A completed hand must have ${FORTY_TWO_TRICKS_PER_HAND} tricks.`
+    );
+  }
+
+  const currentScore = scoreCompletedTricks(completedTricks);
+  assertCompleteHandDominoes(currentScore.trickScores);
+
+  if (currentScore.totalPoints !== FORTY_TWO_HAND_TOTAL_POINTS) {
     throw new EngineError(
       "INVALID_DOMINO",
       `A completed hand must total ${FORTY_TWO_HAND_TOTAL_POINTS} points.`
@@ -120,7 +139,7 @@ export function scoreCompletedHand(
   }
 
   const biddingTeamId = getTeamForSeat(winningBid.seat);
-  const biddingTeamPoints = teamPoints[biddingTeamId];
+  const biddingTeamPoints = currentScore.teamPoints[biddingTeamId];
   const outcome: BidOutcome =
     biddingTeamPoints >= winningBid.bid.amount ? "made" : "set";
 
@@ -130,11 +149,11 @@ export function scoreCompletedHand(
     biddingTeamPoints,
     markAwards: getMarkAwards(biddingTeamId, outcome),
     outcome,
-    teamPoints,
-    teamTrickCounts,
-    totalPoints,
-    trickScores,
-    tricksByTeam
+    teamPoints: currentScore.teamPoints,
+    teamTrickCounts: currentScore.teamTrickCounts,
+    totalPoints: currentScore.totalPoints,
+    trickScores: currentScore.trickScores,
+    tricksByTeam: currentScore.tricksByTeam
   };
 }
 

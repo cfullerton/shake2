@@ -8,6 +8,7 @@ import {
   getLocalGameView,
   playLocalGameDomino,
   restartLocalGameSession,
+  scoreCompletedTricks,
   submitLocalGameBid,
   type EngineContext,
   type LegalDominoPlay,
@@ -42,6 +43,12 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const humanHand = "hands" in state ? state.hands[session.humanSeat] : [];
   const humanHandText = humanHand.map(formatDomino).join("  ");
   const currentTrick = state.phase === "trickPlay" ? state.currentTrick : null;
+  const currentHandScore = state.phase === "trickPlay"
+    ? scoreCompletedTricks(state.completedTricks)
+    : null;
+  const trumpSuitLabel = state.phase === "trickPlay"
+    ? formatTrumpSuit(state.contract.trumpSuit)
+    : null;
 
   const phaseTitle = useMemo(() => {
     switch (view.kind) {
@@ -171,6 +178,23 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
 
       {view.kind === "trickPlay" ? (
         <>
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Table</Text>
+            <View style={styles.playStatusGrid}>
+              <View style={styles.statusItem}>
+                <Text style={styles.handLabel}>Trump</Text>
+                <Text style={styles.statusValue}>{trumpSuitLabel}</Text>
+              </View>
+              <View style={styles.statusItem}>
+                <Text style={styles.handLabel}>Current score</Text>
+                <Text style={styles.statusValue}>
+                  Team A {currentHandScore?.teamPoints.teamA ?? 0} · Team B{" "}
+                  {currentHandScore?.teamPoints.teamB ?? 0}
+                </Text>
+              </View>
+            </View>
+          </View>
+
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Current trick</Text>
             {currentTrick && currentTrick.playedDominoes.length > 0 ? (
@@ -386,6 +410,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 6
   },
+  playStatusGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
   scoreLabel: {
     color: palette.ink,
     flex: 1,
@@ -409,6 +438,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.sm,
     padding: spacing.md
+  },
+  statusItem: {
+    backgroundColor: palette.background,
+    borderColor: palette.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexGrow: 1,
+    gap: spacing.xs,
+    minWidth: 132,
+    padding: spacing.sm
+  },
+  statusValue: {
+    color: palette.ink,
+    fontSize: 16,
+    fontWeight: "900",
+    lineHeight: 22
   },
   subtitle: {
     color: palette.muted,

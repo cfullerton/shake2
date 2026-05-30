@@ -40,6 +40,10 @@ describe("LocalGameScreen", () => {
       fireEvent.press(view.getByText("Sixes"));
 
       expect(view.getByText("Trick Play")).toBeTruthy();
+      expect(view.getByText("Trump")).toBeTruthy();
+      expect(view.getByText("Sixes")).toBeTruthy();
+      expect(view.getByText("Current score")).toBeTruthy();
+      expect(view.getByText("Team A 0 · Team B 0")).toBeTruthy();
       expect(view.queryAllByText(/ as /).length).toBe(0);
     } finally {
       randomSpy.mockRestore();
