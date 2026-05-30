@@ -25,7 +25,7 @@ import {
 } from "@shake2/game-engine";
 import { Play, RotateCcw } from "lucide-react-native";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { Screen } from "../components/Screen";
@@ -33,6 +33,8 @@ import type { RootStackParamList } from "../navigation/types";
 import { letterSpacing, palette, radius, spacing } from "../theme";
 
 type LocalGameScreenProps = NativeStackScreenProps<RootStackParamList, "LocalGame">;
+
+const BOT_PLAY_DELAY_MS = 800;
 
 const seatNames = ["North", "East", "South", "West"] as const;
 type DominoTileSize = "regular" | "small";
@@ -57,6 +59,16 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
     )
   );
   const [selectedPlayKey, setSelectedPlayKey] = useState<string | null>(null);
+  const [isAdvancing, setIsAdvancing] = useState(false);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimerRef.current !== null) {
+        clearTimeout(advanceTimerRef.current);
+      }
+    };
+  }, []);
   const view = getLocalGameView(session);
   const state = session.snapshot.snapshot;
   const humanHand = "hands" in state ? state.hands[session.humanSeat] : [];
@@ -104,6 +116,15 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       const nextSession = run();
       setSelectedPlayKey(null);
       setSession(nextSession);
+      setIsAdvancing(true);
+
+      if (advanceTimerRef.current !== null) {
+        clearTimeout(advanceTimerRef.current);
+      }
+      advanceTimerRef.current = setTimeout(() => {
+        setIsAdvancing(false);
+        advanceTimerRef.current = null;
+      }, BOT_PLAY_DELAY_MS);
     } catch (error) {
       Alert.alert(
         "Action failed",
@@ -187,6 +208,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
             {view.legalBids.map((option) => (
               <Button
                 key={option.label}
+                disabled={isAdvancing}
                 onPress={() =>
                   updateSession(() =>
                     submitLocalGameBid(session, option.bid, contextRef.current)
@@ -221,6 +243,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
             {view.legalTrumpSuits.map((trumpSuit) => (
               <Button
                 key={trumpSuit}
+                disabled={isAdvancing}
                 onPress={() =>
                   updateSession(() =>
                     callLocalGameTrump(session, trumpSuit, contextRef.current)
@@ -321,11 +344,11 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                         ? `Select ${formatDomino(domino)}`
                         : `${formatDomino(domino)} cannot be played now`
                     }
-                    disabled={!legalPlay}
+                    disabled={!legalPlay || isAdvancing}
                     domino={domino}
                     key={dominoKey}
                     onPress={() => {
-                      if (legalPlay) {
+                      if (legalPlay && !isAdvancing) {
                         setSelectedPlayKey(playKey);
                       }
                     }}
@@ -340,7 +363,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                   ? `Play ${formatDomino(selectedPlay.domino)}`
                   : "Choose a domino before playing"
               }
-              disabled={!selectedPlay}
+              disabled={!selectedPlay || isAdvancing}
               onPress={() =>
                 selectedPlay
                   ? updateSession(() =>
@@ -357,7 +380,12 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
 
       {activityLog.length > 0 ? (
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Activity</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.panelTitle}>Activity</Text>
+            {isAdvancing ? (
+              <Text style={styles.meta}>Bots are playing…</Text>
+            ) : null}
+          </View>
           <View style={styles.activityList}>
             {activityLog.map((entry) => (
               <Text key={entry.id} style={styles.meta}>
@@ -410,6 +438,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           </Text>
           <Button
             accessibilityLabel="Start next hand"
+            disabled={isAdvancing}
             icon={<Play color={palette.surface} size={18} />}
             onPress={() =>
               updateSession(() => continueLocalGameSession(session, contextRef.current))
@@ -439,6 +468,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           </View>
           <Button
             accessibilityLabel="Start another local game"
+            disabled={isAdvancing}
             icon={<Play color={palette.surface} size={18} />}
             onPress={handleRestart}
           >
@@ -455,6 +485,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           </Text>
           <Button
             accessibilityLabel="Refresh local game"
+            disabled={isAdvancing}
             onPress={() =>
               updateSession(() => applyLocalHumanAction(session, contextRef.current))
             }
