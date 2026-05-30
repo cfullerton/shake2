@@ -5,6 +5,7 @@ import { ListChecks, Minus, Plus, RotateCcw } from "lucide-react-native";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "../components/Button";
+import { GameText } from "../components/GameText";
 import { MarkDots } from "../components/MarkDots";
 import { Screen } from "../components/Screen";
 import { SegmentedControl, type Segment } from "../components/SegmentedControl";
@@ -77,7 +78,7 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
         <View style={styles.footerActions}>
           <Button
             disabled={activeGame.history.length === 0}
-            icon={<RotateCcw color={palette.teal} size={18} />}
+            icon={<RotateCcw color={palette.crimson} size={18} />}
             onPress={handleUndo}
             style={styles.footerButton}
             variant="secondary"
@@ -85,7 +86,7 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
             Undo
           </Button>
           <Button
-            icon={<ListChecks color={palette.teal} size={18} />}
+            icon={<ListChecks color={palette.crimson} size={18} />}
             onPress={() => navigation.navigate("History", { gameId: activeGame.id })}
             style={styles.footerButton}
             variant="secondary"
@@ -121,8 +122,8 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
       </View>
 
       {winningTeam ? (
-        <View style={styles.winnerBanner}>
-          <Text style={styles.winnerTitle}>🤠 {winningTeam.name} wins!</Text>
+        <View style={styles.winnerHero}>
+          <GameText style={styles.winnerHeroTitle}>🤠 {winningTeam.name} wins!</GameText>
           <Text style={styles.winnerCopy}>Undo the last hand to keep the game going.</Text>
         </View>
       ) : null}
@@ -155,7 +156,7 @@ export function ScorekeeperScreen({ navigation, route }: ScorekeeperScreenProps)
                   {isLeader ? <Text style={styles.leaderPill}>Leader</Text> : null}
                 </View>
               </View>
-              <Text style={styles.scoreNumber}>{team.marks}</Text>
+              <GameText variant="score" style={styles.scoreNumber}>{String(team.marks)}</GameText>
               <MarkDots marks={team.marks} targetMarks={activeGame.targetMarks} />
             </Pressable>
           );
@@ -300,9 +301,9 @@ const styles = StyleSheet.create({
     width: 44
   },
   leaderPill: {
-    backgroundColor: palette.tealSoft,
+    backgroundColor: palette.crimsonSoft,
     borderRadius: radius.sm,
-    color: palette.teal,
+    color: palette.crimson,
     fontSize: 12,
     fontWeight: "800",
     overflow: "hidden",
@@ -335,20 +336,25 @@ const styles = StyleSheet.create({
   },
   scoreNumber: {
     color: palette.ink,
-    fontSize: 48,
-    fontWeight: "900"
+    fontSize: 48
   },
   scoreboard: {
     gap: spacing.md
   },
   selectedTeamCard: {
-    borderColor: palette.teal,
-    borderWidth: 2
+    borderColor: palette.gold,
+    borderLeftColor: palette.gold,
+    borderLeftWidth: 4,
+    borderWidth: 2,
+    shadowColor: palette.goldDark,
+    shadowOffset: { height: 2, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4
   },
   status: {
-    backgroundColor: palette.tealSoft,
+    backgroundColor: palette.crimsonSoft,
     borderRadius: radius.sm,
-    color: palette.teal,
+    color: palette.crimson,
     fontSize: 12,
     fontWeight: "800",
     overflow: "hidden",
@@ -398,22 +404,23 @@ const styles = StyleSheet.create({
     fontSize: 27,
     fontWeight: "900"
   },
-  winnerBanner: {
-    backgroundColor: palette.goldSoft,
-    borderColor: palette.gold,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: spacing.xs,
-    padding: spacing.md
-  },
   winnerCopy: {
     color: palette.goldDark,
     fontSize: 14,
-    fontWeight: "700"
+    fontWeight: "700",
+    textAlign: "center"
   },
-  winnerTitle: {
-    color: palette.goldDark,
-    fontSize: 18,
-    fontWeight: "900"
+  winnerHero: {
+    alignItems: "center",
+    backgroundColor: palette.gold,
+    borderRadius: radius.md,
+    gap: spacing.sm,
+    padding: spacing.xl
+  },
+  winnerHeroTitle: {
+    color: palette.wood,
+    fontSize: 32,
+    letterSpacing: 1.5,
+    textAlign: "center"
   }
 });

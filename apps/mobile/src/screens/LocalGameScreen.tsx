@@ -31,6 +31,7 @@ import { Alert, Animated, Pressable, StyleSheet, Text, View } from "react-native
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
+import { EventFeed } from "../components/EventFeed";
 import { Screen } from "../components/Screen";
 import type { RootStackParamList } from "../navigation/types";
 import { letterSpacing, palette, radius, spacing } from "../theme";
@@ -80,6 +81,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const visibleTrickPlayCountRef = useRef(0);
   const trickEntranceAnimsRef = useRef<Map<string, Animated.Value>>(new Map());
   const startedTrickAnimKeysRef = useRef<Set<string>>(new Set());
+  const handSummaryAnimRef = useRef(new Animated.Value(0));
 
   useEffect(() => {
     return () => {
@@ -257,6 +259,18 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
     }
   }, [view.kind]);
 
+  useEffect(() => {
+    if (view.kind === "handSummary" || view.kind === "gameSummary") {
+      handSummaryAnimRef.current.setValue(0);
+      Animated.spring(handSummaryAnimRef.current, {
+        friction: 8,
+        tension: 60,
+        toValue: 1,
+        useNativeDriver: false
+      }).start();
+    }
+  }, [view.kind]);
+
   function updateSession(run: () => LocalGameSession) {
     try {
       const nextSession = run();
@@ -291,7 +305,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
     <Screen
       footer={
         <Button
-          icon={<RotateCcw color={palette.teal} size={18} />}
+          icon={<RotateCcw color={palette.crimson} size={18} />}
           onPress={handleRestart}
           disabled={isAdvancing}
           variant="secondary"
@@ -367,9 +381,49 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       {view.kind === "bidding" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Your bid</Text>
-          <Text style={styles.copy}>Pick a pass or bid.</Text>
+          {state.phase === "bidding" && state.bidding.highestBid ? (
+            <Text style={styles.currentBidDisplay}>
+              High bid: {state.bidding.highestBid.bid.amount}
+            </Text>
+          ) : null}
+          <View style={styles.bidGrid}>
+            {view.legalBids
+              .filter((option) => option.bid.kind !== "pass")
+              .map((option) => (
+                <Button
+                  key={option.label}
+                  disabled={isAdvancing}
+                  onPress={() =>
+                    updateSession(() =>
+                      submitLocalGameBid(session, option.bid, contextRef.current)
+                    )
+                  }
+                  style={styles.bidButton}
+                  accessibilityLabel={`Bid ${option.label}`}
+                >
+                  {`Bid ${option.label}`}
+                </Button>
+              ))}
+          </View>
+          {view.legalBids.some((option) => option.bid.kind === "pass") ? (
+            <Button
+              disabled={isAdvancing}
+              onPress={() => {
+                const passOption = view.legalBids.find((o) => o.bid.kind === "pass");
+                if (passOption) {
+                  updateSession(() =>
+                    submitLocalGameBid(session, passOption.bid, contextRef.current)
+                  );
+                }
+              }}
+              variant="ghost"
+              accessibilityLabel="Pass"
+            >
+              Pass
+            </Button>
+          ) : null}
           <View style={styles.handPreview}>
-            <Text style={styles.handLabel}>Your hand</Text>
+            <Text style={styles.handLabelDark}>Your hand</Text>
             <View style={styles.dominoGrid} testID="local-game-human-hand">
               {sortedHumanHand.map((domino) => (
                 <DominoTile
@@ -379,28 +433,6 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                 />
               ))}
             </View>
-          </View>
-          <View style={styles.buttonGrid}>
-            {view.legalBids.map((option) => (
-              <Button
-                key={option.label}
-                disabled={isAdvancing}
-                onPress={() =>
-                  updateSession(() =>
-                    submitLocalGameBid(session, option.bid, contextRef.current)
-                  )
-                }
-                style={styles.gridButton}
-                variant={option.bid.kind === "pass" ? "secondary" : "primary"}
-                accessibilityLabel={
-                  option.bid.kind === "numeric"
-                    ? `Bid ${option.bid.amount}`
-                    : "Pass"
-                }
-              >
-                {option.bid.kind === "numeric" ? `Bid ${option.label}` : option.label}
-              </Button>
-            ))}
           </View>
           {state.phase === "bidding" && state.bidding.bids.length > 0 ? (
             <Text style={styles.meta}>
@@ -415,9 +447,10 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       {view.kind === "trumpSelection" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Select trump</Text>
-          <View style={styles.buttonGrid}>
+          <Text style={styles.copy}>Choose the trump suit for this hand.</Text>
+          <View style={styles.trumpGrid}>
             {view.legalTrumpSuits.map((trumpSuit) => (
-              <Button
+              <Pressable
                 key={trumpSuit}
                 disabled={isAdvancing}
                 onPress={() =>
@@ -425,11 +458,17 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                     callLocalGameTrump(session, trumpSuit, contextRef.current)
                   )
                 }
-                style={styles.gridButton}
+                style={({ pressed }) => [
+                  styles.trumpTile,
+                  isAdvancing && styles.disabled,
+                  pressed && !isAdvancing && styles.pressedTrumpTile
+                ]}
+                accessibilityRole="button"
                 accessibilityLabel={`Call ${formatTrumpSuit(trumpSuit)} trump`}
               >
-                {`Call ${formatTrumpSuit(trumpSuit)}`}
-              </Button>
+                <TrumpSuitPips suit={trumpSuit} />
+                <Text style={styles.trumpTileLabel}>{`Call ${formatTrumpSuit(trumpSuit)}`}</Text>
+              </Pressable>
             ))}
           </View>
         </View>
@@ -516,6 +555,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                   : `${formatSeatLabel(state, turnSeat, session.humanSeat)} leads this trick.`}
               </Text>
             )}
+            {isAdvancing ? <Text style={styles.copy}>Bots are playing…</Text> : null}
           </View>
 
           <View style={styles.panel}>
@@ -544,6 +584,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                     disabled={!legalPlay || isAdvancing}
                     domino={domino}
                     key={dominoKey}
+                    legal={!!legalPlay && !isAdvancing}
                     onPress={() => {
                       if (legalPlay && !isAdvancing) {
                         setSelectedPlayKey(playKey);
@@ -575,30 +616,10 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
         </>
       ) : null}
 
-      {activityLog.length > 0 ? (
-        <View style={styles.panel}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.panelTitle}>Activity</Text>
-            {isAdvancing ? (
-              <Text style={styles.meta}>Bots are playing…</Text>
-            ) : null}
-          </View>
-          <View style={styles.activityList}>
-            {activityLog.map((entry) => (
-              <Text key={entry.id} style={styles.meta}>
-                {entry.text}
-              </Text>
-            ))}
-          </View>
-        </View>
-      ) : (
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Activity</Text>
-          <Text style={styles.copy}>
-          Nothing yet—bots are thinking.
-        </Text>
-        </View>
-      )}
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Activity</Text>
+        <EventFeed entries={activityLog} isActive={isAdvancing} />
+      </View>
 
       {completedTricksForDisplay.length > 0 ? (
         <View style={styles.panel}>
@@ -622,7 +643,22 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       ) : null}
 
       {view.kind === "handSummary" ? (
-        <View style={styles.panel}>
+        <Animated.View
+          style={[
+            styles.panel,
+            {
+              opacity: handSummaryAnimRef.current,
+              transform: [
+                {
+                  translateY: handSummaryAnimRef.current.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [24, 0]
+                  })
+                }
+              ]
+            }
+          ]}
+        >
           <Text style={styles.panelTitle}>
             {view.summary.handScore.outcome === "made" ? "Bid made" : "Bid set"}
           </Text>
@@ -664,11 +700,26 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           >
             Deal Next Hand
           </Button>
-        </View>
+        </Animated.View>
       ) : null}
 
       {view.kind === "gameSummary" ? (
-        <View style={styles.panel}>
+        <Animated.View
+          style={[
+            styles.panel,
+            {
+              opacity: handSummaryAnimRef.current,
+              transform: [
+                {
+                  translateY: handSummaryAnimRef.current.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [24, 0]
+                  })
+                }
+              ]
+            }
+          ]}
+        >
           <Text style={styles.panelTitle}>
             {state.teams[view.summary.winningTeamId].name} wins
           </Text>
@@ -692,7 +743,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           >
             Start Another Game
           </Button>
-        </View>
+        </Animated.View>
       ) : null}
 
       {view.kind === "waiting" ? (
@@ -721,6 +772,7 @@ function DominoTile({
   accessibilityLabel,
   disabled = false,
   domino,
+  legal = false,
   onPress,
   selected = false,
   size = "regular"
@@ -728,6 +780,7 @@ function DominoTile({
   readonly accessibilityLabel: string;
   readonly disabled?: boolean;
   readonly domino: Domino;
+  readonly legal?: boolean;
   readonly onPress?: () => void;
   readonly selected?: boolean;
   readonly size?: DominoTileSize;
@@ -747,6 +800,7 @@ function DominoTile({
       style={({ pressed }) => [
         styles.dominoTile,
         size === "small" ? styles.dominoTileSmall : null,
+        legal && !selected ? styles.legalDominoTile : null,
         selected ? styles.selectedDominoTile : null,
         disabled ? styles.illegalDominoTile : null,
         pressed && !pressableDisabled ? styles.pressedDominoTile : null
@@ -1066,9 +1120,59 @@ function getCurrentTrickPlayWindow(
   return plays.slice(-remainder);
 }
 
+const trumpSuitPipCount: Record<TrumpSuit, number> = {
+  blanks: 0,
+  ones: 1,
+  twos: 2,
+  threes: 3,
+  fours: 4,
+  fives: 5,
+  sixes: 6
+};
+
+function TrumpSuitPips({ suit }: { readonly suit: TrumpSuit }) {
+  const count = trumpSuitPipCount[suit];
+  const pips = Array.from({ length: count });
+
+  return (
+    <View style={trumpStyles.pipContainer}>
+      {pips.map((_, i) => (
+        <View key={i} style={trumpStyles.pip} />
+      ))}
+    </View>
+  );
+}
+
+const trumpStyles = StyleSheet.create({
+  pip: {
+    backgroundColor: palette.ink,
+    borderRadius: 5,
+    height: 10,
+    width: 10
+  },
+  pipContainer: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    height: 28,
+    justifyContent: "center",
+    width: 52
+  }
+});
+
 const styles = StyleSheet.create({
   activityList: {
     gap: spacing.xs
+  },
+  bidButton: {
+    minHeight: 52,
+    minWidth: 96
+  },
+  bidGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
   },
   buttonGrid: {
     flexDirection: "row",
@@ -1125,9 +1229,9 @@ const styles = StyleSheet.create({
   },
   dominoPip: {
     backgroundColor: palette.ink,
-    borderRadius: 4,
-    height: 8,
-    width: 8
+    borderRadius: 5,
+    height: 10,
+    width: 10
   },
   dominoPipSmall: {
     borderRadius: 3,
@@ -1146,9 +1250,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 5,
     shadowColor: palette.ink,
-    shadowOffset: { height: 1, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 2,
+    shadowOffset: { height: 2, width: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
     width: 118
   },
   dominoTileSmall: {
@@ -1159,15 +1263,57 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     width: 82
   },
+  currentBidDisplay: {
+    color: palette.crimson,
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  disabled: {
+    opacity: 0.48
+  },
   gridButton: {
     minWidth: 104
   },
   handLabel: {
+    color: palette.paperMuted,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: letterSpacing.caps,
+    textTransform: "uppercase"
+  },
+  handLabelDark: {
     color: palette.subtle,
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: letterSpacing.caps,
     textTransform: "uppercase"
+  },
+  pressedTrumpTile: {
+    opacity: 0.82,
+    transform: [{ scale: 0.97 }]
+  },
+  trumpGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  trumpTile: {
+    alignItems: "center",
+    backgroundColor: palette.surfaceAlt,
+    borderColor: palette.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    justifyContent: "center",
+    minHeight: 72,
+    minWidth: "30%",
+    padding: spacing.sm
+  },
+  trumpTileLabel: {
+    color: palette.ink,
+    fontSize: 14,
+    fontWeight: "800"
   },
   handPreview: {
     gap: spacing.xs
@@ -1185,6 +1331,11 @@ const styles = StyleSheet.create({
   illegalDominoTile: {
     borderColor: palette.border,
     opacity: 0.34
+  },
+  legalDominoTile: {
+    shadowColor: palette.gold,
+    shadowOpacity: 0.35,
+    shadowRadius: 4
   },
   infoGrid: {
     flexDirection: "row",
@@ -1211,9 +1362,9 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   phasePill: {
-    backgroundColor: palette.tealSoft,
+    backgroundColor: palette.crimsonSoft,
     borderRadius: radius.sm,
-    color: palette.teal,
+    color: palette.crimson,
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
@@ -1317,6 +1468,8 @@ const styles = StyleSheet.create({
   },
   trickTable: {
     alignSelf: "center",
+    backgroundColor: palette.felt,
+    borderRadius: 16,
     minHeight: 220,
     position: "relative",
     width: "100%"

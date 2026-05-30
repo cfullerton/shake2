@@ -46,7 +46,7 @@ export function Button({
       {...pressableProps}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "primary" ? palette.surface : palette.teal} />
+        <ActivityIndicator color={variant === "primary" ? palette.surface : palette.crimson} />
       ) : (
         <>
           {icon}
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 56,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm
   },
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent"
   },
   ghostLabel: {
-    color: palette.teal
+    color: palette.crimson
   },
   label: {
     fontSize: 16,
@@ -91,7 +91,9 @@ const styles = StyleSheet.create({
     opacity: 0.82
   },
   primary: {
-    backgroundColor: palette.teal
+    backgroundColor: palette.crimson,
+    borderTopColor: "rgba(255,255,255,0.12)",
+    borderTopWidth: 1
   },
   primaryLabel: {
     color: palette.surface

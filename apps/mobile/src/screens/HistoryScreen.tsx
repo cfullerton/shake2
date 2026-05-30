@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   team: {
-    color: palette.teal,
+    color: palette.crimson,
     fontSize: 15,
     fontWeight: "800"
   },
