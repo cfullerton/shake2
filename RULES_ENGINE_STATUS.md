@@ -6,7 +6,7 @@ Last reviewed: 2026-05-30
 
 The rules engine has moved beyond scorekeeper-only support and now contains the core local Texas 42 rule primitives for dominoes, seating, dealing, numeric bidding, trump, trick legality, trick winners, full-hand scoring, mark awards, dealer advancement, and game completion.
 
-The implementation is now a focused local command/reducer path through `PLAY_DOMINO`: a fourth play completes a trick, the seventh completed trick completes the hand, scoring is applied, marks are awarded, and the game completes when target marks are reached. M3 Phase 1 adds a local playable session layer, legal-random bots, and a minimal mobile practice flow. It is still not wired into persistence, multiplayer, AWS, advanced bots, variants, or a server-authoritative runtime.
+The implementation is now a focused local command/reducer path through `PLAY_DOMINO`: a fourth play completes a trick, the seventh completed trick completes the hand, scoring is applied, marks are awarded, and the game completes when target marks are reached. M3 Phase 1 adds a local playable session layer, legal-random bots, and a minimal mobile practice flow. The first multiplayer implementation adds a backend-neutral authoritative room/session layer, but it is still not wired into persistence, AWS, auth, realtime transport, mobile multiplayer UI, advanced bots, or variants.
 
 ## Current Package Boundary
 
@@ -40,6 +40,8 @@ packages/game-engine/src
 |   `-- trump.ts
 |-- local-play/
 |   `-- session.ts
+|-- multiplayer/
+|   `-- session.ts
 `-- __tests__/
     |-- dominoes.test.ts
     |-- engine-primitives.test.ts
@@ -53,7 +55,8 @@ packages/game-engine/src
     |-- forty-two-state.test.ts
     |-- forty-two-tricks.test.ts
     |-- forty-two-trump.test.ts
-    `-- local-play-session.test.ts
+    |-- local-play-session.test.ts
+    `-- multiplayer-session.test.ts
 ```
 
 The mobile app now has two local modes: the original scorekeeper flow and a minimal local practice flow backed by the full Texas 42 rules modules.
@@ -107,6 +110,13 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Legal-random bot that only chooses actions exposed as legal by the engine.
 - Local game-session layer that creates games, manages human/bot seats, advances bot turns, dispatches engine commands, exposes session views, supports hand continuation, and supports restart.
 - Minimal mobile local-practice screens for start, bidding, trump selection, trick play, hand summary, and game summary.
+- Backend-neutral multiplayer room/session layer for room creation, join, four-seat assignment, ready/in-game/completed status, and host-only game start.
+- `FortyTwoState.mode` now supports `multiplayer` snapshots in addition to `localPractice`.
+- Multiplayer session starts games with server-managed `GAME_CREATED` and `HAND_DEALT` events.
+- Multiplayer action submission validates room membership and seat ownership before routing bid, trump, and domino actions through the Forty Two command layer.
+- Multiplayer action submission records action results by `actionId` for idempotent duplicate retries.
+- Multiplayer session automatically emits `BIDDING_COMPLETED` after the fourth bid.
+- Multiplayer player views redact `hands`, expose public hand counts, and include only the viewer's own hand.
 
 ## Test Status
 
@@ -152,15 +162,16 @@ Important covered invariants:
 - Full-hand integration cases for normal made bids, exact 42 bids, set-by-one bids, trump-heavy hands, no-trump-played led-suit tricks, all-pass dealer-forced bidding, multiple dealer rotations, and target-mark game completion.
 - Local session tests for start, restart/reset, dealer rotation, 100 completed simulated hands, and 25 completed simulated games.
 - Simulation assertions for replay equality, possible hand scores, mark awards, and game completion.
+- Multiplayer session tests for room seating, host-only start, server-managed initial deal, invalid seat claims, bidding auto-completion, duplicate action ID idempotency, hidden-hand redaction, and replay equality.
 
 Latest known verification before this report:
 
 ```text
-npm run typecheck
-npm test
+npm run typecheck -w @shake2/game-engine
+npm run test -w @shake2/game-engine
 ```
 
-Both passed after the M3 Phase 1 local playable slice.
+Both passed after the first multiplayer session slice.
 
 ## Current M2 Plan Alignment
 
@@ -198,13 +209,15 @@ This means the repository has implemented and tested the core local hand lifecyc
 - There is no standalone `COMPLETE_HAND` command; this is acceptable for the current automatic lifecycle but should be an explicit ADR or implementation note if retained.
 - Rule constants now route through `standardRules`, but existing modules still expose compatibility constants.
 - Local practice screen consumes the rules engine, but only as an in-memory vertical slice.
-- No multiplayer-safe authority model is implemented in code.
-- No AWS, AppSync, DynamoDB, Cognito, room state, or reconnect handling.
+- A multiplayer-safe authority model has started in code, but it is in-memory and backend-neutral only.
+- No AWS, AppSync, DynamoDB, Cognito, durable room state, or reconnect handling.
 - Only legal-random bots exist; no heuristic or advanced strategy exists.
 - No variant contracts such as mark bids, 84, plunge, splash, nello, sevens, or follow-me.
 - No runtime schema validation for serialized full-game snapshots or accepted-event payloads yet.
 - No package-local test utilities for deterministic hands; integration tests currently build fixtures inline.
 - No persistence adapter exists for full-rules snapshots/events.
+- No durable multiplayer event log, snapshot adapter, private-hand table, or idempotency table exists yet.
+- Multiplayer redaction exists for player views, but bots and local practice still use full snapshots.
 
 ## Technical Risks
 
@@ -224,12 +237,13 @@ This means the repository has implemented and tested the core local hand lifecyc
 2. Document the automatic hand-completion decision in an ADR or implementation note if a standalone `COMPLETE_HAND` command remains intentionally omitted.
 3. Add accepted-event validation or command-side consistency checks before any server-authoritative persistence path.
 4. Add local-practice persistence or explicit resume/discard UX if practice games should survive app restarts.
-5. Defer AWS, multiplayer rooms, advanced bots, tournaments, and analytics until the local rules command/reducer path is stable.
+5. Add durable multiplayer room/event/snapshot/idempotency adapters around the backend-neutral session layer.
+6. Defer advanced bots, tournaments, and analytics until standard multiplayer is stable.
 
 ## Architecture Notes
 
 - The current separation between scorekeeper mode and full rules mode is still correct.
 - The rules engine is pure TypeScript and remains UI-independent.
 - The current implementation favors small functional modules, serializable state shapes, accepted-event replay, and narrow command slices over an early monolithic reducer. Hand completion is currently automatic from `PLAY_DOMINO`, which keeps the normal rules path simple but should be documented before server-authoritative multiplayer work.
-- The docs describe a future server-authoritative multiplayer engine. The code is not there yet, but the pure deterministic module boundary is compatible with that direction.
+- The docs describe a future server-authoritative multiplayer engine. The new backend-neutral multiplayer session module is the first code-level step in that direction, but it still needs durable storage, runtime schemas, accepted-event validation, auth, and reconnect handling before production use.
 - The biggest remaining architecture deviation is sequence: later rule primitives were implemented before all command validation. `RuleConfig`, `FortyTwoState`, event envelopes, replay, setup/bidding/trump commands, play/trick-completion commands, and automatic hand/game completion now exist, so the next correction should harden full-hand integration fixtures and accepted-event validation boundaries.

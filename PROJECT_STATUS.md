@@ -9,13 +9,14 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - `apps/mobile` contains the Expo app, React Navigation stack, screens, local state provider, AsyncStorage persistence, shared UI components, and theme tokens.
 - `packages/game-engine` contains pure TypeScript scorekeeper domain logic, validation, selectors, persistence codecs, and Node test coverage.
 - `packages/game-engine` also contains the full Texas 42 local rules engine, legal-action selectors, legal-random bots, and an in-memory local practice session layer.
+- `packages/game-engine` now contains the first backend-neutral multiplayer session layer for rooms, seat ownership, server-authoritative action submission, idempotency, and redacted player views.
 - `packages/shared` contains initial versioned Action/Event/Snapshot contracts for scorekeeper and future server use.
 - `.github/workflows/ci.yml` runs install, typecheck, tests, and audit reporting on pull requests and pushes to `main`.
 - `.github/workflows/deploy-web.yml` builds the Expo web bundle and deploys static assets to AWS S3/CloudFront with GitHub OIDC.
 - `infra/aws/web-hosting.yml` provisions static web hosting resources, optional custom-domain ACM/Route 53 wiring, and a least-privilege GitHub Actions deploy role.
 - There is no `backend` workspace yet, despite the original architecture docs naming AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB.
 - App state is client-owned today. The mobile app loads/saves games from AsyncStorage and applies game-engine functions locally.
-- The game engine is serializable and UI-independent, but it is still a scorekeeper model, not a full Texas 42 rules engine.
+- The game engine is serializable and UI-independent, with scorekeeper, local full-rules, bot-practice, and early multiplayer authority modules.
 
 ## Folder Structure
 
@@ -43,6 +44,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 |   |   |-- tsconfig.json
 |   |   `-- src/
 |   |       |-- __tests__/
+|   |       |-- multiplayer/
 |   |       |-- scorekeeper/
 |   |       `-- index.ts
 |   `-- shared/
@@ -83,16 +85,18 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - Hardened scorekeeper validation for target marks, mark awards, timestamps, IDs, names, and notes.
 - Pure TypeScript scorekeeper engine with tests for creation, mark awards, dealer rotation, undo, winner detection, validation, and persistence codecs.
 - Pure TypeScript full-rules engine with tests for deal, bidding, trump, legal play, trick winners, hand scoring, replay, local session orchestration, legal-random bots, 100 completed simulated hands, and 25 completed simulated games.
+- Backend-neutral multiplayer room/session primitives in the engine: room creation, joins, seat assignment, host-only start, multiplayer-mode snapshots, server-managed initial deal, authorized bid/trump/play submission, duplicate action ID handling, automatic bidding completion, and private-hand redaction.
 - Initial shared contracts for `GameAction`, `GameEvent`, `GameSnapshot`, `GameActionResult`, and `GameErrorCode`.
 - React Native Testing Library coverage for core scorekeeper flows and AsyncStorage persistence wrapper behavior.
 - GitHub Actions CI for install, typecheck, tests, and non-blocking audit reporting.
 - GitHub Actions web deployment workflow for Expo web export to AWS S3/CloudFront using OIDC.
 - CloudFormation template and runbook for static AWS web hosting, including optional custom domain and ACM certificate support.
-- ADRs documenting local-first M1, server-authoritative event target architecture, and the scorekeeper mode boundary.
+- ADRs documenting local-first M1, server-authoritative event target architecture, the scorekeeper mode boundary, and the backend-neutral multiplayer session layer.
 
 ## Features Partially Implemented
 
 - Game engine: full local Texas 42 play now exists for standard numeric bids and pip-suit trump, but does not implement variants or advanced bot strategy.
+- Multiplayer: engine-level authority primitives exist, but there is still no auth, backend persistence, realtime transport, reconnect implementation, or mobile multiplayer UI.
 - Game state model: current scorekeeper shape is serializable, but the app does not yet apply shared actions/events or replay an event log.
 - Persistence: local JSON persistence has schema versioning and legacy migration for scorekeeper games, but local practice games are currently in-memory only.
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.
@@ -115,7 +119,8 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 ## Technical Debt
 
 - Full-rules fixtures and local-session helpers are still young and should be consolidated before multiplayer work.
-- Shared contracts define action/event/snapshot shapes, but no engine command currently emits or applies those events.
+- Multiplayer session code uses the Forty Two command/event path, but accepted-event validation and runtime payload schemas are still missing before network ingestion.
+- Shared contracts define action/event/snapshot shapes, but the mobile app still does not submit actions through a remote authority.
 - Persistence has a versioned envelope, but no backup/quarantine strategy or user-controlled reset path.
 - There is no centralized error taxonomy. UI currently catches generic `Error` messages from engine/storage.
 - Package build outputs (`packages/game-engine/dist`) are generated locally and ignored, but the package `main` still points at `src/index.ts`; this is fine for Metro path aliases, weak for external package consumers.
@@ -130,14 +135,16 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 3. Connect engine command results to shared events so local replay can be proven before multiplayer.
 4. Harden M3 local practice: persist or explicitly discard practice sessions, improve local game UI states, and extract reusable simulation fixtures.
 5. Expand contract tests around duplicate actions, stale sequences, reconnect snapshots, and unsupported schemas.
-6. Introduce AWS Amplify Gen 2 only after contracts are stable enough to avoid baking prototype state shapes into DynamoDB.
+6. Add durable multiplayer storage/reconnect adapters around the backend-neutral session layer before building user-facing multiplayer rooms.
+7. Introduce AWS Amplify Gen 2 only after contracts are stable enough to avoid baking prototype state shapes into DynamoDB.
 
 ## Architecture Decisions That Differ From Original Docs
 
 - Original docs include `/backend`; the current repo has no backend workspace.
-- Original stack includes AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB; current implementation is local-only with AsyncStorage.
+- Original stack includes AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB; the mobile app runtime is still local-only with AsyncStorage.
 - The repo now includes a narrow AWS static web hosting path using S3, CloudFront, and GitHub OIDC before any Amplify/AppSync backend exists.
-- Original game-state docs require server authority and reconnect support; current state is client-authoritative and offline-local.
+- The repo now includes a backend-neutral multiplayer authority module before any AWS multiplayer infrastructure exists.
+- Original game-state docs require deployed server authority and reconnect support; the engine now has backend-neutral authority primitives, but the app remains offline-local.
 - Original database docs mention immutable events; current local persistence still stores mutable full game snapshots, although shared event contracts now exist.
 - The current app includes Expo web dependencies for browser smoke testing, though the product target remains iOS-first mobile.
-- ADR-0002, ADR-0003, and ADR-0004 now document why M1 is local-first and how the future multiplayer authority model should differ.
+- ADR-0002 through ADR-0005 document why M1 is local-first, how server authority should work, why scorekeeper stays separate, and why the first multiplayer slice is backend-neutral.
