@@ -1,8 +1,17 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 
 import { LocalGameScreen } from "../LocalGameScreen";
 
 describe("LocalGameScreen", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.runAllTimers();
+    jest.useRealTimers();
+  });
+
   it("shows the human hand while bidding", () => {
     const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0.99);
 
@@ -36,7 +45,10 @@ describe("LocalGameScreen", () => {
       );
 
       fireEvent.press(view.getByText("Pass"));
+      act(() => { jest.runAllTimers(); });
+
       fireEvent.press(view.getByText("Call Sixes"));
+      act(() => { jest.runAllTimers(); });
 
       expect(view.getByText("Trick Play")).toBeTruthy();
       expect(view.getByText("Status")).toBeTruthy();
