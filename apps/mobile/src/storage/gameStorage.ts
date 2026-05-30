@@ -5,7 +5,7 @@ import {
   type ScorekeeperGame
 } from "@shake2/game-engine";
 
-const GAMES_STORAGE_KEY = "@shake2/scorekeeper-games/v1";
+export const GAMES_STORAGE_KEY = "@shake2/scorekeeper-games/v1";
 
 export async function loadPersistedGames(): Promise<ScorekeeperGame[]> {
   const rawGames = await AsyncStorage.getItem(GAMES_STORAGE_KEY);
