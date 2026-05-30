@@ -219,24 +219,27 @@ test("multiplayer storage restore rejects forged trusted event records", () => {
         throw new Error("Expected dealt domino.");
       }
 
+      const forgedPayload = {
+        ...record.envelope.event.payload,
+        hands: {
+          ...record.envelope.event.payload.hands,
+          1: [
+            duplicatedDomino,
+            ...record.envelope.event.payload.hands[1].slice(1)
+          ]
+        }
+      };
+
       return {
         ...record,
         envelope: {
           ...record.envelope,
           event: {
             ...record.envelope.event,
-            payload: {
-              ...record.envelope.event.payload,
-              hands: {
-                ...record.envelope.event.payload.hands,
-                1: [
-                  duplicatedDomino,
-                  ...record.envelope.event.payload.hands[1].slice(1)
-                ]
-              }
-            }
+            payload: forgedPayload
           }
-        }
+        },
+        payload: forgedPayload
       };
     })
   };
