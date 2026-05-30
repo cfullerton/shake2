@@ -143,6 +143,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
         <Button
           icon={<RotateCcw color={palette.teal} size={18} />}
           onPress={handleRestart}
+          disabled={isAdvancing}
           variant="secondary"
         >
           Restart
