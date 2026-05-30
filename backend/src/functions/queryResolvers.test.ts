@@ -98,6 +98,30 @@ test("private hand resolver allows the seat owner", async () => {
   });
 });
 
+test("private hand resolver uses Cognito sub for ownership", async () => {
+  const context = createTestContext();
+  const records = createRecordsWithPendingResults(createStartedSession(context));
+  const store = createMockStore(records);
+  const handler = createGetMyPrivateHandHandler({
+    store: store.store
+  });
+  const response = await handler({
+    arguments: {
+      input: {
+        gameId: "game-1",
+        seatIndex: 0
+      }
+    },
+    identity: {
+      playerId: "spoofed-player",
+      sub: "player-0"
+    }
+  });
+
+  assert.equal(response.seatIndex, 0);
+  assert.equal(response.dominoes.length, 7);
+});
+
 test("private hand resolver rejects non-owner access", async () => {
   const context = createTestContext();
   const records = createRecordsWithPendingResults(createStartedSession(context));

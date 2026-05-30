@@ -8,7 +8,7 @@ Multiplayer is ready for the next backend-design slice, but not ready for produc
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice now converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable `submitGameAction` Lambda-style resolver shell, testable AppSync query resolver shells, mocked-testable AWS SDK DynamoDB store implementation, and draft AppSync schema/contract adapter now exist. The largest remaining gap is still deployed infrastructure: no Cognito identity, public AppSync API deployment, provisioned DynamoDB table, subscription fanout, deployed endpoints, or multiplayer UI exists yet.
+The first DynamoDB adapter contract slice now converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable `submitGameAction` Lambda-style resolver shell, testable AppSync query resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and draft AppSync schema/contract adapter now exist. The largest remaining gap is still deployed infrastructure: no provisioned Cognito user pool, public AppSync API deployment, provisioned DynamoDB table, subscription fanout, deployed endpoints, or multiplayer UI exists yet.
 
 ## Current Multiplayer Architecture
 
@@ -29,8 +29,8 @@ Backend shell code now lives under `backend`.
 - `src/dynamodb/store.ts`: `MultiplayerStore` interface plus AWS SDK v3 `DynamoDBMultiplayerStore` for loading stored game records, public snapshots, private hands, reconnect records, idempotency results, and committing write plans.
 - `src/appsync/schema.graphql`: undeployed draft schema for submit action, public snapshot, private hand, reconnect, and game-update subscription operations.
 - `src/appsync/contracts.ts`: local AppSync contract adapters for safe submit-action results, reconnect views, private-hand ownership boundaries, and public update notifications.
-- `src/auth/identity.ts`: mocked/auth-neutral actor extraction boundary.
-- `src/types/index.ts`: backend-local request, response, actor, resolver-context, and error types.
+- `src/auth/identity.ts`: shared actor extraction boundary that prefers AppSync Cognito `sub` as the stable multiplayer `playerId` and preserves mock identity support for tests.
+- `src/types/index.ts`: backend-local request, response, actor, AppSync Cognito identity, resolver-context, and error types.
 
 Current authority model:
 
@@ -48,7 +48,8 @@ Production multiplayer blockers:
 
 1. Authentication and identity mapping
    - Need Cognito or equivalent.
-   - Need stable mapping from authenticated user to `playerId`.
+   - A production-shaped AppSync Cognito parser now maps authenticated `sub` values to backend `playerId`.
+   - Need deployed Cognito resources and real AppSync authorizer wiring.
    - Need guest/anonymous account decision.
 
 2. Physical persistence adapter
@@ -305,9 +306,10 @@ Production-quality casual multiplayer:
    - Add DynamoDB Local or equivalent integration tests for conditional failures.
    - Keep AWS SDK dependencies isolated inside `backend`.
 
-2. Cognito/AppSync identity boundary
-   - Map authenticated Cognito identities to multiplayer `playerId`.
-   - Replace mocked identity extraction with production-safe adapter behavior.
+2. AppSync/Cognito deployment boundary
+   - Provision Cognito/AppSync resources.
+   - Wire real Lambda resolver events into the existing handler shells.
+   - Confirm deployed identity payloads match the local parser contract.
 
 3. Read-side authorization hardening
    - Enforce room membership on `getGameSnapshot`.

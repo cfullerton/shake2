@@ -59,10 +59,14 @@ This workspace is the first backend boundary for multiplayer Texas 42. It is int
   - Is covered by local contract tests that do not require AWS credentials.
 
 - `src/auth/identity.ts`
-  - Defines a simple mocked identity extraction boundary.
+  - Defines the shared backend actor extraction boundary used by every resolver shell.
+  - Supports production-shaped AppSync Cognito identity objects with top-level `sub` or `claims.sub`.
+  - Maps Cognito `sub` to the stable multiplayer `playerId`.
+  - Uses `claims.name`, username, or email as optional display metadata.
+  - Preserves mock `playerId` identity support for local tests and development.
 
 - `src/types/index.ts`
-  - Defines backend-local request, response, actor, resolver context, and error types.
+  - Defines backend-local request, response, actor, AppSync Cognito identity, resolver context, and error types.
 
 ## Proposed GraphQL Operations
 
@@ -86,11 +90,30 @@ type Subscription {
 
 The public snapshot and subscription types intentionally omit full hands and raw event payloads. Private hand data is only represented through `getMyPrivateHand` and the reconnect player's own `privateHand` field after resolver-level ownership checks.
 
+## Identity Model
+
+Resolver shells call `extractBackendActor` from `src/auth/identity.ts`.
+
+Supported identity sources:
+
+- AppSync Cognito identity objects:
+  - `identity.sub`
+  - `identity.username`
+  - `identity.claims.sub`
+  - `identity.claims["cognito:username"]`
+  - `identity.claims.email`
+  - `identity.claims.name`
+- Mock resolver identities for tests and local development:
+  - `identity.playerId`
+  - optional `identity.displayName`, `identity.username`, or `identity.email`
+
+Cognito `sub` is authoritative and becomes `BackendActor.playerId`, which is the multiplayer player ID used for action authorization and private-hand ownership checks. If a request includes both Cognito `sub` and a client-controlled `playerId`, the `playerId` is ignored.
+
 ## Intentionally Not Implemented
 
 - No deployed AWS resources.
 - No deployed public AppSync API.
-- No Cognito user pool or authorizer.
+- No provisioned Cognito user pool or authorizer.
 - No Amplify backend configuration.
 - No provisioned DynamoDB table.
 - No production Lambda environment wiring.
@@ -136,7 +159,7 @@ npm test
 ## Next Steps
 
 1. Map DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes.
-2. Add Cognito identity mapping from authenticated user IDs to multiplayer `playerId`.
-3. Add resolver-level room membership authorization for public snapshot reads before deployment.
+2. Add resolver-level room membership authorization for public snapshot reads before deployment.
+3. Wire real AppSync Lambda events into these resolver shells with Cognito auth enabled.
 4. Add Amplify/AppSync infrastructure only after resolver contracts and auth checks are tested locally.
 5. Provision the DynamoDB table and indexes with infrastructure code after the API/auth boundary is ready.
