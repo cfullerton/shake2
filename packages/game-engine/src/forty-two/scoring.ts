@@ -57,6 +57,7 @@ export interface HandScore {
   readonly bidAmount: number;
   readonly biddingTeamId: FortyTwoTeamId;
   readonly biddingTeamPoints: number;
+  readonly declarer: SeatIndex;
   readonly markAwards: TeamMarkAwards;
   readonly outcome: BidOutcome;
   readonly teamPoints: TeamPointTotals;
@@ -152,6 +153,7 @@ export function scoreCompletedHand(
     bidAmount,
     biddingTeamId,
     biddingTeamPoints,
+    declarer: contract.declarer,
     markAwards: getContractMarkAwards(contract, biddingTeamId, outcome),
     outcome,
     teamPoints: currentScore.teamPoints,

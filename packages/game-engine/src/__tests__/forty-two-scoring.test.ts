@@ -3,10 +3,12 @@ import test from "node:test";
 
 import {
   FORTY_TWO_HAND_TOTAL_POINTS,
+  FORTY_TWO_TEAMS,
   createDomino,
   createDoubleSixSet,
   createNumericBid,
   getCompletedTrickCountPoints,
+  getTeamForSeat,
   isCountDomino,
   scoreCompletedHand,
   scoreCompletedTricks,
@@ -132,6 +134,60 @@ test("proves total hand points equal 42", () => {
   assert.equal(countPointTotal, 35);
   assert.equal(score.totalPoints, FORTY_TWO_HAND_TOTAL_POINTS);
   assert.equal(score.teamPoints.teamA + score.teamPoints.teamB, 42);
+});
+
+test("seats 0 and 2 map to teamA (North/South)", () => {
+  assert.equal(getTeamForSeat(0), "teamA");
+  assert.equal(getTeamForSeat(2), "teamA");
+  assert.equal(FORTY_TWO_TEAMS.teamA.name, "North/South");
+});
+
+test("seats 1 and 3 map to teamB (East/West)", () => {
+  assert.equal(getTeamForSeat(1), "teamB");
+  assert.equal(getTeamForSeat(3), "teamB");
+  assert.equal(FORTY_TWO_TEAMS.teamB.name, "East/West");
+});
+
+test("a bid won by seat 1 (East) reports teamB (East/West) as bidding team", () => {
+  const score = scoreCompletedHand(
+    createCompletedTricks([1, 3, 1, 3, 1, 1, 1]),
+    createContract(1, 30),
+    standardRules
+  );
+
+  assert.equal(score.declarer, 1);
+  assert.equal(score.biddingTeamId, "teamB");
+});
+
+test("a bid won by seat 2 (South) reports teamA (North/South) as bidding team", () => {
+  const score = scoreCompletedHand(
+    createCompletedTricks([0, 2, 0, 2, 0, 0, 0]),
+    createContract(2, 30),
+    standardRules
+  );
+
+  assert.equal(score.declarer, 2);
+  assert.equal(score.biddingTeamId, "teamA");
+});
+
+test("hand summaries do not relabel teams based on bid winner", () => {
+  const scoreTeamADeclares = scoreCompletedHand(
+    createCompletedTricks([0, 2, 0, 2, 1, 0, 1]),
+    createContract(0, 30),
+    standardRules
+  );
+  const scoreTeamBDeclares = scoreCompletedHand(
+    createCompletedTricks([1, 3, 1, 3, 1, 0, 2]),
+    createContract(1, 30),
+    standardRules
+  );
+
+  assert.equal(scoreTeamADeclares.biddingTeamId, "teamA");
+  assert.equal(scoreTeamBDeclares.biddingTeamId, "teamB");
+  // Both scores must reference the same stable team IDs regardless of who bid
+  assert.notEqual(scoreTeamADeclares.biddingTeamId, scoreTeamBDeclares.biddingTeamId);
+  assert.equal(scoreTeamADeclares.teamPoints.teamA + scoreTeamADeclares.teamPoints.teamB, 42);
+  assert.equal(scoreTeamBDeclares.teamPoints.teamA + scoreTeamBDeclares.teamPoints.teamB, 42);
 });
 
 type TestTrickDominoes = readonly [Domino, Domino, Domino, Domino];

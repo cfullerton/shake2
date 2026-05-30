@@ -57,7 +57,7 @@ describe("LocalGameScreen", () => {
       expect(view.getAllByText("Trump").length).toBeGreaterThan(0);
       expect(view.getAllByText("Sixes").length).toBeGreaterThan(0);
       expect(view.getByText("Current score")).toBeTruthy();
-      expect(view.getByText("Team A 0 · Team B 0")).toBeTruthy();
+      expect(view.getByText("North/South 0 · East/West 0")).toBeTruthy();
       expect(view.getByText("Previous trick")).toBeTruthy();
       expect(view.getByTestId("local-game-trick-table")).toBeTruthy();
       expect(view.getByTestId("local-game-trick-seat-top")).toBeTruthy();
