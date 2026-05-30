@@ -141,7 +141,8 @@ Common causes:
 - The `AWS_ROLE_TO_ASSUME` variable points to a role from a different AWS account
   or older stack.
 - The IAM OIDC provider does not exist in the target AWS account, or its audience
-  is not `sts.amazonaws.com`.
+  is not exactly `sts.amazonaws.com`. Watch for accidental whitespace when
+  creating the provider.
 
 You can inspect the stack values with:
 
@@ -149,6 +150,14 @@ You can inspect the stack values with:
 aws cloudformation describe-stacks \
   --stack-name shake2-web \
   --query "Stacks[0].Outputs"
+```
+
+You can inspect the IAM OIDC provider audience with:
+
+```sh
+aws iam get-open-id-connect-provider \
+  --open-id-connect-provider-arn arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com \
+  --query "ClientIDList"
 ```
 
 ## Local Build Check
