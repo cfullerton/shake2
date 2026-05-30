@@ -266,7 +266,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
         friction: 8,
         tension: 60,
         toValue: 1,
-        useNativeDriver: true
+        useNativeDriver: false
       }).start();
     }
   }, [view.kind]);
@@ -467,7 +467,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                 accessibilityLabel={`Call ${formatTrumpSuit(trumpSuit)} trump`}
               >
                 <TrumpSuitPips suit={trumpSuit} />
-                <Text style={styles.trumpTileLabel}>{formatTrumpSuit(trumpSuit)}</Text>
+                <Text style={styles.trumpTileLabel}>{`Call ${formatTrumpSuit(trumpSuit)}`}</Text>
               </Pressable>
             ))}
           </View>
@@ -555,6 +555,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                   : `${formatSeatLabel(state, turnSeat, session.humanSeat)} leads this trick.`}
               </Text>
             )}
+            {isAdvancing ? <Text style={styles.copy}>Bots are playing…</Text> : null}
           </View>
 
           <View style={styles.panel}>
@@ -616,6 +617,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       ) : null}
 
       <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Activity</Text>
         <EventFeed entries={activityLog} isActive={isAdvancing} />
       </View>
 
