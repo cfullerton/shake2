@@ -1,0 +1,136 @@
+# Draft AppSync schema for multiplayer Texas 42.
+#
+# This file is intentionally not deployed yet. It documents the boundary between
+# mobile clients and backend resolvers while keeping raw trusted events and full
+# hand state server-only.
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+scalar AWSDateTime
+scalar AWSJSON
+
+type Query {
+  getGameSnapshot(gameId: ID!): PublicGameSnapshot!
+  getMyPrivateHand(input: GetMyPrivateHandInput!): PrivateHandResponse!
+  getReconnectView(input: GetReconnectViewInput!): ReconnectView!
+}
+
+type Mutation {
+  submitGameAction(input: SubmitGameActionInput!): SubmitGameActionResult!
+}
+
+type Subscription {
+  onGameUpdated(gameId: ID!): GameUpdatedNotification!
+    @aws_subscribe(mutations: ["submitGameAction"])
+}
+
+input SubmitGameActionInput {
+  gameId: ID!
+  action: AWSJSON!
+}
+
+input GetMyPrivateHandInput {
+  gameId: ID!
+  seatIndex: SeatIndex!
+}
+
+input GetReconnectViewInput {
+  gameId: ID!
+  lastAppliedEventSequence: Int!
+  snapshotVersion: Int!
+  pendingActionIds: [ID!] = []
+}
+
+type SubmitGameActionResult {
+  accepted: Boolean!
+  committed: Boolean!
+  duplicate: Boolean!
+  error: BackendError
+  events: [SafeGameEventSummary!]!
+  snapshot: PublicGameSnapshot
+}
+
+type BackendError {
+  code: String!
+  message: String!
+}
+
+type PublicGameSnapshot {
+  gameId: ID!
+  generatedAt: AWSDateTime!
+  lastEventSequence: Int!
+  schemaVersion: Int!
+  snapshotVersion: Int!
+  phase: String!
+  handCounts: SeatHandCounts
+  redactedState: AWSJSON!
+}
+
+type SeatHandCounts {
+  seat0: Int!
+  seat1: Int!
+  seat2: Int!
+  seat3: Int!
+}
+
+type PrivateHandResponse {
+  gameId: ID!
+  handNumber: Int!
+  seatIndex: SeatIndex!
+  updatedAt: AWSDateTime!
+  dominoes: [Domino!]!
+}
+
+type Domino {
+  high: Int!
+  low: Int!
+  key: String!
+}
+
+type ReconnectView {
+  acceptedPendingActionIds: [ID!]!
+  rejectedPendingActions: [PendingActionRejection!]!
+  unknownPendingActionIds: [ID!]!
+  requiresSnapshotRefresh: Boolean!
+  serverLastEventSequence: Int!
+  serverSnapshotVersion: Int!
+  snapshot: PublicGameSnapshot!
+  privateHand: PrivateHandResponse
+}
+
+type PendingActionRejection {
+  actionId: ID!
+  errorCode: String!
+}
+
+type GameUpdatedNotification {
+  gameId: ID!
+  accepted: Boolean!
+  duplicate: Boolean!
+  lastEventSequence: Int!
+  snapshotVersion: Int!
+  eventIds: [ID!]!
+  eventTypes: [String!]!
+  actionIds: [ID!]!
+  actorIds: [ID!]!
+}
+
+type SafeGameEventSummary {
+  eventId: ID!
+  eventType: String!
+  sequence: Int!
+  actionId: ID!
+  actorId: ID!
+  actorSeat: SeatIndex
+}
+
+enum SeatIndex {
+  SEAT_0
+  SEAT_1
+  SEAT_2
+  SEAT_3
+}

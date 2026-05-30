@@ -27,20 +27,56 @@ This workspace is the first backend boundary for multiplayer Texas 42. It is int
   - Supports loading game records, loading one idempotency result, and committing transaction intents.
   - Is unit-tested with a mocked client and does not require AWS credentials in tests.
 
+- `src/appsync/schema.graphql`
+  - Drafts the proposed AppSync GraphQL boundary.
+  - Defines `submitGameAction`, public snapshot, private hand, reconnect, and game-update subscription operations.
+  - Separates public/redacted snapshots from private hand responses.
+  - Uses safe event summaries and subscription notifications instead of raw trusted event payloads.
+
+- `src/appsync/contracts.ts`
+  - Maps AppSync submit-action inputs to the existing submit-game-action handler event shape.
+  - Maps handler responses to GraphQL-safe accepted/rejected result shapes.
+  - Maps reconnect inputs to the engine client-sync state shape.
+  - Defines the private-hand store boundary with an explicit seat-ownership check.
+  - Is covered by local contract tests that do not require AWS credentials.
+
 - `src/auth/identity.ts`
   - Defines a simple mocked identity extraction boundary.
 
 - `src/types/index.ts`
   - Defines backend-local request, response, actor, resolver context, and error types.
 
+## Proposed GraphQL Operations
+
+Drafted in `src/appsync/schema.graphql`:
+
+```graphql
+type Mutation {
+  submitGameAction(input: SubmitGameActionInput!): SubmitGameActionResult!
+}
+
+type Query {
+  getGameSnapshot(gameId: ID!): PublicGameSnapshot!
+  getMyPrivateHand(input: GetMyPrivateHandInput!): PrivateHandResponse!
+  getReconnectView(input: GetReconnectViewInput!): ReconnectView!
+}
+
+type Subscription {
+  onGameUpdated(gameId: ID!): GameUpdatedNotification!
+}
+```
+
+The public snapshot and subscription types intentionally omit full hands and raw event payloads. Private hand data is only represented through `getMyPrivateHand` and the reconnect player's own `privateHand` field after resolver-level ownership checks.
+
 ## Intentionally Not Implemented
 
 - No deployed AWS resources.
-- No public AppSync schema or API.
+- No deployed public AppSync API.
 - No Cognito user pool or authorizer.
+- No Amplify backend configuration.
 - No provisioned DynamoDB table.
 - No production Lambda environment wiring.
-- No subscriptions.
+- No live subscription fanout.
 - No frontend multiplayer UI.
 - No game-rule changes.
 
@@ -81,7 +117,7 @@ npm test
 ## Next Steps
 
 1. Map DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes.
-2. Add an AppSync schema draft for `submitGameAction`, room queries, snapshot queries, and room/game subscriptions.
+2. Add Lambda resolver shells for `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView`.
 3. Add Cognito identity mapping from authenticated user IDs to multiplayer `playerId`.
-4. Add reconnect/query resolver shells that return redacted player views and pending-action status.
+4. Add Amplify/AppSync infrastructure only after resolver contracts and auth checks are tested locally.
 5. Provision the DynamoDB table and indexes with infrastructure code after the API/auth boundary is ready.

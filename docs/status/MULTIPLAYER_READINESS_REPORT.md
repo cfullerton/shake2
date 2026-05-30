@@ -8,7 +8,7 @@ Multiplayer is ready for the next backend-design slice, but not ready for produc
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice now converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable `submitGameAction` Lambda-style resolver shell, and mocked-testable AWS SDK DynamoDB store implementation now exist. The largest remaining gap is still deployed infrastructure: no Cognito identity, public AppSync API, provisioned DynamoDB table, subscription fanout, deployed reconnect endpoint, or multiplayer UI exists yet.
+The first DynamoDB adapter contract slice now converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable `submitGameAction` Lambda-style resolver shell, mocked-testable AWS SDK DynamoDB store implementation, and draft AppSync schema/contract adapter now exist. The largest remaining gap is still deployed infrastructure: no Cognito identity, public AppSync API deployment, provisioned DynamoDB table, subscription fanout, deployed reconnect endpoint, or multiplayer UI exists yet.
 
 ## Current Multiplayer Architecture
 
@@ -24,6 +24,8 @@ Backend shell code now lives under `backend`.
 
 - `src/functions/submitGameAction/handler.ts`: AppSync-like Lambda resolver shell for submit-game-action requests.
 - `src/dynamodb/store.ts`: `MultiplayerStore` interface plus AWS SDK v3 `DynamoDBMultiplayerStore` for loading stored game records, loading idempotency results, and committing write plans.
+- `src/appsync/schema.graphql`: undeployed draft schema for submit action, public snapshot, private hand, reconnect, and game-update subscription operations.
+- `src/appsync/contracts.ts`: local AppSync contract adapters for safe submit-action results, reconnect views, private-hand ownership boundaries, and public update notifications.
 - `src/auth/identity.ts`: mocked/auth-neutral actor extraction boundary.
 - `src/types/index.ts`: backend-local request, response, actor, resolver-context, and error types.
 
@@ -54,7 +56,8 @@ Production multiplayer blockers:
    - Need physical adapter tests for AWS error mapping, transaction cancellation reasons, partial failures, and retry handling against a local or integration test environment.
 
 3. AppSync or realtime transport
-   - No GraphQL schema/resolvers/subscriptions exist.
+   - A draft GraphQL schema and local contract tests now exist.
+   - No deployed AppSync API, live resolvers, or subscriptions exist.
    - The `submitGameAction` Lambda handler exists as a testable shell, but it is not connected to AppSync.
    - No subscription gap detection is wired into the app.
    - No deployed reconnect query exists.
@@ -182,9 +185,16 @@ Already implemented in engine:
 - redacted player snapshot views
 - restore with validated replay and snapshot comparison
 
+Backend contract drafted:
+
+- AppSync `getReconnectView` query shape exists in `backend/src/appsync/schema.graphql`.
+- Local mapper from query input to `MultiplayerClientSyncState` exists.
+- Local mapper from engine reconnect view to a GraphQL-safe response exists.
+
 Still needed:
 
-- AppSync query for reconnect.
+- Deployed AppSync query for reconnect.
+- Lambda resolver shell that loads records and calls `getMultiplayerReconnectView`.
 - Client-side pending action queue.
 - Event gap detection in mobile session state.
 - UX for reconnecting/offline/pending/rejected actions.
@@ -210,6 +220,13 @@ Required backend rules:
 - Resolver logs must not include private hand contents.
 - DynamoDB IAM should prevent clients from direct table access.
 - Lambda/AppSync authorization must check room membership and seat ownership for every action.
+
+Current backend contract tests cover:
+
+- Public snapshot GraphQL type and mapper do not expose full hands.
+- Private hand query maps through an explicit seat-ownership boundary.
+- Subscription notification payloads include only safe public fields.
+- Reconnect response can represent accepted, rejected, and unknown pending actions.
 
 Recommended subscription payload:
 
@@ -284,14 +301,14 @@ Production-quality casual multiplayer:
    - Add DynamoDB Local or equivalent integration tests for conditional failures.
    - Keep AWS SDK dependencies isolated inside `backend`.
 
-2. AppSync schema draft
-   - Define `submitGameAction` mutation shape against the existing resolver response.
-   - Define room/snapshot queries without exposing private hand records.
-   - Keep schema draft undeployed until auth and persistence are ready.
+2. Backend query resolver shells
+   - Add testable resolver shells for `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView`.
+   - Load records through `MultiplayerStore`.
+   - Enforce room membership and seat ownership before returning private data.
 
-3. Backend reconnect resolver shell
-   - Add a testable resolver around `getMultiplayerReconnectView`.
-   - Return redacted player views and accepted/rejected/unknown pending actions.
+3. Cognito/AppSync identity boundary
+   - Map authenticated Cognito identities to multiplayer `playerId`.
+   - Replace mocked identity extraction with production-safe adapter behavior.
 
 4. Reconnect client model
    - Add pending action queue and gap detection in the app without real network transport.
