@@ -8,7 +8,7 @@ Multiplayer is ready for the next backend-design slice, but not ready for produc
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The largest remaining gap is physical infrastructure: no Cognito identity, AppSync API, Lambda resolver, DynamoDB adapter, subscription fanout, deployed reconnect endpoint, or multiplayer UI exists yet.
+The first DynamoDB adapter contract slice now converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. The largest remaining gap is still physical infrastructure: no Cognito identity, AppSync API, Lambda resolver, deployed DynamoDB client adapter, subscription fanout, deployed reconnect endpoint, or multiplayer UI exists yet.
 
 ## Current Multiplayer Architecture
 
@@ -18,6 +18,7 @@ Current multiplayer code is backend-neutral and lives under `packages/game-engin
 - `storage.ts`: durable record shapes for room metadata, trusted event records, public snapshots, private hands, and action results; restore/reconnect helpers.
 - `schema.ts`: runtime parsers for action envelopes, storage records, public snapshots, private hands, idempotency records, and client reconnect state.
 - `write-plan.ts`: backend-neutral persistence write intentions for game start, accepted actions, and rejected actions.
+- `dynamodb-adapter.ts`: pure DynamoDB transaction-intent conversion for write plans, with conditional-write expressions for room state, snapshot version, event append, and action idempotency conflicts.
 
 Current authority model:
 
@@ -39,9 +40,9 @@ Production multiplayer blockers:
    - Need guest/anonymous account decision.
 
 2. Physical persistence adapter
-   - No DynamoDB transaction adapter exists.
-   - Need translation from write plans to conditional writes.
-   - Need adapter tests for contention, duplicate action IDs, stale snapshots, and partial failures.
+   - DynamoDB transaction intent shapes now exist and are tested.
+   - No AWS SDK/AppSync/Lambda adapter executes those transaction intents yet.
+   - Need physical adapter tests for AWS error mapping, transaction cancellation reasons, partial failures, and retry handling.
 
 3. AppSync or realtime transport
    - No GraphQL schema/resolvers/subscriptions exist.
@@ -268,9 +269,10 @@ Production-quality casual multiplayer:
 
 ## Recommended Next Slices
 
-1. DynamoDB adapter contract tests
-   - Translate write plans to DynamoDB transaction items.
-   - Test conditional failures for stale snapshots, duplicate event records, duplicate action IDs, and room status mismatch.
+1. Physical DynamoDB adapter shell
+   - Translate tested transaction intents into AWS SDK `TransactWriteItems` calls.
+   - Map conditional-check failures back to stable `EngineError` codes.
+   - Keep the AWS SDK dependency out of `packages/game-engine` unless a backend package is introduced.
 
 2. Backend workspace scaffold
    - Add `/backend` or Amplify Gen 2 workspace.
