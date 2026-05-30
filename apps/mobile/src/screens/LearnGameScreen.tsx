@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   stepNumber: {
-    backgroundColor: palette.teal,
+    backgroundColor: palette.crimson,
     borderRadius: radius.sm,
     color: palette.surface,
     fontSize: 14,

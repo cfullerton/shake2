@@ -8,7 +8,7 @@ import { LocalGameStartScreen } from "../screens/LocalGameStartScreen";
 import { NewGameScreen } from "../screens/NewGameScreen";
 import { ScorekeeperScreen } from "../screens/ScorekeeperScreen";
 import { TeamSetupScreen } from "../screens/TeamSetupScreen";
-import { palette } from "../theme";
+import { fonts, palette } from "../theme";
 import type { RootStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -20,20 +20,22 @@ export function AppNavigator() {
         contentStyle: {
           backgroundColor: palette.background
         },
+        headerBackTitle: "",
         headerShadowVisible: false,
         headerStyle: {
-          backgroundColor: palette.background
+          backgroundColor: palette.wood
         },
         headerTintColor: palette.paper,
         headerTitleStyle: {
-          fontWeight: "800"
+          fontFamily: fonts.display,
+          fontSize: 17
         }
       }}
     >
       <Stack.Screen
         component={HomeScreen}
         name="Home"
-        options={{ title: "Shake 2" }}
+        options={{ headerTransparent: true, title: "Shake 2" }}
       />
       <Stack.Screen
         component={LocalGameStartScreen}
