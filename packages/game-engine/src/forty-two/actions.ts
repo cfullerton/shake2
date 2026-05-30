@@ -30,6 +30,8 @@ export interface SubmitFortyTwoBidActionPayload {
   readonly seat: SeatIndex;
 }
 
+export type CompleteFortyTwoBiddingActionPayload = Readonly<Record<string, never>>;
+
 export interface CallFortyTwoTrumpActionPayload {
   readonly trumpSuit: TrumpSuit;
 }
@@ -66,6 +68,10 @@ export type FortyTwoAction =
       readonly type: "fortyTwo.bid.submit";
     }
   | {
+      readonly payload: CompleteFortyTwoBiddingActionPayload;
+      readonly type: "fortyTwo.bidding.complete";
+    }
+  | {
       readonly payload: CallFortyTwoTrumpActionPayload;
       readonly type: "fortyTwo.trump.call";
     }
@@ -85,6 +91,31 @@ export type FortyTwoAction =
       readonly payload: CompleteFortyTwoGameActionPayload;
       readonly type: "fortyTwo.game.complete";
     };
+
+export type CreateFortyTwoGameAction = Extract<
+  FortyTwoAction,
+  { readonly type: "fortyTwo.game.create" }
+>;
+
+export type DealFortyTwoHandAction = Extract<
+  FortyTwoAction,
+  { readonly type: "fortyTwo.hand.deal" }
+>;
+
+export type SubmitFortyTwoBidAction = Extract<
+  FortyTwoAction,
+  { readonly type: "fortyTwo.bid.submit" }
+>;
+
+export type CompleteFortyTwoBiddingAction = Extract<
+  FortyTwoAction,
+  { readonly type: "fortyTwo.bidding.complete" }
+>;
+
+export type CallFortyTwoTrumpAction = Extract<
+  FortyTwoAction,
+  { readonly type: "fortyTwo.trump.call" }
+>;
 
 export interface FortyTwoActionEnvelope<
   TAction extends FortyTwoAction = FortyTwoAction

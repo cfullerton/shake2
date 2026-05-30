@@ -5,6 +5,7 @@ export * from "./dominoes/set.ts";
 export * from "./errors.ts";
 export * from "./forty-two/actions.ts";
 export * from "./forty-two/bidding.ts";
+export * from "./forty-two/commands.ts";
 export * from "./forty-two/deal.ts";
 export * from "./forty-two/events.ts";
 export * from "./forty-two/reducer.ts";
