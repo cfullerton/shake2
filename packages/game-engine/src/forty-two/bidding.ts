@@ -4,9 +4,10 @@ import {
   getBidOrder,
   type SeatIndex
 } from "./seats.ts";
+import { standardRules } from "./rules-config.ts";
 
-export const MIN_NUMERIC_BID = 30;
-export const MAX_NUMERIC_BID = 42;
+export const MIN_NUMERIC_BID = standardRules.bidding.minimumBid;
+export const MAX_NUMERIC_BID = standardRules.bidding.maximumNumericBid;
 
 export interface PassBid {
   readonly kind: "pass";

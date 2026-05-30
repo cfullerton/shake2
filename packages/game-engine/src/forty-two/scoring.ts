@@ -12,6 +12,7 @@ import {
   DOUBLE_SIX_DOMINO_COUNT
 } from "../dominoes/set.ts";
 import { EngineError } from "../errors.ts";
+import { standardRules } from "./rules-config.ts";
 import {
   FORTY_TWO_TEAM_IDS,
   getTeamForSeat,
@@ -25,9 +26,9 @@ import {
 } from "./tricks.ts";
 import { type WinningBid } from "./bidding.ts";
 
-export const FORTY_TWO_TRICKS_PER_HAND = 7;
-export const FORTY_TWO_TRICK_POINT_VALUE = 1;
-export const FORTY_TWO_HAND_TOTAL_POINTS = 42;
+export const FORTY_TWO_TRICKS_PER_HAND = standardRules.table.tricksPerHand;
+export const FORTY_TWO_TRICK_POINT_VALUE = standardRules.scoring.trickPointValue;
+export const FORTY_TWO_HAND_TOTAL_POINTS = standardRules.scoring.handTotalPoints;
 
 export type BidOutcome = "made" | "set";
 export type TeamPointTotals = Readonly<Record<FortyTwoTeamId, number>>;

@@ -25,8 +25,10 @@ packages/game-engine/src
 |-- forty-two/
 |   |-- bidding.ts
 |   |-- deal.ts
+|   |-- rules-config.ts
 |   |-- scoring.ts
 |   |-- seats.ts
+|   |-- state.ts
 |   |-- tricks.ts
 |   `-- trump.ts
 `-- __tests__/
@@ -45,6 +47,7 @@ The mobile app still uses the scorekeeper engine, not the full Texas 42 rules mo
 
 - Stable `EngineError` codes and command-result primitives.
 - `EngineContext` injection for `now`, `newId`, and `random`.
+- Standard `RuleConfig` and `standardRules` for marks scoring, target marks, numeric bid limits, all-pass behavior, table size, trick count, hand value, disabled variants, and trump behavior.
 - Normalized `Pip` and `Domino` model with canonical keys and string formatting.
 - Double-six domino set generation with exactly 28 unique dominoes.
 - Count-domino recognition and scoring for the five count dominoes.
@@ -67,6 +70,8 @@ The mobile app still uses the scorekeeper engine, not the full Texas 42 rules mo
 - Bidding-team point calculation.
 - Numeric bid made/set outcome.
 - Mark awards for made or set numeric bids.
+- Serializable `FortyTwoState` phase types for setup, dealt, bidding, trump, trick play, hand complete, and game complete.
+- Initial full-game snapshot builder for local practice setup state.
 
 ## Test Status
 
@@ -91,6 +96,8 @@ Important covered invariants:
 - Set bid by one point.
 - All and no count dominoes captured by bidding team.
 - Total hand points equal 42.
+- Default rules and config-backed rule constants.
+- Initial full-game snapshot serialization, dealer, teams, target marks, and setup phase.
 
 Latest known verification before this report:
 
@@ -121,9 +128,6 @@ Completed or mostly completed:
 
 Still missing from the plan:
 
-- Standard `RuleConfig` and `standardRules`.
-- Full-hand state skeleton, such as `FortyTwoState`.
-- Initial full-game snapshot builder.
 - Event/reducer/replay model for full Texas 42.
 - Integration between trick completion and next-trick leader.
 - Dealer rotation and game-completion logic after a full rules hand.
@@ -132,10 +136,10 @@ This means the repository has implemented several later rules primitives while s
 
 ## Known Gaps
 
-- No full `FortyTwoState` or phase machine connects deal, bidding, trump, tricks, hand scoring, and marks.
+- `FortyTwoState` phase shapes exist, but no phase machine connects deal, bidding, trump, tricks, hand scoring, and marks.
 - No rules command layer emits events for full Texas 42 actions.
-- No full rules event types, reducer, snapshots, or replay helper.
-- No standard rules configuration object, so constants such as minimum bid, target marks, all-pass behavior, and trump behavior are currently spread across modules.
+- No full rules event types, reducer, or replay helper beyond the initial snapshot envelope.
+- Rule constants now route through `standardRules`, but existing modules still expose compatibility constants.
 - No local practice screen or app flow consumes the rules engine.
 - No multiplayer-safe authority model is implemented in code.
 - No AWS, AppSync, DynamoDB, Cognito, room state, or reconnect handling.
@@ -149,8 +153,8 @@ This means the repository has implemented several later rules primitives while s
 - The rules modules are individually tested, but there is no end-to-end hand lifecycle test from deal through hand scoring.
 - `scoreCompletedHand` trusts caller-provided trick winners. The trick winner helper exists, but scoring does not yet derive winners from tricks and trump in an orchestrated flow.
 - The trick model removes played dominoes from hands, but completed tricks are not yet accumulated by a game state reducer.
-- The bidding, trump, trick, and scoring states are separate shapes. Without a single state machine, future callers could compose them in an invalid order.
-- Constants should move behind `RuleConfig` before variants or multiplayer are added.
+- The bidding, trump, trick, and scoring states are separate shapes. `FortyTwoState` can represent phases, but without reducers future callers could still compose them in an invalid order.
+- Constants are now behind `RuleConfig`, but variant-specific behavior still needs command-level enforcement.
 - Current full-rules code is deterministic where randomness is involved, but replay is not proven because no event log applies these rules yet.
 - Full-hand mark awards are calculated, but not applied to a match score or game-complete state.
 - Dealer rotation after a rules hand is not implemented outside scorekeeper mode.
@@ -158,21 +162,19 @@ This means the repository has implemented several later rules primitives while s
 
 ## Recommended Next Work
 
-1. Add `forty-two/rules-config.ts` with standard rules and explicit disabled variants.
-2. Add `FortyTwoState` and a serializable initial snapshot builder.
-3. Add a small command/event/reducer slice for full rules setup, deal, bid, trump, play domino, complete trick, and complete hand.
-4. Wire trick completion so the engine derives the winner, captures points, stores the completed trick, and sets the next leader.
-5. Wire hand completion so seven completed tricks produce a hand score, mark awards, next dealer, and optional game completion.
-6. Add deterministic replay tests from an initial snapshot plus events.
-7. Move repeated rules test fixtures into `packages/game-engine/src/test-utils`.
-8. Add integration tests for a full seven-trick hand lifecycle.
-9. Only after local replay is stable, map full-rules events into the shared Action/Event/Snapshot contracts.
-10. Defer AWS, multiplayer rooms, bots, tournaments, and UI until the local rules reducer is stable.
+1. Add a small command/event/reducer slice for full rules setup, deal, bid, trump, play domino, complete trick, and complete hand.
+2. Wire trick completion so the engine derives the winner, captures points, stores the completed trick, and sets the next leader.
+3. Wire hand completion so seven completed tricks produce a hand score, mark awards, next dealer, and optional game completion.
+4. Add deterministic replay tests from an initial snapshot plus events.
+5. Move repeated rules test fixtures into `packages/game-engine/src/test-utils`.
+6. Add integration tests for a full seven-trick hand lifecycle.
+7. Only after local replay is stable, map full-rules events into the shared Action/Event/Snapshot contracts.
+8. Defer AWS, multiplayer rooms, bots, tournaments, and UI until the local rules reducer is stable.
 
 ## Architecture Notes
 
 - The current separation between scorekeeper mode and full rules mode is still correct.
 - The rules engine is pure TypeScript and remains UI-independent.
-- The current implementation favors small functional modules over an early monolithic state machine. That has kept tests focused, but the next milestone needs an orchestrator.
+- The current implementation favors small functional modules plus serializable state shapes over an early monolithic reducer. That has kept tests focused, but the next milestone needs an orchestrator.
 - The docs describe a future server-authoritative multiplayer engine. The code is not there yet, but the pure deterministic module boundary is compatible with that direction.
-- The biggest architecture deviation is sequence: later rule primitives were implemented before `RuleConfig`, `FortyTwoState`, reducers, and replay. That is manageable, but should be corrected before adding more gameplay surface.
+- The biggest remaining architecture deviation is sequence: later rule primitives were implemented before reducers and replay. `RuleConfig` and `FortyTwoState` now exist, so the next correction should connect them through events.

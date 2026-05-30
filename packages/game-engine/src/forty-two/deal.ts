@@ -13,9 +13,10 @@ import {
   assertSeatIndex,
   type SeatIndex
 } from "./seats.ts";
+import { standardRules } from "./rules-config.ts";
 
-export const DOMINOES_PER_HAND = 7;
-export const PLAYER_COUNT = 4;
+export const DOMINOES_PER_HAND = standardRules.table.dominoesPerHand;
+export const PLAYER_COUNT = standardRules.table.playerCount;
 
 export type FortyTwoHands = Readonly<Record<SeatIndex, readonly Domino[]>>;
 

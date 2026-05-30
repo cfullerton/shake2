@@ -20,9 +20,10 @@ import {
   isDominoTrump,
   type TrumpSuit
 } from "./trump.ts";
+import { standardRules } from "./rules-config.ts";
 
 export type DominoSuit = TrumpSuit;
-export const TRICK_PLAY_COUNT = 4;
+export const TRICK_PLAY_COUNT = standardRules.table.playerCount;
 
 export interface PlayedDomino {
   readonly domino: Domino;
