@@ -1,8 +1,8 @@
 # Draft AppSync schema for multiplayer Texas 42.
 #
-# This file is intentionally not deployed yet. It documents the boundary between
-# mobile clients and backend resolvers while keeping raw trusted events and full
-# hand state server-only.
+# This file is wired into the CDK AppSync API definition, but the repository
+# does not deploy it automatically. It keeps raw trusted events and full hand
+# state server-only.
 
 schema {
   query: Query
