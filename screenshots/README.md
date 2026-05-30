@@ -4,7 +4,11 @@ This folder is reserved for app screenshots. No canonical screenshot image set h
 
 ## Home
 
-The Home screen is the app's scorekeeper dashboard. It shows the Shake 2 title, a "New Game" action, loading/error states, an empty state, and saved game cards. Saved game cards show game name, hand number, current dealer, updated date, active/complete status, team names, mark totals, and mark dots.
+The Home screen is the app's saloon-themed dashboard. It shows the Shake 2 title, actions for scoring a real-world game, practicing against bots, and learning how to play, plus loading/error states, an empty state, and saved game cards. Saved game cards show game name, hand number, current dealer, updated date, active/complete status, team names, mark totals, and mark dots.
+
+## Learn Game
+
+The Learn Game screen explains Texas 42 for new players. It covers the table setup, partners, hand flow, bidding, trump, trick play, the five count dominoes, why each hand totals 42 points, and a short tip about highlighted legal plays in practice mode. The footer action opens the local practice setup screen.
 
 ## New Game
 
@@ -22,11 +26,17 @@ The Scorekeeper screen is the active scoring surface. It shows game name, hand n
 
 The History screen lists scored hands in reverse chronological order. Each entry shows hand number, timestamp, team awarded marks, mark count, dealer for that hand when available, and optional note. Undo Latest removes the most recent score and restores the prior dealer/hand state.
 
+## Local Game Start
+
+The Local Game Start screen configures a local practice game against three legal-random bots. It explains that the engine handles dealing, bidding, trump, tricks, scoring, and game completion, and lets the user choose the target marks before starting.
+
+## Local Game
+
+The Local Game screen is the active local practice table. It shows the current phase, dealer, turn, teams and marks, current bid, trump, previous trick winner, current hand score, current trick, activity log, and the user's domino hand. During trick play, legal dominoes are highlighted as clickable domino tiles and illegal dominoes are faded. It also shows hand summaries, game summaries, restart, and next-hand actions.
+
 ## Missing/Planned Screens
 
 - No dedicated Settings screen.
 - No game deletion/archive screen.
-- No rules-engine play table.
 - No authentication screens.
 - No multiplayer room, lobby, invite, reconnect, or presence screens.
-- No bot/practice setup screens.

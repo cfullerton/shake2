@@ -6,6 +6,7 @@ export type RootStackParamList = {
     targetMarks: number;
   };
   LocalGameStart: undefined;
+  LearnGame: undefined;
   NewGame: undefined;
   TeamSetup: {
     dealer: PlayerSeat;
