@@ -60,12 +60,20 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   );
   const [selectedPlayKey, setSelectedPlayKey] = useState<string | null>(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
+  const [visibleTrickPlayCount, setVisibleTrickPlayCount] = useState(0);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trickRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRenderedTrickIdRef = useRef<string | null>(null);
+  const visibleTrickPlayCountRef = useRef(0);
 
   useEffect(() => {
     return () => {
       if (advanceTimerRef.current !== null) {
         clearTimeout(advanceTimerRef.current);
+      }
+
+      if (trickRevealTimerRef.current !== null) {
+        clearTimeout(trickRevealTimerRef.current);
       }
     };
   }, []);
@@ -83,6 +91,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const trumpSuitLabel = state.phase === "trickPlay"
     ? formatTrumpSuit(state.contract.trumpSuit)
     : null;
+  const currentTrickId = state.phase === "trickPlay"
+    ? `${state.handNumber}-${state.completedTricks.length}-${state.currentTrick.leader}`
+    : null;
   const activityLog = getLocalGameActivityLog(session, 7);
   const turnSeat = getLocalGameCurrentTurnSeat(session);
   const legalPlayByDominoKey = new Map(
@@ -93,6 +104,78 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const selectedPlay = view.kind === "trickPlay" && selectedPlayKey
     ? view.legalPlays.find((play) => formatPlayKey(play) === selectedPlayKey) ?? null
     : null;
+  const visibleTrickPlays = currentTrick
+    ? currentTrick.playedDominoes.slice(0, visibleTrickPlayCount)
+    : [];
+
+  useEffect(() => {
+    visibleTrickPlayCountRef.current = visibleTrickPlayCount;
+  }, [visibleTrickPlayCount]);
+
+  useEffect(() => {
+    if (trickRevealTimerRef.current !== null) {
+      clearTimeout(trickRevealTimerRef.current);
+      trickRevealTimerRef.current = null;
+    }
+
+    if (!currentTrick || !currentTrickId) {
+      lastRenderedTrickIdRef.current = null;
+      visibleTrickPlayCountRef.current = 0;
+      setVisibleTrickPlayCount(0);
+      return;
+    }
+
+    const totalPlayCount = currentTrick.playedDominoes.length;
+    const sameTrick = currentTrickId === lastRenderedTrickIdRef.current;
+    let nextVisibleCount = sameTrick
+      ? Math.min(visibleTrickPlayCountRef.current, totalPlayCount)
+      : 0;
+
+    if (!sameTrick && visibleTrickPlayCountRef.current !== 0) {
+      visibleTrickPlayCountRef.current = 0;
+      setVisibleTrickPlayCount(0);
+    }
+
+    if (!isAdvancing) {
+      lastRenderedTrickIdRef.current = currentTrickId;
+      if (nextVisibleCount !== totalPlayCount) {
+        visibleTrickPlayCountRef.current = totalPlayCount;
+        setVisibleTrickPlayCount(totalPlayCount);
+      }
+      return;
+    }
+
+    if (
+      nextVisibleCount < totalPlayCount &&
+      currentTrick.playedDominoes[nextVisibleCount]?.seat === session.humanSeat
+    ) {
+      nextVisibleCount += 1;
+      visibleTrickPlayCountRef.current = nextVisibleCount;
+      setVisibleTrickPlayCount(nextVisibleCount);
+    }
+
+    if (nextVisibleCount < totalPlayCount) {
+      const revealNextBotPlay = () => {
+        const latestCount = Math.min(
+          visibleTrickPlayCountRef.current + 1,
+          currentTrick.playedDominoes.length
+        );
+
+        visibleTrickPlayCountRef.current = latestCount;
+        setVisibleTrickPlayCount(latestCount);
+
+        if (latestCount < currentTrick.playedDominoes.length) {
+          trickRevealTimerRef.current = setTimeout(revealNextBotPlay, BOT_PLAY_DELAY_MS);
+        } else {
+          trickRevealTimerRef.current = null;
+        }
+      };
+
+      trickRevealTimerRef.current = setTimeout(revealNextBotPlay, BOT_PLAY_DELAY_MS);
+    }
+
+    lastRenderedTrickIdRef.current = currentTrickId;
+  }, [currentTrick, currentTrickId, isAdvancing, session.humanSeat]);
 
   const phaseTitle = useMemo(() => {
     switch (view.kind) {
@@ -114,6 +197,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   function updateSession(run: () => LocalGameSession) {
     try {
       const nextSession = run();
+      const advanceDelayMs = getAdvanceDelayMs(session, nextSession);
       setSelectedPlayKey(null);
       setSession(nextSession);
       setIsAdvancing(true);
@@ -124,7 +208,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       advanceTimerRef.current = setTimeout(() => {
         setIsAdvancing(false);
         advanceTimerRef.current = null;
-      }, BOT_PLAY_DELAY_MS);
+      }, advanceDelayMs);
     } catch (error) {
       Alert.alert(
         "Action failed",
@@ -291,9 +375,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                 </Text>
               </View>
             ) : null}
-            {currentTrick && currentTrick.playedDominoes.length > 0 ? (
+            {currentTrick && visibleTrickPlays.length > 0 ? (
               <View style={styles.trickList}>
-                {currentTrick.playedDominoes.map((play) => (
+                {visibleTrickPlays.map((play) => (
                   <View
                     key={`${play.seat}-${formatDomino(play.domino)}`}
                     style={styles.playedDominoRow}
@@ -726,6 +810,63 @@ function createMobileEngineContext(): EngineContext {
     },
     now: () => new Date().toISOString(),
     random: () => Math.random()
+  };
+}
+
+function getAdvanceDelayMs(
+  previousSession: LocalGameSession,
+  nextSession: LocalGameSession
+): number {
+  const botPlaysToReveal = countNewCurrentTrickBotPlays(previousSession, nextSession);
+  return BOT_PLAY_DELAY_MS * Math.max(1, botPlaysToReveal);
+}
+
+function countNewCurrentTrickBotPlays(
+  previousSession: LocalGameSession,
+  nextSession: LocalGameSession
+): number {
+  const previousTrickState = getCurrentTrickPlaybackState(previousSession);
+  const nextTrickState = getCurrentTrickPlaybackState(nextSession);
+
+  if (!nextTrickState) {
+    return 0;
+  }
+
+  const previouslyVisibleCount = previousTrickState?.trickId === nextTrickState.trickId
+    ? previousTrickState.playedDominoes.length
+    : 0;
+
+  if (previouslyVisibleCount >= nextTrickState.playedDominoes.length) {
+    return 0;
+  }
+
+  return nextTrickState.playedDominoes
+    .slice(previouslyVisibleCount)
+    .filter((play) => play.seat !== nextSession.humanSeat)
+    .length;
+}
+
+function getCurrentTrickPlaybackState(
+  session: LocalGameSession
+): {
+  readonly playedDominoes: readonly {
+    readonly domino: Domino;
+    readonly seat: SeatIndex;
+  }[];
+  readonly trickId: string;
+} | null {
+  const state = session.snapshot.snapshot;
+
+  if (state.phase !== "trickPlay") {
+    return null;
+  }
+
+  return {
+    playedDominoes: state.currentTrick.playedDominoes.map((play) => ({
+      domino: play.domino,
+      seat: play.seat
+    })),
+    trickId: `${state.handNumber}-${state.completedTricks.length}-${state.currentTrick.leader}`
   };
 }
 
