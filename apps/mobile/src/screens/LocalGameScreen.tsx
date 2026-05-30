@@ -9,6 +9,7 @@ import {
   getLocalGameActivityLog,
   getLocalGameCurrentTurnSeat,
   getLocalGameView,
+  getTeamForSeat,
   playLocalGameDomino,
   restartLocalGameSession,
   scoreCompletedTricks,
@@ -372,8 +373,8 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
               <View style={styles.statusItem}>
                 <Text style={styles.handLabel}>Current score</Text>
                 <Text style={styles.statusValue}>
-                  Team A {currentHandScore?.teamPoints.teamA ?? 0} · Team B{" "}
-                  {currentHandScore?.teamPoints.teamB ?? 0}
+                  {state.teams.teamA.name} {currentHandScore?.teamPoints.teamA ?? 0} ·{" "}
+                  {state.teams.teamB.name} {currentHandScore?.teamPoints.teamB ?? 0}
                 </Text>
               </View>
             </View>
@@ -431,7 +432,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                     )}
                   </View>
                   <View style={[styles.trickSeatSlot, styles.trickSeatBottom]} testID="local-game-trick-seat-bottom">
-                    <Text style={styles.handLabel}>Player</Text>
+                    <Text style={styles.handLabel}>North</Text>
                     {visibleTrickPlayBySeat.get(0) ? (
                       <DominoTile
                         accessibilityLabel={`${formatSeatLabel(state, 0, session.humanSeat)} played ${formatDomino(visibleTrickPlayBySeat.get(0)!.domino)}`}
@@ -550,19 +551,19 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           <View style={styles.infoGrid}>
             <InfoTile
               label="Bid"
-              value={`${view.summary.handScore.bidAmount} by ${state.teams[view.summary.handScore.biddingTeamId].name}`}
+              value={`${view.summary.handScore.bidAmount} by ${seatNames[view.summary.handScore.declarer]} (${state.teams[view.summary.handScore.biddingTeamId].name})`}
             />
             <InfoTile
               label="Points"
-              value={`Team A ${view.summary.handScore.teamPoints.teamA} · Team B ${view.summary.handScore.teamPoints.teamB}`}
+              value={`${state.teams.teamA.name} ${view.summary.handScore.teamPoints.teamA} · ${state.teams.teamB.name} ${view.summary.handScore.teamPoints.teamB}`}
             />
             <InfoTile
               label="Tricks"
-              value={`Team A ${view.summary.handScore.teamTrickCounts.teamA} · Team B ${view.summary.handScore.teamTrickCounts.teamB}`}
+              value={`${state.teams.teamA.name} ${view.summary.handScore.teamTrickCounts.teamA} · ${state.teams.teamB.name} ${view.summary.handScore.teamTrickCounts.teamB}`}
             />
             <InfoTile
               label="Marks"
-              value={`Team A +${view.summary.handScore.markAwards.teamA} · Team B +${view.summary.handScore.markAwards.teamB}`}
+              value={`${state.teams.teamA.name} +${view.summary.handScore.markAwards.teamA} · ${state.teams.teamB.name} +${view.summary.handScore.markAwards.teamB}`}
             />
             <InfoTile
               label="Next dealer"
@@ -596,12 +597,12 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           <View style={styles.infoGrid}>
             <InfoTile
               label="Final marks"
-              value={`Team A ${state.marks.teamA} · Team B ${state.marks.teamB}`}
+              value={`${state.teams.teamA.name} ${state.marks.teamA} · ${state.teams.teamB.name} ${state.marks.teamB}`}
             />
             {session.lastHandSummary ? (
               <InfoTile
                 label="Final hand"
-                value={`${session.lastHandSummary.handScore.outcome === "made" ? "Bid made" : "Bid set"} · Team A ${session.lastHandSummary.handScore.teamPoints.teamA} · Team B ${session.lastHandSummary.handScore.teamPoints.teamB}`}
+                value={`${session.lastHandSummary.handScore.outcome === "made" ? "Bid made" : "Bid set"} · ${state.teams.teamA.name} ${session.lastHandSummary.handScore.teamPoints.teamA} · ${state.teams.teamB.name} ${session.lastHandSummary.handScore.teamPoints.teamB}`}
               />
             ) : null}
           </View>
@@ -812,9 +813,11 @@ function formatCurrentBid(state: FortyTwoState, humanSeat: SeatIndex): string {
     return "No bid yet";
   }
 
-  return `${highestBid.bid.amount} by ${formatSeatLabel(state, highestBid.seat, humanSeat)}${
-    highestBid.forced ? " (forced)" : ""
-  }`;
+  const direction = seatNames[highestBid.seat];
+  const teamName = state.teams[getTeamForSeat(highestBid.seat)].name;
+  const bidderLabel = highestBid.seat === humanSeat ? "You" : direction;
+  const forcedSuffix = highestBid.forced ? " (forced)" : "";
+  return `${highestBid.bid.amount} by ${bidderLabel} (${teamName})${forcedSuffix}`;
 }
 
 function formatTrumpStatus(state: FortyTwoState): string {

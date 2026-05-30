@@ -23,12 +23,12 @@ export const FORTY_TWO_TEAM_SEATS: Record<
 export const FORTY_TWO_TEAMS: Record<FortyTwoTeamId, FortyTwoTeam> = {
   teamA: {
     id: "teamA",
-    name: "Team A",
+    name: "North/South",
     seats: FORTY_TWO_TEAM_SEATS.teamA
   },
   teamB: {
     id: "teamB",
-    name: "Team B",
+    name: "East/West",
     seats: FORTY_TWO_TEAM_SEATS.teamB
   }
 };
