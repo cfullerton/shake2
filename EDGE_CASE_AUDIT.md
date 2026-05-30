@@ -64,9 +64,9 @@ The weak edge is not normal local gameplay. The weak edge is trust at boundaries
 | Events | Sequence must advance by one | Covered | Reducer rejects out-of-sequence events. |
 | Events | Wrong game ID | Covered | Reducer rejects event for different game. |
 | Events | Unsupported event schema version | Covered | Reducer checks event schema version. |
-| Events | Duplicate action ID | Missing | Event envelope carries `actionId`, but no idempotency store rejects or replays duplicates. |
-| Events | Forged trick winner | Missing | Reducer accepts `TRICK_COMPLETED` payloads. Add accepted-event validation. |
-| Events | Forged hand score | Missing | Reducer accepts `HAND_COMPLETED` payloads. Add accepted-event validation. |
+| Events | Duplicate action ID | Covered for multiplayer session | Multiplayer action results are stored by `actionId` and duplicate retries return the prior accepted or rejected result. |
+| Events | Forged trick winner | Covered at restore boundary | Validated replay recomputes trick winners before restored event streams become authoritative. Reducer still trusts already-accepted in-process events. |
+| Events | Forged hand score | Covered at restore boundary | Validated replay recomputes hand scores before restored event streams become authoritative. Reducer still trusts already-accepted in-process events. |
 | Events | Replay mismatch | Covered for command streams | Full-hand and session tests compare replayed state to command-applied state. |
 | Snapshots | JSON serialization | Covered for initial/full paths | Tests cover serializable snapshots. Runtime schema/migration still missing. |
 | Snapshots | Corrupt persisted state | Missing | Full-rules persistence does not exist yet. |
@@ -81,12 +81,11 @@ The weak edge is not normal local gameplay. The weak edge is trust at boundaries
 
 ## Highest Priority Edge Fixes
 
-1. Add accepted-event validation before any event can enter durable storage or server replay.
-2. Add runtime schemas and migrations for all full-rules snapshots and event envelopes.
-3. Add idempotency handling for duplicate `actionId` values.
-4. Redact hidden information at the bot/client boundary.
-5. Add local full-rules persistence with corruption and unsupported-version tests.
-6. Add UI integration tests for start, bid, trump call, trick play, hand summary, game summary, restart, and app reload behavior.
+1. Broaden runtime schemas and migrations for network action, room, storage, and snapshot payloads.
+2. Apply validated accepted-event replay before initial persistence writes, not only restore.
+3. Redact hidden information at the bot/client boundary.
+4. Add local full-rules persistence with corruption and unsupported-version tests.
+5. Add UI integration tests for start, bid, trump call, trick play, hand summary, game summary, restart, and app reload behavior.
 
 ## Multiplayer-Specific Edge Cases Not Yet Solved
 
@@ -101,4 +100,4 @@ The weak edge is not normal local gameplay. The weak edge is trust at boundaries
 
 ## Bottom Line
 
-The engine is ready for continued local-play iteration and UI hardening. It is not ready to be treated as a multiplayer authority until accepted-event validation, runtime schemas, idempotency, persistence, and hidden-information boundaries are added.
+The engine is ready for continued local-play iteration and UI hardening. Multiplayer authority is now partially protected by idempotency, hidden-hand redaction, storage records, and validated restore, but it still needs broader runtime schemas, physical persistence, auth, and deployed reconnect handling.

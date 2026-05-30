@@ -23,6 +23,7 @@ Implemented now:
 - Serializable storage records for rooms, trusted events, public snapshots, private hands, and action idempotency.
 - Restore helpers that rebuild an authoritative session from records.
 - Reconnect helpers that return a redacted latest player view and pending-action status.
+- Validated replay for restored event streams, including forged trick-winner and forged hand-score rejection.
 
 ## Authority Model
 
@@ -60,7 +61,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer and the backend-neutral durable record shape. Actual DynamoDB persistence, conditional writes, auth, and realtime fanout are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, and validated accepted-event restore. Actual DynamoDB persistence, conditional writes, auth, and realtime fanout are still missing.
 
 ## Durable Record Shape
 
@@ -75,6 +76,21 @@ It produces records shaped for a future DynamoDB adapter:
 - `ACTION#<actionId> / RESULT`
 
 The latest snapshot record is public/redacted. It stores hand counts, not full hands. Current private hands are stored in seat-specific private-hand records.
+
+## Accepted Event Validation
+
+The reducer applies trusted accepted events. Boundary restore must use validated replay before treating persisted records as authoritative.
+
+Validated replay checks:
+
+- event envelope schema version, IDs, timestamps, game ID, and sequence
+- full deal shape and duplicate dominoes
+- submitted bid result against the previous bidding state
+- bidding completion and trump call state
+- domino play hand/trick transitions
+- trick winner recomputation
+- completed hand score recomputation
+- stored latest snapshot equality after replay
 
 ## Hidden Information
 
@@ -111,8 +127,8 @@ The current reconnect helper returns:
 
 - Authenticated identity mapping to `playerId`.
 - Physical DynamoDB adapter for the durable records.
-- Runtime schema validation for all network payloads.
-- Accepted-event validation before persistence.
+- Broader runtime schema validation for all network payloads and migrations.
+- Accepted-event validation before initial persistence writes, not only restore.
 - AppSync schema/resolvers and DynamoDB conditional writes.
 - Subscription gap detection.
 - Leave/rejoin/replacement behavior.
