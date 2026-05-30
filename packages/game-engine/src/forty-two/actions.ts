@@ -6,6 +6,7 @@ import {
   type FortyTwoTeamId,
   type SeatIndex
 } from "./seats.ts";
+import { type FortyTwoGameMode } from "./state.ts";
 import { type TrumpSuit } from "./trump.ts";
 
 export const FORTY_TWO_ACTION_SCHEMA_VERSION = 1;
@@ -15,6 +16,7 @@ export type FortyTwoActionId = string;
 
 export interface CreateFortyTwoGameActionPayload {
   readonly dealer: SeatIndex;
+  readonly mode?: FortyTwoGameMode;
   readonly playerNames?: Partial<Record<SeatIndex, string>>;
   readonly rules?: RuleConfig;
   readonly teamNames?: Partial<Record<FortyTwoTeamId, string>>;

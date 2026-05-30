@@ -114,6 +114,9 @@ export function handleCreateFortyTwoGameCommand(
       {
         dealer: action.action.payload.dealer,
         gameId: action.gameId,
+        ...(action.action.payload.mode
+          ? { mode: action.action.payload.mode }
+          : {}),
         ...(action.action.payload.playerNames
           ? { playerNames: action.action.payload.playerNames }
           : {}),

@@ -18,6 +18,7 @@ export * from "./forty-two/state.ts";
 export * from "./forty-two/tricks.ts";
 export * from "./forty-two/trump.ts";
 export * from "./local-play/session.ts";
+export * from "./multiplayer/session.ts";
 export * from "./scorekeeper/commands.ts";
 export * from "./scorekeeper/dealer.ts";
 export * from "./scorekeeper/persistence.ts";

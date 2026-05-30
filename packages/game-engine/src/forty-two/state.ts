@@ -49,7 +49,7 @@ export const FORTY_TWO_PHASES = [
 ] as const;
 
 export type FortyTwoPhase = (typeof FORTY_TWO_PHASES)[number];
-export type FortyTwoGameMode = "localPractice";
+export type FortyTwoGameMode = "localPractice" | "multiplayer";
 
 export interface FortyTwoPlayer {
   readonly name: string;
@@ -131,6 +131,7 @@ export interface FortyTwoSnapshotEnvelope {
 export interface CreateInitialFortyTwoSnapshotInput {
   readonly dealer: SeatIndex;
   readonly gameId?: string;
+  readonly mode?: FortyTwoGameMode;
   readonly playerNames?: Partial<Record<SeatIndex, string>>;
   readonly rules?: RuleConfig;
   readonly teamNames?: Partial<Record<FortyTwoTeamId, string>>;
@@ -151,7 +152,7 @@ export function createInitialFortyTwoSnapshot(
     gameId,
     handNumber: 1,
     marks: createEmptyMarks(),
-    mode: "localPractice",
+    mode: input.mode ?? "localPractice",
     phase: "setup",
     players: createPlayers(input.playerNames),
     rules,
