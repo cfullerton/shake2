@@ -11,7 +11,7 @@ The repository currently contains:
 - `packages/shared`: initial TypeScript contracts for scorekeeper-focused actions, events, snapshots, results, and error codes.
 - `.github/workflows/ci.yml`: CI for install, typecheck, tests, and non-blocking audit reporting.
 - `docs/v2`: spec package for the next architecture layer.
-- `adr`: accepted local-first, server-authoritative, and scorekeeper-boundary decisions, plus a duplicate proposed ADR-0004 file.
+- `adr`: accepted local-first, server-authoritative, and scorekeeper-boundary decisions.
 
 There is no `/backend`, no full Texas 42 rules engine, no bot engine, no room state machine, no AppSync API, and no DynamoDB model implementation.
 
@@ -87,6 +87,6 @@ M2 should prefer Small and Medium tasks first. Large tasks should start only aft
 - Determinism: shuffle/deal must be reproducible, or replay/server validation will be unreliable.
 - Hidden information: private hands must not leak into future public snapshots, bot inputs, or logs.
 - Error handling: current raw `Error` strings are not durable enough for UI, tests, or server errors.
-- ADR confusion: duplicate ADR-0004 files can mislead future agents about the accepted decision.
+- ADR hygiene: future docs should keep one file per ADR number so accepted decisions remain unambiguous.
 - CI signal: audit is non-blocking due to known Expo advisory, so security posture depends on explicit tracking.
 - Premature backend work: implementing AWS before deterministic rules would bake unstable game shapes into data models.

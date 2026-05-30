@@ -34,7 +34,7 @@ The main risk is scope gravity. The v2 package contains enough AWS, AppSync, Dyn
 - The v2 scorekeeper actions include archive/delete. Current app has create, award, undo, and history, but no delete/archive/rename game management.
 - The v2 M1 hardening list includes corrupt-data handling. Current persistence drops invalid local data safely, but there is no user-facing recovery, reset, or quarantine flow.
 - The v2 CI gate lists `npm audit --audit-level=moderate`. Current CI runs audit as non-blocking because the Expo transitive `uuid/xcode` advisory has no safe fix path yet.
-- ADR numbering is inconsistent: there are two ADR-0004 files, one accepted and one proposed, both covering scorekeeper/full-game separation.
+- ADR-0004 now has a single accepted file for the scorekeeper/full-game boundary.
 
 ## Overengineering
 
@@ -61,4 +61,4 @@ The main risk is scope gravity. The v2 package contains enough AWS, AppSync, Dyn
 - Migration strategy from current shared contracts to the v2 envelopes is not defined.
 - Local scorekeeper save compatibility with future mode-discriminated snapshots is not specified.
 - Engine fixture and test-utils conventions are not specified.
-- ADR process needs cleanup so new decisions do not duplicate ADR numbers or statuses.
+- ADR process should keep using one file per number so future decisions do not duplicate ADR numbers or statuses.
