@@ -6,6 +6,7 @@ export * from "./errors.ts";
 export * from "./forty-two/bidding.ts";
 export * from "./forty-two/deal.ts";
 export * from "./forty-two/seats.ts";
+export * from "./forty-two/tricks.ts";
 export * from "./forty-two/trump.ts";
 export * from "./scorekeeper/commands.ts";
 export * from "./scorekeeper/dealer.ts";
