@@ -18,6 +18,7 @@ import {
   parseMultiplayerRoomRecord,
   parseMultiplayerSnapshotRecord,
   parseMultiplayerStoredGameRecords,
+  SEAT_INDICES,
   type MultiplayerActionIdempotencyRecord,
   type MultiplayerDynamoDbTransactionWritePlan,
   type MultiplayerGameEventRecord,
@@ -25,16 +26,38 @@ import {
   type MultiplayerRoomRecord,
   type MultiplayerSnapshotRecord,
   type MultiplayerStoredGameRecords,
-  type MultiplayerWritePlan
+  type MultiplayerWritePlan,
+  type SeatIndex
 } from "../game-engine.ts";
 
 export interface LoadGameSnapshotInput {
   readonly gameId: string;
 }
 
+export interface LoadPublicSnapshotInput {
+  readonly gameId: string;
+}
+
+export interface LoadPrivateHandInput {
+  readonly gameId: string;
+  readonly seatIndex: SeatIndex;
+}
+
 export interface LoadIdempotencyResultInput {
   readonly actionId: string;
   readonly gameId: string;
+}
+
+export interface LoadReconnectRecordsInput {
+  readonly actorPlayerId: string;
+  readonly gameId: string;
+  readonly pendingActionIds: readonly string[];
+}
+
+export interface MultiplayerReconnectRecords {
+  readonly idempotency: readonly MultiplayerActionIdempotencyRecord[];
+  readonly privateHand?: MultiplayerPrivateHandRecord;
+  readonly snapshot: MultiplayerSnapshotRecord;
 }
 
 export interface CommitWritePlanInput {
@@ -47,9 +70,18 @@ export interface MultiplayerStore {
   loadGameSnapshot(
     input: LoadGameSnapshotInput
   ): Promise<MultiplayerStoredGameRecords>;
+  loadPublicSnapshot(
+    input: LoadPublicSnapshotInput
+  ): Promise<MultiplayerSnapshotRecord>;
+  loadPrivateHand(
+    input: LoadPrivateHandInput
+  ): Promise<MultiplayerPrivateHandRecord>;
   loadIdempotencyResult(
     input: LoadIdempotencyResultInput
   ): Promise<MultiplayerActionIdempotencyRecord | null>;
+  loadReconnectRecords(
+    input: LoadReconnectRecordsInput
+  ): Promise<MultiplayerReconnectRecords>;
   commitWritePlan(input: CommitWritePlanInput): Promise<void>;
 }
 
@@ -120,6 +152,46 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
     return parseMultiplayerStoredGameRecords(records);
   }
 
+  async loadPublicSnapshot(
+    input: LoadPublicSnapshotInput
+  ): Promise<MultiplayerSnapshotRecord> {
+    const output = await this.client.send(
+      new GetCommand({
+        ConsistentRead: this.config.consistentRead,
+        Key: {
+          pk: `GAME#${input.gameId}`,
+          sk: "SNAPSHOT#LATEST"
+        },
+        TableName: this.config.tableName
+      })
+    );
+    const item = "Item" in output ? output.Item : undefined;
+
+    if (!item) {
+      throw new BackendResolverError(
+        "GAME_NOT_FOUND",
+        "Multiplayer game snapshot was not found."
+      );
+    }
+
+    return parseMultiplayerSnapshotRecord(item);
+  }
+
+  async loadPrivateHand(
+    input: LoadPrivateHandInput
+  ): Promise<MultiplayerPrivateHandRecord> {
+    const record = await this.loadPrivateHandIfPresent(input);
+
+    if (!record) {
+      throw new BackendResolverError(
+        "GAME_NOT_FOUND",
+        "Multiplayer private hand was not found."
+      );
+    }
+
+    return record;
+  }
+
   async loadIdempotencyResult(
     input: LoadIdempotencyResultInput
   ): Promise<MultiplayerActionIdempotencyRecord | null> {
@@ -149,6 +221,39 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
     }
 
     return record;
+  }
+
+  async loadReconnectRecords(
+    input: LoadReconnectRecordsInput
+  ): Promise<MultiplayerReconnectRecords> {
+    const [snapshot, room, idempotency] = await Promise.all([
+      this.loadPublicSnapshot({
+        gameId: input.gameId
+      }),
+      this.loadRoomRecord(input.gameId),
+      this.loadPendingIdempotencyResults(input.gameId, input.pendingActionIds)
+    ]);
+    const actorSeat = getSeatForPlayer(room, input.actorPlayerId);
+
+    if (!room.room.participants[input.actorPlayerId]) {
+      throw new BackendResolverError(
+        "INVALID_ACTOR",
+        "Player is not a member of this room."
+      );
+    }
+
+    const privateHand = actorSeat === null
+      ? null
+      : await this.loadPrivateHandIfPresent({
+          gameId: input.gameId,
+          seatIndex: actorSeat
+        });
+
+    return {
+      idempotency,
+      ...(privateHand ? { privateHand } : {}),
+      snapshot
+    };
   }
 
   async commitWritePlan(input: CommitWritePlanInput): Promise<void> {
@@ -254,6 +359,71 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
 
     return room;
   }
+
+  private async loadPrivateHandIfPresent(
+    input: LoadPrivateHandInput
+  ): Promise<MultiplayerPrivateHandRecord | null> {
+    const output = await this.client.send(
+      new GetCommand({
+        ConsistentRead: this.config.consistentRead,
+        Key: {
+          pk: `GAME#${input.gameId}`,
+          sk: `PRIVATE_HAND#${input.seatIndex}`
+        },
+        TableName: this.config.tableName
+      })
+    );
+    const item = "Item" in output ? output.Item : undefined;
+
+    if (!item) {
+      return null;
+    }
+
+    const record = parseMultiplayerPrivateHandRecord(item);
+
+    if (record.gameId !== input.gameId || record.seatIndex !== input.seatIndex) {
+      throw new BackendResolverError(
+        "GAME_NOT_FOUND",
+        "Private hand record belongs to a different game or seat."
+      );
+    }
+
+    return record;
+  }
+
+  private async loadPendingIdempotencyResults(
+    gameId: string,
+    actionIds: readonly string[]
+  ): Promise<readonly MultiplayerActionIdempotencyRecord[]> {
+    const uniqueActionIds = [...new Set(actionIds)];
+    const records = await Promise.all(
+      uniqueActionIds.map(async (actionId) => {
+        const output = await this.client.send(
+          new GetCommand({
+            ConsistentRead: this.config.consistentRead,
+            Key: {
+              pk: `ACTION#${actionId}`,
+              sk: "RESULT"
+            },
+            TableName: this.config.tableName
+          })
+        );
+        const item = "Item" in output ? output.Item : undefined;
+
+        if (!item) {
+          return null;
+        }
+
+        const record = parseMultiplayerActionIdempotencyRecord(item);
+
+        return record.gameId === gameId ? record : null;
+      })
+    );
+
+    return records.filter((record): record is MultiplayerActionIdempotencyRecord =>
+      record !== null
+    );
+  }
 }
 
 function createSdkTransactItems(
@@ -319,13 +489,33 @@ export function createUnimplementedMultiplayerStore(): MultiplayerStore {
     async loadGameSnapshot(): Promise<MultiplayerStoredGameRecords> {
       throw new Error("MultiplayerStore.loadGameSnapshot is not implemented.");
     },
+    async loadPublicSnapshot(): Promise<MultiplayerSnapshotRecord> {
+      throw new Error("MultiplayerStore.loadPublicSnapshot is not implemented.");
+    },
+    async loadPrivateHand(): Promise<MultiplayerPrivateHandRecord> {
+      throw new Error("MultiplayerStore.loadPrivateHand is not implemented.");
+    },
     async loadIdempotencyResult(): Promise<MultiplayerActionIdempotencyRecord | null> {
       throw new Error("MultiplayerStore.loadIdempotencyResult is not implemented.");
+    },
+    async loadReconnectRecords(): Promise<MultiplayerReconnectRecords> {
+      throw new Error("MultiplayerStore.loadReconnectRecords is not implemented.");
     },
     async commitWritePlan(): Promise<void> {
       throw new Error("MultiplayerStore.commitWritePlan is not implemented.");
     }
   };
+}
+
+function getSeatForPlayer(
+  room: MultiplayerRoomRecord,
+  playerId: string
+): SeatIndex | null {
+  const seat = SEAT_INDICES.find((seatIndex) =>
+    room.room.seats[seatIndex]?.playerId === playerId
+  );
+
+  return seat ?? null;
 }
 
 function getOutputItems(

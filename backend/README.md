@@ -21,10 +21,28 @@ This workspace is the first backend boundary for multiplayer Texas 42. It is int
   - Converts those write plans into pure DynamoDB transaction intent shapes.
   - Delegates persistence to a `MultiplayerStore` interface.
 
+- `src/functions/getGameSnapshot/handler.ts`
+  - Accepts an AppSync-like query resolver event.
+  - Requires an authenticated actor identity.
+  - Loads only the latest public/redacted snapshot.
+  - Returns an `AppSyncPublicGameSnapshot` without private hands or raw trusted events.
+
+- `src/functions/getMyPrivateHand/handler.ts`
+  - Accepts an AppSync-like private-hand query event.
+  - Requires an authenticated actor identity.
+  - Loads the requested seat private hand through `MultiplayerStore`.
+  - Enforces that the authenticated actor owns the requested seat before returning dominoes.
+
+- `src/functions/getReconnectView/handler.ts`
+  - Accepts an AppSync-like reconnect query event.
+  - Requires an authenticated actor identity.
+  - Loads the latest public snapshot, the actor's private hand when seated, and requested pending action results.
+  - Returns accepted/rejected/unknown pending action classifications and snapshot-refresh guidance.
+
 - `src/dynamodb/store.ts`
   - Defines `MultiplayerStore`.
   - Implements `DynamoDBMultiplayerStore` with AWS SDK v3 DynamoDB DocumentClient commands.
-  - Supports loading game records, loading one idempotency result, and committing transaction intents.
+  - Supports loading full game records for command validation, loading public snapshots, loading private hand records, loading reconnect records, loading one idempotency result, and committing transaction intents.
   - Is unit-tested with a mocked client and does not require AWS credentials in tests.
 
 - `src/appsync/schema.graphql`
@@ -77,6 +95,7 @@ The public snapshot and subscription types intentionally omit full hands and raw
 - No provisioned DynamoDB table.
 - No production Lambda environment wiring.
 - No live subscription fanout.
+- No deployed query resolvers.
 - No frontend multiplayer UI.
 - No game-rule changes.
 
@@ -117,7 +136,7 @@ npm test
 ## Next Steps
 
 1. Map DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes.
-2. Add Lambda resolver shells for `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView`.
-3. Add Cognito identity mapping from authenticated user IDs to multiplayer `playerId`.
+2. Add Cognito identity mapping from authenticated user IDs to multiplayer `playerId`.
+3. Add resolver-level room membership authorization for public snapshot reads before deployment.
 4. Add Amplify/AppSync infrastructure only after resolver contracts and auth checks are tested locally.
 5. Provision the DynamoDB table and indexes with infrastructure code after the API/auth boundary is ready.
