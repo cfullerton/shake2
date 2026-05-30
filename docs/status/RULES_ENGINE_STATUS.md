@@ -187,7 +187,7 @@ Both passed after the accepted-event validation slice.
 
 ## Current M2 Plan Alignment
 
-The implementation no longer maps cleanly to the older phase numbering in `M2_IMPLEMENTATION_PLAN.md`.
+The implementation no longer maps cleanly to the older phase numbering in `docs/plans/M2_IMPLEMENTATION_PLAN.md`.
 
 Completed or mostly completed:
 
