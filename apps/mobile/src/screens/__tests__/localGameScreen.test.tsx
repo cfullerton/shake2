@@ -59,6 +59,11 @@ describe("LocalGameScreen", () => {
       expect(view.getByText("Current score")).toBeTruthy();
       expect(view.getByText("Team A 0 · Team B 0")).toBeTruthy();
       expect(view.getByText("Previous trick")).toBeTruthy();
+      expect(view.getByTestId("local-game-trick-table")).toBeTruthy();
+      expect(view.getByTestId("local-game-trick-seat-top")).toBeTruthy();
+      expect(view.getByTestId("local-game-trick-seat-left")).toBeTruthy();
+      expect(view.getByTestId("local-game-trick-seat-right")).toBeTruthy();
+      expect(view.getByTestId("local-game-trick-seat-bottom")).toBeTruthy();
       expect(view.getByText("Activity")).toBeTruthy();
       expect(view.queryAllByText(/ as /).length).toBe(0);
       expect(view.getByTestId("local-game-domino-3-0")).toBeTruthy();
