@@ -8,6 +8,10 @@ import {
   getPreviousDealer,
   getScoreSummary,
   getWinningTeamId,
+  MAX_GAME_NAME_LENGTH,
+  MAX_SCORE_NOTE_LENGTH,
+  MAX_TARGET_MARKS,
+  MAX_TEAM_NAME_LENGTH,
   undoLastScore
 } from "../index.js";
 
@@ -143,5 +147,90 @@ test("rejects invalid mark awards", () => {
         teamId: "northSouth"
       }),
     /marks must be a positive integer/
+  );
+});
+
+test("rejects mark awards above the target marks", () => {
+  const game = createScorekeeperGame({
+    createdAt,
+    id: "game-1",
+    targetMarks: 3
+  });
+
+  assert.throws(
+    () =>
+      awardMarks(game, {
+        createdAt,
+        id: "entry-1",
+        marks: 4,
+        teamId: "northSouth"
+      }),
+    /marks cannot exceed target marks/
+  );
+});
+
+test("rejects invalid target marks", () => {
+  assert.throws(
+    () =>
+      createScorekeeperGame({
+        createdAt,
+        id: "game-1",
+        targetMarks: MAX_TARGET_MARKS + 1
+      }),
+    /targetMarks must be an integer/
+  );
+});
+
+test("rejects overlong game and team labels", () => {
+  assert.throws(
+    () =>
+      createScorekeeperGame({
+        createdAt,
+        id: "game-1",
+        name: "x".repeat(MAX_GAME_NAME_LENGTH + 1)
+      }),
+    /name must be/
+  );
+
+  assert.throws(
+    () =>
+      createScorekeeperGame({
+        createdAt,
+        id: "game-1",
+        teamNames: {
+          northSouth: "x".repeat(MAX_TEAM_NAME_LENGTH + 1)
+        }
+      }),
+    /team name must be/
+  );
+});
+
+test("rejects invalid timestamps and overlong notes", () => {
+  const game = createScorekeeperGame({
+    createdAt,
+    id: "game-1"
+  });
+
+  assert.throws(
+    () =>
+      awardMarks(game, {
+        createdAt: "not-a-date",
+        id: "entry-1",
+        marks: 1,
+        teamId: "northSouth"
+      }),
+    /createdAt must be a valid timestamp/
+  );
+
+  assert.throws(
+    () =>
+      awardMarks(game, {
+        createdAt,
+        id: "entry-1",
+        marks: 1,
+        note: "x".repeat(MAX_SCORE_NOTE_LENGTH + 1),
+        teamId: "northSouth"
+      }),
+    /note must be/
   );
 });
