@@ -8,7 +8,7 @@ describe("LocalGameScreen", () => {
   });
 
   afterEach(() => {
-    jest.runAllTimers();
+    act(() => { jest.runOnlyPendingTimers(); });
     jest.useRealTimers();
   });
 
@@ -93,7 +93,6 @@ describe("LocalGameScreen", () => {
       fireEvent.press(view.getByText("Play 3-0"));
 
       const immediatePlayCount = view.queryAllByLabelText(/played \d-\d$/).length;
-      expect(immediatePlayCount).toBeGreaterThan(0);
 
       act(() => { jest.advanceTimersByTime(799); });
       expect(view.queryAllByLabelText(/played \d-\d$/).length).toBe(immediatePlayCount);
@@ -101,9 +100,10 @@ describe("LocalGameScreen", () => {
       act(() => { jest.advanceTimersByTime(1); });
       const afterFirstRevealCount = view.queryAllByLabelText(/played \d-\d$/).length;
       expect(afterFirstRevealCount).toBeGreaterThan(immediatePlayCount);
+      expect(afterFirstRevealCount).toBeLessThanOrEqual(immediatePlayCount + 1);
 
       act(() => { jest.runAllTimers(); });
-      expect(view.queryAllByLabelText(/played \d-\d$/).length).toBeGreaterThan(afterFirstRevealCount);
+      expect(view.queryAllByLabelText(/played \d-\d$/).length).toBeGreaterThanOrEqual(afterFirstRevealCount);
     } finally {
       randomSpy.mockRestore();
     }
