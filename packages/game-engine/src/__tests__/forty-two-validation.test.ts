@@ -122,6 +122,42 @@ test("validated replay rejects unsupported event schema versions", () => {
   );
 });
 
+test("validated replay rejects unsupported contract kinds", () => {
+  const context = createSimulationContext(25);
+  const session = playUntilHandSummary(
+    createLocalGameSession({ targetMarks: 100 }, context),
+    context
+  );
+  const forgedEvents = replaceFirstEvent(
+    session.events,
+    "fortyTwo.trump.called",
+    (event) => {
+      const forgedEvent = event as any;
+
+      return {
+        ...forgedEvent,
+        event: {
+          ...forgedEvent.event,
+          payload: {
+            ...forgedEvent.event.payload,
+            contract: {
+              ...forgedEvent.event.payload.contract,
+              kind: "unsupportedContract"
+            }
+          }
+        }
+      } as FortyTwoEventEnvelope;
+    }
+  );
+
+  assert.throws(
+    () => replayValidatedFortyTwoEvents(session.initialSnapshot, forgedEvents),
+    {
+      code: "INVALID_ACTION"
+    }
+  );
+});
+
 function playUntilHandSummary(
   initialSession: LocalGameSession,
   context: EngineContext

@@ -29,7 +29,7 @@ import {
   type Trick
 } from "./tricks.ts";
 import {
-  type StandardNumericContract,
+  type Contract,
   type TrumpCallState
 } from "./trump.ts";
 
@@ -95,7 +95,7 @@ export interface FortyTwoTrumpPhaseState extends FortyTwoStateBase<"trump"> {
 export interface FortyTwoTrickPlayState extends FortyTwoStateBase<"trickPlay"> {
   readonly bidding: BiddingState;
   readonly completedTricks: readonly CompletedTrick[];
-  readonly contract: StandardNumericContract;
+  readonly contract: Contract;
   readonly currentTrick: Trick;
   readonly hands: FortyTwoHands;
 }

@@ -34,13 +34,15 @@ import {
   type FortyTwoSnapshotEnvelope
 } from "./state.ts";
 import {
-  determineTrickWinner,
+  determineTrickWinnerForContract,
   playDominoToTrick,
   startTrick
 } from "./tricks.ts";
 import {
+  assertContract,
   callTrump,
-  createTrumpCallState
+  createTrumpCallState,
+  getContractTrumpSuit
 } from "./trump.ts";
 
 export function assertFortyTwoSnapshotEnvelope(
@@ -301,6 +303,7 @@ function validateTrumpCalledEvent(
   }
 
   const contract = event.event.payload.contract;
+  assertContract(contract);
 
   if (event.actorSeat !== undefined && event.actorSeat !== contract.declarer) {
     throw new EngineError("INVALID_ACTOR", "Trump event actor is not the declarer.");
@@ -309,7 +312,7 @@ function validateTrumpCalledEvent(
   const expectedTrump = callTrump(
     snapshot.snapshot.trump,
     contract.declarer,
-    contract.trumpSuit
+    getContractTrumpSuit(contract)
   );
 
   assertDeepEqual(
@@ -366,7 +369,7 @@ function validateDominoPlayedEvent(
       : {}),
     seat: nextPlay.seat,
     trick: previousTrick,
-    trumpSuit: snapshot.snapshot.contract.trumpSuit
+    trumpSuit: getContractTrumpSuit(snapshot.snapshot.contract)
   });
 
   assertDeepEqual(
@@ -393,9 +396,9 @@ function validateTrickCompletedEvent(
   }
 
   const completedTrick = event.event.payload.completedTrick;
-  const expectedWinner = determineTrickWinner(
+  const expectedWinner = determineTrickWinnerForContract(
     snapshot.snapshot.currentTrick,
-    snapshot.snapshot.contract.trumpSuit
+    snapshot.snapshot.contract
   );
 
   assertDeepEqual(
@@ -426,19 +429,17 @@ function validateHandCompletedEvent(
     throw new EngineError("INVALID_PHASE", "Hand completion can only apply during trick play.");
   }
 
-  const winningBid = snapshot.snapshot.bidding.highestBid;
-
-  if (!winningBid) {
-    throw new EngineError("INVALID_PHASE", "Hand completion requires a winning bid.");
-  }
-
   assertDeepEqual(
     event.event.payload.completedTricks,
     snapshot.snapshot.completedTricks,
     "Hand completed event contains forged completed tricks."
   );
 
-  const expectedScore = scoreCompletedHand(snapshot.snapshot.completedTricks, winningBid);
+  const expectedScore = scoreCompletedHand(
+    snapshot.snapshot.completedTricks,
+    snapshot.snapshot.contract,
+    snapshot.snapshot.rules
+  );
   assertHandScore(event.event.payload.handScore);
   assertDeepEqual(
     event.event.payload.handScore,

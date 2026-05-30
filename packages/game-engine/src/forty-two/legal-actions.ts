@@ -14,11 +14,12 @@ import {
 } from "./seats.ts";
 import {
   getExpectedTrickSeat,
-  getLegalLedSuits,
+  getLegalLedSuitsForContract,
   playDominoToTrick,
   type DominoSuit
 } from "./tricks.ts";
 import {
+  getContractTrumpSuit,
   TRUMP_SUITS,
   type TrumpSuit
 } from "./trump.ts";
@@ -106,9 +107,9 @@ export function getLegalDominoPlays(
 
   for (const domino of snapshot.snapshot.hands[seat]) {
     if (snapshot.snapshot.currentTrick.playedDominoes.length === 0) {
-      for (const ledSuit of getLegalLedSuits(
+      for (const ledSuit of getLegalLedSuitsForContract(
         domino,
-        snapshot.snapshot.contract.trumpSuit
+        snapshot.snapshot.contract
       )) {
         if (isLegalDominoPlay(snapshot, seat, domino, ledSuit)) {
           options.push({
@@ -154,7 +155,7 @@ function isLegalDominoPlay(
       ...(ledSuit ? { ledSuit } : {}),
       seat,
       trick: snapshot.snapshot.currentTrick,
-      trumpSuit: snapshot.snapshot.contract.trumpSuit
+      trumpSuit: getContractTrumpSuit(snapshot.snapshot.contract)
     });
     return true;
   } catch (error) {

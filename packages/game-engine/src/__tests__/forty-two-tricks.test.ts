@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   createDomino,
   determineTrickWinner,
+  determineTrickWinnerForContract,
+  getLegalLedSuitsForContract,
   getLegalLedSuits,
   isEngineError,
   isTrickComplete,
@@ -13,7 +15,8 @@ import {
   type DominoSuit,
   type FortyTwoHands,
   type SeatIndex,
-  type Trick
+  type Trick,
+  type TrumpSuit
 } from "../index.ts";
 
 test("highest trump wins a trick", () => {
@@ -84,6 +87,26 @@ test("uses the high pip as the only led suit for non-trump dominoes", () => {
   assert.deepEqual(getLegalLedSuits(createDomino(4, 2), "sixes"), ["fours"]);
 });
 
+test("contract helpers preserve standard numeric led-suit and winner behavior", () => {
+  const contract = createStandardNumericContract("sixes");
+  let trick = startTrick(0);
+  let hands = createHands({
+    0: [createDomino(5, 2)],
+    1: [createDomino(5, 5)],
+    2: [createDomino(3, 3)],
+    3: [createDomino(5, 4)]
+  });
+
+  assert.deepEqual(getLegalLedSuitsForContract(createDomino(6, 4), contract), ["sixes"]);
+
+  ({ trick, hands } = play(trick, hands, 0, createDomino(5, 2), "fives"));
+  ({ trick, hands } = play(trick, hands, 1, createDomino(5, 5)));
+  ({ trick, hands } = play(trick, hands, 2, createDomino(3, 3)));
+  ({ trick, hands } = play(trick, hands, 3, createDomino(5, 4)));
+
+  assert.equal(determineTrickWinnerForContract(trick, contract), 1);
+});
+
 test("rejects play out of turn", () => {
   const trick = startTrick(0);
   const hands = createHands({
@@ -145,5 +168,20 @@ function createHands(
     1: cardsBySeat[1] ?? [],
     2: cardsBySeat[2] ?? [],
     3: cardsBySeat[3] ?? []
+  };
+}
+
+function createStandardNumericContract(
+  trumpSuit: TrumpSuit
+) {
+  return {
+    bid: { amount: 30, kind: "numeric" as const },
+    declarer: 0 as SeatIndex,
+    kind: "standardNumeric" as const,
+    trump: {
+      kind: "pip" as const,
+      suit: trumpSuit
+    },
+    trumpSuit
   };
 }

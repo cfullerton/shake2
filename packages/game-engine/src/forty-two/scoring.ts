@@ -12,7 +12,10 @@ import {
   DOUBLE_SIX_DOMINO_COUNT
 } from "../dominoes/set.ts";
 import { EngineError } from "../errors.ts";
-import { standardRules } from "./rules-config.ts";
+import {
+  standardRules,
+  type RuleConfig
+} from "./rules-config.ts";
 import {
   FORTY_TWO_TEAM_IDS,
   getTeamForSeat,
@@ -20,12 +23,13 @@ import {
   type SeatIndex
 } from "./seats.ts";
 import {
+  type Contract
+} from "./trump.ts";
+import {
   isTrickComplete,
   TRICK_PLAY_COUNT,
   type Trick
 } from "./tricks.ts";
-import { type WinningBid } from "./bidding.ts";
-
 export const FORTY_TWO_TRICKS_PER_HAND = standardRules.table.tricksPerHand;
 export const FORTY_TWO_TRICK_POINT_VALUE = standardRules.scoring.trickPointValue;
 export const FORTY_TWO_HAND_TOTAL_POINTS = standardRules.scoring.handTotalPoints;
@@ -119,35 +123,36 @@ export function scoreCompletedTricks(
 
 export function scoreCompletedHand(
   completedTricks: readonly CompletedTrick[],
-  winningBid: WinningBid
+  contract: Contract,
+  rules: RuleConfig
 ): HandScore {
-  if (completedTricks.length !== FORTY_TWO_TRICKS_PER_HAND) {
+  if (completedTricks.length !== rules.table.tricksPerHand) {
     throw new EngineError(
       "INVALID_PHASE",
-      `A completed hand must have ${FORTY_TWO_TRICKS_PER_HAND} tricks.`
+      `A completed hand must have ${rules.table.tricksPerHand} tricks.`
     );
   }
 
   const currentScore = scoreCompletedTricks(completedTricks);
   assertCompleteHandDominoes(currentScore.trickScores);
 
-  if (currentScore.totalPoints !== FORTY_TWO_HAND_TOTAL_POINTS) {
+  if (currentScore.totalPoints !== rules.scoring.handTotalPoints) {
     throw new EngineError(
       "INVALID_DOMINO",
-      `A completed hand must total ${FORTY_TWO_HAND_TOTAL_POINTS} points.`
+      `A completed hand must total ${rules.scoring.handTotalPoints} points.`
     );
   }
 
-  const biddingTeamId = getTeamForSeat(winningBid.seat);
+  const biddingTeamId = getTeamForSeat(contract.declarer);
   const biddingTeamPoints = currentScore.teamPoints[biddingTeamId];
-  const outcome: BidOutcome =
-    biddingTeamPoints >= winningBid.bid.amount ? "made" : "set";
+  const bidAmount = getContractBidAmount(contract);
+  const outcome: BidOutcome = biddingTeamPoints >= bidAmount ? "made" : "set";
 
   return {
-    bidAmount: winningBid.bid.amount,
+    bidAmount,
     biddingTeamId,
     biddingTeamPoints,
-    markAwards: getMarkAwards(biddingTeamId, outcome),
+    markAwards: getContractMarkAwards(contract, biddingTeamId, outcome),
     outcome,
     teamPoints: currentScore.teamPoints,
     teamTrickCounts: currentScore.teamTrickCounts,
@@ -155,6 +160,17 @@ export function scoreCompletedHand(
     trickScores: currentScore.trickScores,
     tricksByTeam: currentScore.tricksByTeam
   };
+}
+
+export function getContractMarkAwards(
+  contract: Contract,
+  biddingTeamId: FortyTwoTeamId,
+  outcome: BidOutcome
+): TeamMarkAwards {
+  switch (contract.kind) {
+    case "standardNumeric":
+      return getStandardNumericMarkAwards(biddingTeamId, outcome);
+  }
 }
 
 export function getCompletedTrickCountPoints(
@@ -238,7 +254,7 @@ function assertCompleteHandDominoes(
   }
 }
 
-function getMarkAwards(
+function getStandardNumericMarkAwards(
   biddingTeamId: FortyTwoTeamId,
   outcome: BidOutcome
 ): TeamMarkAwards {
@@ -248,6 +264,13 @@ function getMarkAwards(
 
   markAwards[awardedTeamId] = 1;
   return markAwards;
+}
+
+function getContractBidAmount(contract: Contract): number {
+  switch (contract.kind) {
+    case "standardNumeric":
+      return contract.bid.amount;
+  }
 }
 
 function getOpposingTeamId(teamId: FortyTwoTeamId): FortyTwoTeamId {

@@ -15,9 +15,11 @@ import {
   assertSeatIndex
 } from "./seats.ts";
 import {
+  getContractTrumpSuit,
   getTrumpDominoRank,
   getTrumpSuitPip,
   isDominoTrump,
+  type Contract,
   type TrumpSuit
 } from "./trump.ts";
 import { standardRules } from "./rules-config.ts";
@@ -179,6 +181,13 @@ export function determineTrickWinner(
   ).seat;
 }
 
+export function determineTrickWinnerForContract(
+  trick: Trick,
+  contract: Contract
+): SeatIndex {
+  return determineTrickWinner(trick, getContractTrumpSuit(contract));
+}
+
 export function getExpectedTrickSeat(trick: Trick): SeatIndex {
   if (trick.playedDominoes.length >= TRICK_PLAY_COUNT) {
     throw new EngineError("INVALID_PHASE", "Trick is already complete.");
@@ -208,6 +217,13 @@ export function getLegalLedSuits(
   const highSuit = DOMINO_SUIT_BY_PIP[domino.high];
 
   return [highSuit];
+}
+
+export function getLegalLedSuitsForContract(
+  domino: Domino,
+  contract: Contract
+): readonly DominoSuit[] {
+  return getLegalLedSuits(domino, getContractTrumpSuit(contract));
 }
 
 export function canFollowSuit(

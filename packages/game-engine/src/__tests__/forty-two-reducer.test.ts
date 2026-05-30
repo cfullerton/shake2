@@ -13,11 +13,13 @@ import {
   createPassBid,
   createTrumpCallState,
   dealDominoes,
+  getContractTrumpSuit,
   getLegalLedSuits,
   isEngineError,
   playDominoToTrick,
   replayFortyTwoEvents,
   scoreCompletedHand,
+  standardRules,
   startTrick,
   submitBid,
   type CompletedTrick,
@@ -111,7 +113,7 @@ function createReplayFixture(): {
     throw new Error("Declarer fixture hand is empty.");
   }
 
-  const ledSuit = getLegalLedSuits(leadDomino, contract.trumpSuit)[0];
+  const ledSuit = getLegalLedSuits(leadDomino, getContractTrumpSuit(contract))[0];
 
   if (!ledSuit) {
     throw new Error("Lead domino fixture has no legal suit.");
@@ -123,7 +125,7 @@ function createReplayFixture(): {
     ledSuit,
     seat: contract.declarer,
     trick: firstTrick,
-    trumpSuit: contract.trumpSuit
+    trumpSuit: getContractTrumpSuit(contract)
   });
   const completedTricks = createCompletedTricks();
   const firstCompletedTrick = completedTricks[0];
@@ -132,11 +134,7 @@ function createReplayFixture(): {
     throw new Error("Completed trick fixture did not create a first trick.");
   }
 
-  const handScore = scoreCompletedHand(completedTricks, {
-    bid: createNumericBid(30),
-    forced: false,
-    seat: 0
-  });
+  const handScore = scoreCompletedHand(completedTricks, contract, standardRules);
 
   return {
     events: [
