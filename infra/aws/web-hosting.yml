@@ -6,6 +6,18 @@ Parameters:
     Type: String
     Default: ""
     Description: Optional globally unique bucket name. Leave blank to let CloudFormation generate one.
+  CustomDomainName:
+    Type: String
+    Default: ""
+    Description: Optional hostname for CloudFront, for example play.example.com.
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Optional Route 53 hosted zone ID. Required to auto-create an ACM certificate.
+  AcmCertificateArn:
+    Type: String
+    Default: ""
+    Description: Optional existing us-east-1 ACM certificate ARN for the custom domain.
   GitHubOwner:
     Type: String
     Description: GitHub owner or organization that owns the repository.
@@ -20,14 +32,59 @@ Parameters:
     Type: String
     Description: Existing IAM OIDC provider ARN for https://token.actions.githubusercontent.com.
 
+Rules:
+  CustomDomainCertificateRule:
+    Assertions:
+      - Assert: !Or
+          - !Equals
+              - !Ref CustomDomainName
+              - ""
+          - !Not
+              - !Equals
+                  - !Ref AcmCertificateArn
+                  - ""
+          - !And
+              - !Equals
+                  - !Ref "AWS::Region"
+                  - us-east-1
+              - !Not
+                  - !Equals
+                      - !Ref HostedZoneId
+                      - ""
+        AssertDescription: To use CustomDomainName, provide an existing us-east-1 AcmCertificateArn or deploy this stack in us-east-1 with HostedZoneId so CloudFormation can create and validate a certificate.
+
 Conditions:
-  HasBucketName: !Not [!Equals [!Ref BucketName, ""]]
+  HasBucketName: !Not
+    - !Equals
+      - !Ref BucketName
+      - ""
+  HasCustomDomain: !Not
+    - !Equals
+      - !Ref CustomDomainName
+      - ""
+  HasHostedZoneId: !Not
+    - !Equals
+      - !Ref HostedZoneId
+      - ""
+  HasCertificateArn: !Not
+    - !Equals
+      - !Ref AcmCertificateArn
+      - ""
+  ShouldCreateCertificate: !And
+    - !Condition HasCustomDomain
+    - !Not [!Condition HasCertificateArn]
+  ShouldCreateDnsRecords: !And
+    - !Condition HasCustomDomain
+    - !Condition HasHostedZoneId
 
 Resources:
   WebBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !If [HasBucketName, !Ref BucketName, !Ref AWS::NoValue]
+      BucketName: !If
+        - HasBucketName
+        - !Ref BucketName
+        - !Ref AWS::NoValue
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -45,10 +102,24 @@ Resources:
         SigningBehavior: always
         SigningProtocol: sigv4
 
+  WebCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: ShouldCreateCertificate
+    Properties:
+      DomainName: !Ref CustomDomainName
+      DomainValidationOptions:
+        - DomainName: !Ref CustomDomainName
+          HostedZoneId: !Ref HostedZoneId
+      ValidationMethod: DNS
+
   WebDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
+        Aliases: !If
+          - HasCustomDomain
+          - - !Ref CustomDomainName
+          - !Ref AWS::NoValue
         Comment: !Sub "${AWS::StackName} Shake 2 web hosting"
         CustomErrorResponses:
           - ErrorCachingMinTTL: 0
@@ -82,8 +153,37 @@ Resources:
             S3OriginConfig:
               OriginAccessIdentity: ""
         PriceClass: PriceClass_100
-        ViewerCertificate:
-          CloudFrontDefaultCertificate: true
+        ViewerCertificate: !If
+          - HasCustomDomain
+          - AcmCertificateArn: !If
+              - HasCertificateArn
+              - !Ref AcmCertificateArn
+              - !Ref WebCertificate
+            MinimumProtocolVersion: TLSv1.2_2021
+            SslSupportMethod: sni-only
+          - CloudFrontDefaultCertificate: true
+
+  WebDnsRecordA:
+    Type: AWS::Route53::RecordSet
+    Condition: ShouldCreateDnsRecords
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref CustomDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt WebDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
+  WebDnsRecordAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: ShouldCreateDnsRecords
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref CustomDomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt WebDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
 
   WebBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -151,6 +251,17 @@ Outputs:
   CloudFrontDomainName:
     Description: Default CloudFront hostname.
     Value: !GetAtt WebDistribution.DomainName
+  CustomDomainUrl:
+    Condition: HasCustomDomain
+    Description: Custom HTTPS URL for the hosted web app.
+    Value: !Sub "https://${CustomDomainName}"
+  CertificateArn:
+    Condition: HasCustomDomain
+    Description: ACM certificate used by CloudFront.
+    Value: !If
+      - HasCertificateArn
+      - !Ref AcmCertificateArn
+      - !Ref WebCertificate
   GitHubActionsRoleArn:
     Description: Role ARN to store in GitHub repository variable AWS_ROLE_TO_ASSUME.
     Value: !GetAtt GitHubDeployRole.Arn

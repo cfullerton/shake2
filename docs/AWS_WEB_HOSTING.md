@@ -6,6 +6,7 @@ This repo can publish the Expo web build to AWS as a static site:
 - GitHub Actions assumes an AWS role through GitHub OIDC.
 - The workflow syncs static files to S3.
 - CloudFront serves the site and falls back to `index.html` for client-side routes.
+- Optionally, CloudFront serves a custom domain with an ACM certificate.
 
 No AWS access keys should be stored in GitHub.
 
@@ -25,7 +26,9 @@ No AWS access keys should be stored in GitHub.
    Most AWS accounts should have one provider per account. If one already exists,
    reuse it instead of creating a duplicate.
 
-2. Deploy the CloudFormation stack:
+2. Deploy the CloudFormation stack.
+
+   Default CloudFront domain only:
 
    ```sh
    aws cloudformation deploy \
@@ -38,6 +41,49 @@ No AWS access keys should be stored in GitHub.
        GitHubBranch=main \
        GitHubOidcProviderArn=arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com
    ```
+
+   Custom domain with a new ACM certificate:
+
+   ```sh
+   aws cloudformation deploy \
+     --region us-east-1 \
+     --stack-name shake2-web \
+     --template-file infra/aws/web-hosting.yml \
+     --capabilities CAPABILITY_NAMED_IAM \
+     --parameter-overrides \
+       GitHubOwner=<github-owner> \
+       GitHubRepo=shake2 \
+       GitHubBranch=main \
+       GitHubOidcProviderArn=arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com \
+       CustomDomainName=play.example.com \
+       HostedZoneId=<route53-hosted-zone-id>
+   ```
+
+   CloudFront requires ACM certificates for alternate domain names to live in
+   `us-east-1`. The template can create and DNS-validate the certificate
+   automatically only when the stack is deployed in `us-east-1` and the hosted
+   zone is in Route 53 in the same AWS account.
+
+   Custom domain with an existing ACM certificate:
+
+   ```sh
+   aws cloudformation deploy \
+     --stack-name shake2-web \
+     --template-file infra/aws/web-hosting.yml \
+     --capabilities CAPABILITY_NAMED_IAM \
+     --parameter-overrides \
+       GitHubOwner=<github-owner> \
+       GitHubRepo=shake2 \
+       GitHubBranch=main \
+       GitHubOidcProviderArn=arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com \
+       CustomDomainName=play.example.com \
+       AcmCertificateArn=arn:aws:acm:us-east-1:<account-id>:certificate/<certificate-id> \
+       HostedZoneId=<route53-hosted-zone-id>
+   ```
+
+   `HostedZoneId` is optional when using an existing certificate. If omitted,
+   create the DNS record yourself as a CNAME or alias to the `CloudFrontDomainName`
+   stack output.
 
 3. Capture the stack outputs:
 
@@ -57,6 +103,9 @@ Set these repository variables in GitHub:
 | `AWS_ROLE_TO_ASSUME` | `GitHubActionsRoleArn` stack output. |
 | `AWS_S3_BUCKET` | `BucketName` stack output. |
 | `AWS_CLOUDFRONT_DISTRIBUTION_ID` | `CloudFrontDistributionId` stack output. Optional but recommended. |
+
+If a custom domain is configured, the stack also outputs `CustomDomainUrl` and
+`CertificateArn`.
 
 The workflow deploys on pushes to `main` and can also be run manually.
 
@@ -82,8 +131,8 @@ distribution ID is configured, the workflow invalidates `/*` after upload.
 
 ## Notes
 
-- The CloudFormation stack uses the default CloudFront domain. Add custom domain,
-  ACM certificate, and Route 53 records later when the production hostname is known.
+- The CloudFormation stack can use the default CloudFront domain or a custom
+  domain with ACM and optional Route 53 alias records.
 - The CloudFront distribution maps 403 and 404 responses to `index.html` so native
   navigation URLs like `/LocalGameStart` continue to load after refresh.
 - This is static web hosting only. It does not add Cognito, AppSync, DynamoDB,

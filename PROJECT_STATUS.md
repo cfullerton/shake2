@@ -12,7 +12,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - `packages/shared` contains initial versioned Action/Event/Snapshot contracts for scorekeeper and future server use.
 - `.github/workflows/ci.yml` runs install, typecheck, tests, and audit reporting on pull requests and pushes to `main`.
 - `.github/workflows/deploy-web.yml` builds the Expo web bundle and deploys static assets to AWS S3/CloudFront with GitHub OIDC.
-- `infra/aws/web-hosting.yml` provisions static web hosting resources and a least-privilege GitHub Actions deploy role.
+- `infra/aws/web-hosting.yml` provisions static web hosting resources, optional custom-domain ACM/Route 53 wiring, and a least-privilege GitHub Actions deploy role.
 - There is no `backend` workspace yet, despite the original architecture docs naming AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB.
 - App state is client-owned today. The mobile app loads/saves games from AsyncStorage and applies game-engine functions locally.
 - The game engine is serializable and UI-independent, but it is still a scorekeeper model, not a full Texas 42 rules engine.
@@ -87,7 +87,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - React Native Testing Library coverage for core scorekeeper flows and AsyncStorage persistence wrapper behavior.
 - GitHub Actions CI for install, typecheck, tests, and non-blocking audit reporting.
 - GitHub Actions web deployment workflow for Expo web export to AWS S3/CloudFront using OIDC.
-- CloudFormation template and runbook for static AWS web hosting.
+- CloudFormation template and runbook for static AWS web hosting, including optional custom domain and ACM certificate support.
 - ADRs documenting local-first M1, server-authoritative event target architecture, and the scorekeeper mode boundary.
 
 ## Features Partially Implemented
@@ -98,7 +98,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.
 - UI system: reusable components exist, but there is no formal design system, accessibility pass, or cross-device visual regression coverage.
 - Shared package: contracts exist, but they are initial scorekeeper-oriented TypeScript contracts, not a backend schema or runtime validator.
-- Web hosting: AWS S3/CloudFront hosting infrastructure and workflow exist, but no production AWS stack has been deployed from this environment.
+- Web hosting: AWS S3/CloudFront hosting infrastructure and workflow exist, including custom-domain support, but no production AWS stack has been deployed from this environment.
 - CI: basic workflow exists, but there is no lint, coverage threshold, visual test, iOS device test, or required audit pass yet.
 
 ## Known Issues
