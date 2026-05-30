@@ -35,7 +35,7 @@ export function AppNavigator() {
       <Stack.Screen
         component={HomeScreen}
         name="Home"
-        options={{ headerTransparent: true, title: "Shake 2" }}
+        options={{ title: "Shake 2" }}
       />
       <Stack.Screen
         component={LocalGameStartScreen}
