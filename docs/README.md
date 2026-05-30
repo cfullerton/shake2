@@ -16,6 +16,7 @@ Most project documentation lives under this directory. `AGENTS.md` intentionally
 - `status/ENGINE_CONFIDENCE_REPORT.md`
 - `status/MISSING_RULES.md`
 - `status/EDGE_CASE_AUDIT.md`
+- `status/MULTIPLAYER_READINESS_REPORT.md`
 
 ## Reviews
 

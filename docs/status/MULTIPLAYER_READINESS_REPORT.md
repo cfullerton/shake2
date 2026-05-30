@@ -1,0 +1,291 @@
+# Multiplayer Readiness Report
+
+Last reviewed: 2026-05-30
+
+## Executive Summary
+
+Multiplayer is ready for the next backend-design slice, but not ready for production or mobile users.
+
+The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
+
+The largest remaining gap is physical infrastructure: no Cognito identity, AppSync API, Lambda resolver, DynamoDB adapter, subscription fanout, deployed reconnect endpoint, or multiplayer UI exists yet.
+
+## Current Multiplayer Architecture
+
+Current multiplayer code is backend-neutral and lives under `packages/game-engine/src/multiplayer`.
+
+- `session.ts`: room membership, seat ownership, host-only start, server-managed initial game/deal, player action submission, idempotency, automation for bidding completion, redacted player views.
+- `storage.ts`: durable record shapes for room metadata, trusted event records, public snapshots, private hands, and action results; restore/reconnect helpers.
+- `schema.ts`: runtime parsers for action envelopes, storage records, public snapshots, private hands, idempotency records, and client reconnect state.
+- `write-plan.ts`: backend-neutral persistence write intentions for game start, accepted actions, and rejected actions.
+
+Current authority model:
+
+- Client state is not trusted.
+- Server owns game truth.
+- Clients request joins, seats, bids, trump calls, and domino plays.
+- Server-managed transitions create/deal/complete bidding/complete trick/complete hand/complete game.
+- Public snapshots omit full hands.
+- Private hands are split into seat-specific records.
+- Accepted events are validated before restore and before write planning.
+
+## Remaining Blockers
+
+Production multiplayer blockers:
+
+1. Authentication and identity mapping
+   - Need Cognito or equivalent.
+   - Need stable mapping from authenticated user to `playerId`.
+   - Need guest/anonymous account decision.
+
+2. Physical persistence adapter
+   - No DynamoDB transaction adapter exists.
+   - Need translation from write plans to conditional writes.
+   - Need adapter tests for contention, duplicate action IDs, stale snapshots, and partial failures.
+
+3. AppSync or realtime transport
+   - No GraphQL schema/resolvers/subscriptions exist.
+   - No subscription gap detection is wired into the app.
+   - No deployed reconnect query exists.
+
+4. Hidden-information enforcement
+   - Engine redaction exists, but backend IAM/resolver rules do not.
+   - Trusted event records may contain private hands and must remain server-only.
+   - Public subscriptions must never publish raw hand-dealt events.
+
+5. Mobile multiplayer UI
+   - No room creation/join screens.
+   - No multiplayer active-game screen.
+   - No reconnect/offline/pending-action UX.
+
+6. Lifecycle and abuse handling
+   - No leave/rejoin/replacement flow.
+   - No room expiry/archive job.
+   - No rate limits or invite-code abuse controls.
+
+7. Migration/versioning
+   - Runtime parsers reject unsupported versions, but no migration path exists.
+   - Physical adapter payload compatibility is untested.
+
+## Recommended AWS Topology
+
+Recommended v1 topology:
+
+```text
+Expo app
+  -> Cognito user/session
+  -> AppSync GraphQL API
+      -> Lambda resolvers for authority-sensitive mutations
+          -> game-engine multiplayer session/schema/write-plan modules
+          -> DynamoDB transactional writes
+      -> DynamoDB direct resolvers only for safe read models
+  -> AppSync subscriptions for room/game notifications
+  -> CloudWatch logs/metrics
+```
+
+Core AWS components:
+
+- Cognito User Pool: authenticated user identity.
+- AppSync: GraphQL API, subscriptions, mobile-friendly reconnect surface.
+- Lambda resolvers: action validation, session restore, write-plan translation, authorization.
+- DynamoDB: room metadata, event records, latest public snapshots, private hand records, idempotency records.
+- CloudWatch: structured logs and alarms.
+- EventBridge scheduled job or Lambda cron: room expiry/archive cleanup.
+
+Recommended DynamoDB layout should follow current backend-neutral records:
+
+- `ROOM#<roomId> / META`
+- `GAME#<gameId> / EVENT#<sequence>`
+- `GAME#<gameId> / SNAPSHOT#LATEST`
+- `GAME#<gameId> / PRIVATE_HAND#<seatIndex>`
+- `ACTION#<actionId> / RESULT`
+
+Recommended indexes:
+
+- Room code lookup: `roomCode -> roomId`.
+- Player rooms: `playerId -> active room/game summaries`.
+- Expiry/archive scan: `expiresAt`.
+
+## AppSync vs Alternatives
+
+Recommended default: AppSync for v1 multiplayer.
+
+Why AppSync fits:
+
+- Good Cognito integration.
+- Built-in GraphQL subscriptions.
+- Mobile clients can query snapshots and subscribe to updates with one API model.
+- Amplify Gen 2 aligns with the original tech-stack ADR.
+- Server authority can stay inside Lambda resolvers that call the existing engine.
+
+AppSync risks:
+
+- Subscriptions are not guaranteed delivery. Clients still need reconnect/snapshot refresh.
+- Fine-grained hidden-hand authorization is easy to get wrong if raw event records are exposed.
+- Complex conditional transactions still belong in Lambda, not simple direct resolvers.
+- Resolver sprawl can become hard to test unless logic stays in shared TypeScript modules.
+
+Viable alternatives:
+
+- API Gateway WebSocket + Lambda
+  - More control over realtime delivery and connection state.
+  - More infrastructure and client complexity.
+  - Better if AppSync subscription filtering becomes limiting.
+
+- API Gateway HTTP/REST + polling
+  - Simpler backend.
+  - Poorer gameplay experience.
+  - Acceptable only as a fallback or early internal test path.
+
+- Custom WebSocket service on ECS/Fargate
+  - Maximum control.
+  - Too much operations burden for current stage.
+
+- Firebase/Supabase
+  - Faster hosted realtime in some cases.
+  - Conflicts with the AWS/Amplify direction already chosen.
+
+Recommendation: start with AppSync plus Lambda resolvers. Keep the engine/backend adapter portable enough that a WebSocket transport can replace AppSync subscriptions later if needed.
+
+## Reconnect Strategy
+
+Reconnect must treat subscriptions as hints, not truth.
+
+Target flow:
+
+1. Client stores `gameId`, `lastAppliedEventSequence`, `snapshotVersion`, and pending action IDs.
+2. On resume or subscription gap, client calls reconnect query.
+3. Backend restores authoritative session from records.
+4. Backend returns latest redacted player view.
+5. Backend classifies pending actions as accepted, rejected, or unknown.
+6. Client replaces local view with authoritative snapshot.
+7. Client clears accepted/rejected pending actions.
+8. Client retries safe unknown pending actions by original `actionId`.
+9. Client resumes subscriptions from the latest sequence.
+
+Already implemented in engine:
+
+- `MultiplayerClientSyncState`
+- `getMultiplayerReconnectView`
+- accepted/rejected/unknown pending action classification
+- redacted player snapshot views
+- restore with validated replay and snapshot comparison
+
+Still needed:
+
+- AppSync query for reconnect.
+- Client-side pending action queue.
+- Event gap detection in mobile session state.
+- UX for reconnecting/offline/pending/rejected actions.
+
+## Hidden-Information Security Model
+
+The most important multiplayer security invariant is: no player can see another player’s hand.
+
+Current protections:
+
+- Public snapshots omit `hands`.
+- Public snapshots expose hand counts only.
+- Player views include only the viewer’s own hand.
+- Private hands are separated into seat-specific records.
+- Runtime parsers reject public snapshots containing private hands.
+
+Required backend rules:
+
+- Raw authoritative snapshots are server-only.
+- Raw trusted events are server-only, especially `fortyTwo.hand.dealt`, because it contains all hands.
+- Public subscriptions must publish redacted event views or notification envelopes, not raw event records.
+- `getMyPrivateHand` must verify authenticated user owns the requested seat.
+- Resolver logs must not include private hand contents.
+- DynamoDB IAM should prevent clients from direct table access.
+- Lambda/AppSync authorization must check room membership and seat ownership for every action.
+
+Recommended subscription payload:
+
+- room/game ID
+- latest sequence/snapshot version
+- public event summary safe for all room members
+- optional actor/action status
+
+Clients should fetch a fresh redacted snapshot after reconnect or when they detect a sequence gap.
+
+## Room Lifecycle
+
+Current code supports:
+
+```text
+waiting -> ready -> inGame -> completed
+```
+
+Target lifecycle:
+
+```text
+created -> waiting -> ready -> inGame -> completed -> archived
+```
+
+Recommended v1 behavior:
+
+- Created/waiting: host creates room, players join, seats fill.
+- Ready: all four seats occupied; host can start.
+- In game: seating is locked; server owns actions.
+- Completed: game has winner; room is readable but no new actions.
+- Archived: room is hidden from default lists after expiry.
+
+Still missing:
+
+- explicit archived status
+- TTL/expiry policy
+- leave room
+- kick/reassign seat
+- replace disconnected player with bot
+- spectator policy
+- invite-code expiry and regeneration
+
+## Estimated Effort Remaining
+
+Rough effort for multiplayer v1, assuming one experienced engineer with this codebase context:
+
+| Workstream | Estimate |
+|---|---:|
+| DynamoDB adapter for write plans and restore records | 3-5 days |
+| Cognito/auth identity mapping and room authorization | 3-5 days |
+| AppSync schema, Lambda resolvers, and subscriptions | 5-8 days |
+| Reconnect endpoint and client sync queue | 4-6 days |
+| Mobile multiplayer room/start/join UI | 4-7 days |
+| Mobile active-game multiplayer UX | 5-8 days |
+| Hidden-information security tests and redaction tests | 2-4 days |
+| Load/contention/idempotency tests | 2-4 days |
+| Room lifecycle cleanup, expiry, replacement basics | 3-5 days |
+| Deployment, observability, runbook, smoke tests | 3-5 days |
+
+Minimum credible multiplayer alpha:
+
+- 4-6 engineering weeks.
+
+Production-quality casual multiplayer:
+
+- 8-12 engineering weeks, depending on UI polish, auth UX, replacement/disconnect policy, and App Store readiness.
+
+## Recommended Next Slices
+
+1. DynamoDB adapter contract tests
+   - Translate write plans to DynamoDB transaction items.
+   - Test conditional failures for stale snapshots, duplicate event records, duplicate action IDs, and room status mismatch.
+
+2. Backend workspace scaffold
+   - Add `/backend` or Amplify Gen 2 workspace.
+   - Add Lambda resolver package that imports `@shake2/game-engine`.
+   - No public API yet.
+
+3. AppSync schema draft
+   - Define mutations/queries/subscriptions.
+   - Explicitly separate public views from server-only records.
+
+4. Reconnect client model
+   - Add pending action queue and gap detection in the app without real network transport.
+
+5. Security test matrix
+   - Actor not in room.
+   - Actor claiming wrong seat.
+   - Private hand access by wrong player.
+   - Raw hand data in public snapshot/subscription payload.
