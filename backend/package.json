@@ -7,10 +7,13 @@
   "types": "dist/backend/src/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "smoke:deployed": "npm run build && node dist/backend/src/smoke/deployed-smoke.js",
     "test": "npm run build && node --test \"dist/backend/src/**/*.test.js\"",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudformation": "^3.1057.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1057.0",
     "@aws-sdk/client-dynamodb": "^3.1057.0",
     "@aws-sdk/lib-dynamodb": "^3.1057.0",
     "@shake2/game-engine": "file:../packages/game-engine"

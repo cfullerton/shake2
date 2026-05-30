@@ -4,11 +4,11 @@ Last reviewed: 2026-05-30
 
 ## Executive Summary
 
-Multiplayer is ready for the next backend-design slice, but not ready for production or mobile users.
+Multiplayer now has a deployable development infrastructure definition, but it is still not ready for production or mobile users.
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice now converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable `submitGameAction` Lambda-style resolver shell, testable AppSync query resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and draft AppSync schema/contract adapter now exist. The largest remaining gap is still deployed infrastructure: no provisioned Cognito user pool, public AppSync API deployment, provisioned DynamoDB table, subscription fanout, deployed endpoints, or multiplayer UI exists yet.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. A deployed-stack smoke harness now exists for Cognito/AppSync/Lambda checks once a dev stack is deployed. The largest remaining gap is proving it in a real AWS account: no stack has been deployed, no live smoke run has completed, no live subscription flow has been validated, and no multiplayer UI exists yet.
 
 ## Current Multiplayer Architecture
 
@@ -30,7 +30,17 @@ Backend shell code now lives under `backend`.
 - `src/appsync/schema.graphql`: undeployed draft schema for submit action, public snapshot, private hand, reconnect, and game-update subscription operations.
 - `src/appsync/contracts.ts`: local AppSync contract adapters for safe submit-action results, reconnect views, private-hand ownership boundaries, and public update notifications.
 - `src/auth/identity.ts`: shared actor extraction boundary that prefers AppSync Cognito `sub` as the stable multiplayer `playerId` and preserves mock identity support for tests.
+- `src/smoke/deployed-smoke.ts`: deployed-stack smoke harness that loads CloudFormation outputs, authenticates a Cognito smoke user, verifies unauthenticated rejection, confirms Cognito actor propagation, and invokes all current AppSync resolvers.
 - `src/types/index.ts`: backend-local request, response, actor, AppSync Cognito identity, resolver-context, and error types.
+
+Infrastructure code now lives under `infra`.
+
+- `config/multiplayer-config.ts`: stage-aware resource naming, removal policy, and index-name configuration.
+- `constructs/multiplayer-auth.ts`: Cognito User Pool and native-app-shaped app client.
+- `constructs/multiplayer-data.ts`: DynamoDB table with room/game/action record access patterns, TTL, point-in-time recovery, and GSIs.
+- `constructs/multiplayer-lambdas.ts`: Lambda functions for submit action and read-side query resolvers, with table configuration injected by environment.
+- `constructs/multiplayer-appsync.ts`: AppSync API, schema deployment wiring, Lambda data sources, and resolver definitions.
+- `stacks/multiplayer-infrastructure-stack.ts`: development stack that wires auth, data, Lambda, AppSync, IAM, and CloudFormation outputs.
 
 Current authority model:
 
@@ -47,27 +57,30 @@ Current authority model:
 Production multiplayer blockers:
 
 1. Authentication and identity mapping
-   - Need Cognito or equivalent.
    - A production-shaped AppSync Cognito parser now maps authenticated `sub` values to backend `playerId`.
-   - Need deployed Cognito resources and real AppSync authorizer wiring.
+   - CDK now defines Cognito resources and AppSync user-pool authorization.
+   - A smoke script can validate real sign-in and AppSync identity payloads after deployment.
+   - Need deployed Cognito resources and a live smoke-test result.
    - Need guest/anonymous account decision.
 
 2. Physical persistence adapter
    - DynamoDB transaction intent shapes now exist and are tested.
    - A Lambda-style resolver shell can delegate transaction intents to `MultiplayerStore` mocks.
    - An AWS SDK v3 DynamoDB store implementation exists behind the interface and is tested with mocked clients.
-   - No DynamoDB table, IAM policy, or Lambda deployment exists yet.
+   - CDK now defines a DynamoDB table, Lambda functions, and IAM grants.
+   - No DynamoDB table or Lambda has been deployed yet.
    - Need physical adapter tests for AWS error mapping, transaction cancellation reasons, partial failures, and retry handling against a local or integration test environment.
 
 3. AppSync or realtime transport
-   - A draft GraphQL schema and local contract tests now exist.
-   - The submit-action and read-side Lambda handler shells exist as testable shells, but they are not connected to AppSync.
-   - No deployed AppSync API, live resolvers, or subscriptions exist.
+   - A GraphQL schema, local contract tests, and CDK AppSync/Lambda resolver wiring now exist.
+   - A deployed smoke script is available for the mutation and query resolvers.
+   - No deployed AppSync API, live resolver run, or subscription delivery has been validated.
    - No subscription gap detection is wired into the app.
-   - No deployed reconnect query exists, though the local resolver shell exists.
+   - No deployed reconnect query exists, though the local resolver shell and CDK resolver definition exist.
 
 4. Hidden-information enforcement
-   - Engine redaction exists, but backend IAM/resolver rules do not.
+   - Engine redaction exists, and query resolver tests enforce public/private separation.
+   - CDK prevents direct client table access by routing through Lambda/AppSync, but resolver-level room membership checks are still incomplete.
    - Trusted event records may contain private hands and must remain server-only.
    - Public subscriptions must never publish raw hand-dealt events.
 
@@ -232,6 +245,9 @@ Current backend contract tests cover:
 - Subscription notification payloads include only safe public fields.
 - Reconnect response can represent accepted, rejected, and unknown pending actions.
 - Query resolver shell tests enforce public/private separation and private-hand ownership.
+- Infrastructure tests assert AppSync uses Cognito authorization, Lambda resolvers, and native-app Cognito client settings.
+- Submit-action tests assert rejected actions persist idempotency results without writing public snapshots, trusted events, or private hand records.
+- Smoke harness tests assert the deployed smoke checks cover all current AppSync resolvers without requiring seeded private hand data.
 
 Recommended subscription payload:
 
@@ -280,9 +296,9 @@ Rough effort for multiplayer v1, assuming one experienced engineer with this cod
 
 | Workstream | Estimate |
 |---|---:|
-| DynamoDB adapter for write plans and restore records | 3-5 days |
-| Cognito/auth identity mapping and room authorization | 3-5 days |
-| AppSync schema, Lambda resolvers, and subscriptions | 5-8 days |
+| Deployed dev stack smoke tests and AWS error mapping | 3-5 days |
+| Room authorization and lifecycle resolver hardening | 3-5 days |
+| AppSync subscription validation and reconnect gap behavior | 4-7 days |
 | Reconnect endpoint and client sync queue | 4-6 days |
 | Mobile multiplayer room/start/join UI | 4-7 days |
 | Mobile active-game multiplayer UX | 5-8 days |
@@ -293,23 +309,23 @@ Rough effort for multiplayer v1, assuming one experienced engineer with this cod
 
 Minimum credible multiplayer alpha:
 
-- 4-6 engineering weeks.
+- 3-5 engineering weeks.
 
 Production-quality casual multiplayer:
 
-- 8-12 engineering weeks, depending on UI polish, auth UX, replacement/disconnect policy, and App Store readiness.
+- 7-11 engineering weeks, depending on UI polish, auth UX, replacement/disconnect policy, and App Store readiness.
 
 ## Recommended Next Slices
 
-1. DynamoDB failure mapping and local integration test harness
+1. Deploy-and-smoke-test development stack
+   - Deploy the CDK stack into a disposable AWS development account/region.
+   - Run `npm run smoke:deployed -w @shake2/backend`.
+   - Capture and review the live smoke result.
+
+2. DynamoDB failure mapping and local integration test harness
    - Map transaction cancellation reasons back to stable `EngineError` codes.
    - Add DynamoDB Local or equivalent integration tests for conditional failures.
    - Keep AWS SDK dependencies isolated inside `backend`.
-
-2. AppSync/Cognito deployment boundary
-   - Provision Cognito/AppSync resources.
-   - Wire real Lambda resolver events into the existing handler shells.
-   - Confirm deployed identity payloads match the local parser contract.
 
 3. Read-side authorization hardening
    - Enforce room membership on `getGameSnapshot`.

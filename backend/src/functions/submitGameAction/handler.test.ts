@@ -93,6 +93,18 @@ test("rejected action returns typed error response and commits rejection", async
   if (!response.accepted) {
     assert.equal(response.error.code, "INVALID_BID");
     assert.equal(response.transaction?.kind, "rejectedAction");
+    const persistedItems = response.transaction?.transactItems.map((item) =>
+      item.Put.Item
+    ) ?? [];
+
+    assert.deepEqual(persistedItems.map((item) => item.sk), ["RESULT"]);
+    assert.equal(persistedItems.some((item) => item.sk === "SNAPSHOT#LATEST"), false);
+    assert.equal(persistedItems.some((item) =>
+      typeof item.sk === "string" && item.sk.startsWith("EVENT#")
+    ), false);
+    assert.equal(persistedItems.some((item) =>
+      typeof item.sk === "string" && item.sk.startsWith("PRIVATE_HAND#")
+    ), false);
   }
 
   assert.equal(store.commits.length, 1);

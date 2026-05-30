@@ -1,19 +1,19 @@
 # Backend Workspace
 
-This workspace is the first backend boundary for multiplayer Texas 42. It is intentionally a testable TypeScript shell, not a deployed AWS backend.
+This workspace is the backend boundary for multiplayer Texas 42. It contains testable TypeScript resolver shells plus deployed Lambda entrypoints that are wired by the CDK stack in `infra/`; nothing is deployed automatically.
 
 ## Purpose
 
 - Host future Lambda/AppSync resolver code separately from the mobile app and pure rules engine.
 - Adapt AppSync-like resolver events into the existing server-authoritative multiplayer engine.
-- Keep persistence behind an interface until DynamoDB/AppSync/Cognito are introduced for real.
+- Keep DynamoDB persistence behind an interface so resolver logic remains locally testable.
 - Keep private hand records and public snapshot records separated by construction.
 
 ## Implemented
 
 - `src/functions/submitGameAction/handler.ts`
   - Accepts an AppSync-like submit-game-action event.
-  - Extracts an auth-neutral mocked actor identity.
+  - Extracts an actor through the shared Cognito/mock identity boundary.
   - Parses and validates the Forty Two action envelope.
   - Restores a multiplayer session from store-provided records.
   - Calls the existing game-engine multiplayer validation path.
@@ -21,11 +21,17 @@ This workspace is the first backend boundary for multiplayer Texas 42. It is int
   - Converts those write plans into pure DynamoDB transaction intent shapes.
   - Delegates persistence to a `MultiplayerStore` interface.
 
+- `src/functions/submitGameAction/lambda.ts`
+  - Deployed Lambda entrypoint that wires `submitGameAction` to the DynamoDB store from environment variables.
+
 - `src/functions/getGameSnapshot/handler.ts`
   - Accepts an AppSync-like query resolver event.
   - Requires an authenticated actor identity.
   - Loads only the latest public/redacted snapshot.
   - Returns an `AppSyncPublicGameSnapshot` without private hands or raw trusted events.
+
+- `src/functions/getGameSnapshot/lambda.ts`
+  - Deployed Lambda entrypoint for the AppSync `getGameSnapshot` query.
 
 - `src/functions/getMyPrivateHand/handler.ts`
   - Accepts an AppSync-like private-hand query event.
@@ -33,11 +39,26 @@ This workspace is the first backend boundary for multiplayer Texas 42. It is int
   - Loads the requested seat private hand through `MultiplayerStore`.
   - Enforces that the authenticated actor owns the requested seat before returning dominoes.
 
+- `src/functions/getMyPrivateHand/lambda.ts`
+  - Deployed Lambda entrypoint for the AppSync `getMyPrivateHand` query.
+
 - `src/functions/getReconnectView/handler.ts`
   - Accepts an AppSync-like reconnect query event.
   - Requires an authenticated actor identity.
   - Loads the latest public snapshot, the actor's private hand when seated, and requested pending action results.
   - Returns accepted/rejected/unknown pending action classifications and snapshot-refresh guidance.
+
+- `src/functions/getReconnectView/lambda.ts`
+  - Deployed Lambda entrypoint for the AppSync `getReconnectView` query.
+
+- `src/functions/shared/deployed-runtime.ts`
+  - Shared deployed-runtime wiring for DynamoDB store construction, resolver context, and engine context.
+
+- `src/smoke/deployed-smoke.ts`
+  - Loads CDK stack outputs.
+  - Optionally creates/resets a temporary Cognito smoke user.
+  - Authenticates through Cognito and calls the deployed AppSync API.
+  - Verifies unauthenticated rejection, Cognito actor propagation, and invocation of each deployed resolver.
 
 - `src/dynamodb/store.ts`
   - Defines `MultiplayerStore`.
@@ -46,7 +67,7 @@ This workspace is the first backend boundary for multiplayer Texas 42. It is int
   - Is unit-tested with a mocked client and does not require AWS credentials in tests.
 
 - `src/appsync/schema.graphql`
-  - Drafts the proposed AppSync GraphQL boundary.
+  - Defines the AppSync GraphQL boundary used by the CDK API.
   - Defines `submitGameAction`, public snapshot, private hand, reconnect, and game-update subscription operations.
   - Separates public/redacted snapshots from private hand responses.
   - Uses safe event summaries and subscription notifications instead of raw trusted event payloads.
@@ -111,14 +132,10 @@ Cognito `sub` is authoritative and becomes `BackendActor.playerId`, which is the
 
 ## Intentionally Not Implemented
 
-- No deployed AWS resources.
-- No deployed public AppSync API.
-- No provisioned Cognito user pool or authorizer.
+- No automatically deployed AWS resources.
+- CDK infrastructure exists in `infra/` and synthesizes a deployable development stack.
 - No Amplify backend configuration.
-- No provisioned DynamoDB table.
-- No production Lambda environment wiring.
-- No live subscription fanout.
-- No deployed query resolvers.
+- No live subscription fanout beyond the schema-level AppSync subscription shape.
 - No frontend multiplayer UI.
 - No game-rule changes.
 
@@ -139,6 +156,17 @@ Optional:
 AWS_REGION
 ```
 
+Deployed smoke-test configuration:
+
+```text
+SHAKE2_SMOKE_STACK_NAME
+SHAKE2_SMOKE_EMAIL
+SHAKE2_SMOKE_USERNAME
+SHAKE2_SMOKE_PASSWORD
+SHAKE2_SMOKE_CREATE_USER
+SHAKE2_SMOKE_GAME_ID
+```
+
 The room game ID index must allow lookup of room metadata by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 
 ## Test Commands
@@ -148,6 +176,8 @@ From the repository root:
 ```text
 npm run test -w @shake2/backend
 npm run typecheck -w @shake2/backend
+npm run smoke:deployed -w @shake2/backend
+npm run synth -w @shake2/infra
 ```
 
 The root workspace test command also includes this package once dependencies are installed:
@@ -160,6 +190,6 @@ npm test
 
 1. Map DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes.
 2. Add resolver-level room membership authorization for public snapshot reads before deployment.
-3. Wire real AppSync Lambda events into these resolver shells with Cognito auth enabled.
-4. Add Amplify/AppSync infrastructure only after resolver contracts and auth checks are tested locally.
-5. Provision the DynamoDB table and indexes with infrastructure code after the API/auth boundary is ready.
+3. Deploy a disposable development stack from `infra/` and smoke test real AppSync/Cognito Lambda events.
+4. Add frontend multiplayer configuration and session UI behind a feature flag.
+5. Add production hardening: rate limits, alarms, log review, and retention policies.
