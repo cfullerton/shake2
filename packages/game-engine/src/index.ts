@@ -3,6 +3,7 @@ export * from "./dominoes/domino.ts";
 export * from "./dominoes/scoring.ts";
 export * from "./dominoes/set.ts";
 export * from "./errors.ts";
+export * from "./forty-two/bidding.ts";
 export * from "./forty-two/deal.ts";
 export * from "./forty-two/seats.ts";
 export * from "./scorekeeper/commands.ts";
