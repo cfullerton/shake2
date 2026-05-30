@@ -11,7 +11,7 @@
     "android": "npm run android -w @shake2/mobile",
     "ios": "npm run ios -w @shake2/mobile",
     "web": "npm run web -w @shake2/mobile",
-    "test": "npm run test -w @shake2/game-engine",
+    "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
