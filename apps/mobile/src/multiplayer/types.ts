@@ -45,6 +45,18 @@ export interface MultiplayerDomino {
   readonly low: number;
 }
 
+export const multiplayerTrumpSuits = [
+  "blanks",
+  "ones",
+  "twos",
+  "threes",
+  "fours",
+  "fives",
+  "sixes"
+] as const;
+
+export type MultiplayerTrumpSuit = (typeof multiplayerTrumpSuits)[number];
+
 export interface MultiplayerPublicGameSnapshot {
   readonly gameId: string;
   readonly generatedAt: string;

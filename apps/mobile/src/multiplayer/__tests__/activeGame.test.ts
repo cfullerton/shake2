@@ -112,6 +112,133 @@ test("active game view hides bidding controls while waiting on another seat", ()
   expect(view.waitingMessage).toBe("Waiting for East.");
 });
 
+test("active game view exposes trump selection only to the declarer", () => {
+  const declarerView = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView({
+      viewerSeat: "SEAT_1"
+    }),
+    snapshot: createSnapshot({
+      phase: "trump",
+      redactedState: {
+        bidding: {
+          highestBid: {
+            bid: {
+              amount: 35,
+              kind: "numeric"
+            },
+            forced: false,
+            seat: 1
+          }
+        },
+        dealer: 0,
+        phase: "trump",
+        trump: {
+          contract: null,
+          declarer: 1,
+          phase: "callingTrump",
+          winningBid: {
+            bid: {
+              amount: 35,
+              kind: "numeric"
+            },
+            forced: false,
+            seat: 1
+          }
+        }
+      }
+    })
+  });
+  const partnerView = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView({
+      viewerSeat: "SEAT_3"
+    }),
+    snapshot: declarerViewSnapshot()
+  });
+
+  expect(declarerView.canCallTrump).toBe(true);
+  expect(declarerView.currentBidLabel).toBe("35");
+  expect(declarerView.currentTrumpLabel).toBe("Not called");
+  expect(declarerView.currentTurnLabel).toBe("East (You)");
+  expect(declarerView.legalTrumpSuits).toEqual([
+    "blanks",
+    "ones",
+    "twos",
+    "threes",
+    "fours",
+    "fives",
+    "sixes"
+  ]);
+  expect(declarerView.waitingMessage).toBe("Call trump.");
+
+  expect(partnerView.canCallTrump).toBe(false);
+  expect(partnerView.legalTrumpSuits).toEqual([]);
+  expect(partnerView.waitingMessage).toBe("Waiting for East.");
+});
+
+test("active game view reads called trump from trick-play contracts", () => {
+  const view = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView(),
+    snapshot: createSnapshot({
+      phase: "trickPlay",
+      redactedState: {
+        contract: {
+          declarer: 1,
+          kind: "standardNumeric",
+          trump: {
+            kind: "pip",
+            suit: "fives"
+          }
+        },
+        currentTrick: {
+          leader: 1,
+          playedDominoes: []
+        },
+        dealer: 0,
+        phase: "trickPlay"
+      }
+    })
+  });
+
+  expect(view.canCallTrump).toBe(false);
+  expect(view.currentTrumpLabel).toBe("Fives");
+});
+
+function declarerViewSnapshot(): MultiplayerPublicGameSnapshot {
+  return createSnapshot({
+    phase: "trump",
+    redactedState: {
+      bidding: {
+        highestBid: {
+          bid: {
+            amount: 35,
+            kind: "numeric"
+          },
+          forced: false,
+          seat: 1
+        }
+      },
+      dealer: 0,
+      phase: "trump",
+      trump: {
+        contract: null,
+        declarer: 1,
+        phase: "callingTrump",
+        winningBid: {
+          bid: {
+            amount: 35,
+            kind: "numeric"
+          },
+          forced: false,
+          seat: 1
+        }
+      }
+    }
+  });
+}
+
 function createSnapshot(
   overrides: Partial<MultiplayerPublicGameSnapshot> = {}
 ): MultiplayerPublicGameSnapshot {

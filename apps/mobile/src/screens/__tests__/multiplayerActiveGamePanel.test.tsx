@@ -43,7 +43,8 @@ test("active game panel loads the viewer hand and submits bids", async () => {
   const client = {
     getGameSnapshot: jest.fn(async () => createSnapshot()),
     getMyPrivateHand: jest.fn(async () => hand),
-    submitBid: jest.fn(async () => accepted)
+    submitBid: jest.fn(async () => accepted),
+    submitTrump: jest.fn()
   } as unknown as MultiplayerLobbyGameClient;
   const view = render(
     <MultiplayerActiveGamePanel
@@ -76,6 +77,73 @@ test("active game panel loads the viewer hand and submits bids", async () => {
       gameId: "game-1",
       knownLastEventSequence: 2,
       knownSnapshotVersion: 2
+    });
+  });
+});
+
+test("active game panel submits declarer trump calls", async () => {
+  const hand = createPrivateHand();
+  const accepted: MultiplayerSubmitGameActionResult = {
+    accepted: true,
+    committed: true,
+    duplicate: false,
+    events: [],
+    gameId: "game-1",
+    snapshot: createSnapshot({
+      lastEventSequence: 7,
+      phase: "trickPlay",
+      redactedState: {
+        contract: {
+          declarer: 1,
+          kind: "standardNumeric",
+          trump: {
+            kind: "pip",
+            suit: "sixes"
+          }
+        },
+        currentTrick: {
+          leader: 1,
+          playedDominoes: []
+        },
+        dealer: 0,
+        phase: "trickPlay"
+      },
+      snapshotVersion: 7
+    })
+  };
+  const client = {
+    getGameSnapshot: jest.fn(async () => createTrumpSnapshot()),
+    getMyPrivateHand: jest.fn(async () => hand),
+    submitBid: jest.fn(),
+    submitTrump: jest.fn(async () => accepted)
+  } as unknown as MultiplayerLobbyGameClient;
+  const view = render(
+    <MultiplayerActiveGamePanel
+      actorId="actor-sub"
+      client={client}
+      initialRoom={createRoomView()}
+      initialSnapshot={createTrumpSnapshot()}
+      session={createSession()}
+    />
+  );
+
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledWith({
+      gameId: "game-1",
+      seatIndex: "SEAT_1"
+    });
+  });
+
+  fireEvent.press(view.getByLabelText("Call Sixes trump"));
+
+  await waitFor(() => {
+    expect(client.submitTrump).toHaveBeenCalledWith({
+      actorId: "actor-sub",
+      actorSeat: "SEAT_1",
+      gameId: "game-1",
+      knownLastEventSequence: 6,
+      knownSnapshotVersion: 6,
+      trumpSuit: "sixes"
     });
   });
 });
@@ -136,6 +204,42 @@ function createSnapshot(
     snapshotVersion: 2,
     ...overrides
   };
+}
+
+function createTrumpSnapshot(): MultiplayerPublicGameSnapshot {
+  return createSnapshot({
+    lastEventSequence: 6,
+    phase: "trump",
+    redactedState: {
+      bidding: {
+        highestBid: {
+          bid: {
+            amount: 31,
+            kind: "numeric"
+          },
+          forced: false,
+          seat: 1
+        }
+      },
+      dealer: 0,
+      handNumber: 1,
+      phase: "trump",
+      trump: {
+        contract: null,
+        declarer: 1,
+        phase: "callingTrump",
+        winningBid: {
+          bid: {
+            amount: 31,
+            kind: "numeric"
+          },
+          forced: false,
+          seat: 1
+        }
+      }
+    },
+    snapshotVersion: 6
+  });
 }
 
 function createRoomView(): MultiplayerRoomView {

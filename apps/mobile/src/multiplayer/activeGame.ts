@@ -1,10 +1,12 @@
+import { multiplayerTrumpSuits } from "./types";
 import type {
   AppSyncSeatIndex,
   MultiplayerDomino,
   MultiplayerPrivateHand,
   MultiplayerPublicGameSnapshot,
   MultiplayerRoomSeat,
-  MultiplayerRoomView
+  MultiplayerRoomView,
+  MultiplayerTrumpSuit
 } from "./types";
 
 type SeatNumber = 0 | 1 | 2 | 3;
@@ -27,13 +29,16 @@ export interface MultiplayerActiveTeamSummary {
 }
 
 export interface MultiplayerActiveGameView {
+  readonly canCallTrump: boolean;
   readonly canPass: boolean;
   readonly canSubmitBid: boolean;
   readonly currentBidLabel: string;
+  readonly currentTrumpLabel: string;
   readonly currentTurnLabel: string;
   readonly dealerLabel: string;
   readonly handNumber: number;
   readonly legalBidAmounts: readonly number[];
+  readonly legalTrumpSuits: readonly MultiplayerTrumpSuit[];
   readonly phase: string;
   readonly phaseTitle: string;
   readonly privateHand: readonly MultiplayerDomino[];
@@ -53,6 +58,16 @@ export const multiplayerSeatLabels: Record<AppSyncSeatIndex, string> = {
   SEAT_3: "West"
 };
 
+export const multiplayerTrumpSuitLabels: Record<MultiplayerTrumpSuit, string> = {
+  blanks: "Blanks",
+  fives: "Fives",
+  fours: "Fours",
+  ones: "Ones",
+  sixes: "Sixes",
+  threes: "Threes",
+  twos: "Twos"
+};
+
 export function createMultiplayerActiveGameView(input: {
   readonly privateHand: MultiplayerPrivateHand | null;
   readonly room: MultiplayerRoomView;
@@ -64,7 +79,12 @@ export function createMultiplayerActiveGameView(input: {
   const currentTurnSeat = readCurrentTurnSeat(state, dealer);
   const handCounts = readHandCounts(input.snapshot, state);
   const bidding = readRecord(state.bidding);
-  const currentBidAmount = readHighestBidAmount(bidding);
+  const trump = readRecord(state.trump);
+  const currentBidAmount = readHighestBidAmount(bidding) ??
+    readWinningBidAmount(trump?.winningBid);
+  const canCallTrump = viewerSeat !== null &&
+    currentTurnSeat === toSeatNumber(viewerSeat) &&
+    input.snapshot.phase === "trump";
   const legalBidAmounts = viewerSeat !== null &&
     currentTurnSeat === toSeatNumber(viewerSeat) &&
     isBiddingPhase(input.snapshot.phase)
@@ -72,17 +92,20 @@ export function createMultiplayerActiveGameView(input: {
       : [];
 
   return {
+    canCallTrump,
     canPass: viewerSeat !== null &&
       currentTurnSeat === toSeatNumber(viewerSeat) &&
       isBiddingPhase(input.snapshot.phase),
     canSubmitBid: legalBidAmounts.length > 0,
     currentBidLabel: currentBidAmount === null ? "No bid yet" : String(currentBidAmount),
+    currentTrumpLabel: readTrumpLabel(state),
     currentTurnLabel: currentTurnSeat === null
       ? "Waiting"
       : formatSeatLabel(toSeatIndex(currentTurnSeat), viewerSeat),
     dealerLabel: formatSeatLabel(toSeatIndex(dealer), viewerSeat),
     handNumber: readNumber(state.handNumber, 1),
     legalBidAmounts,
+    legalTrumpSuits: canCallTrump ? multiplayerTrumpSuits : [],
     phase: input.snapshot.phase,
     phaseTitle: formatPhaseTitle(input.snapshot.phase),
     privateHand: input.privateHand?.dominoes ?? [],
@@ -240,11 +263,25 @@ function readHandCounts(
 function readHighestBidAmount(
   bidding: Readonly<Record<string, unknown>> | undefined
 ): number | null {
-  const highestBid = readRecord(bidding?.highestBid);
+  return readWinningBidAmount(bidding?.highestBid);
+}
+
+function readWinningBidAmount(value: unknown): number | null {
+  const highestBid = readRecord(value);
   const bid = readRecord(highestBid?.bid);
   const amount = bid?.amount;
 
   return typeof amount === "number" && Number.isFinite(amount) ? amount : null;
+}
+
+function readTrumpLabel(state: Readonly<Record<string, unknown>>): string {
+  const contract = readRecord(state.contract) ??
+    readRecord(readRecord(state.trump)?.contract);
+  const selection = readRecord(contract?.trump);
+  const suit = readTrumpSuit(selection?.suit) ??
+    readTrumpSuit(contract?.trumpSuit);
+
+  return suit ? multiplayerTrumpSuitLabels[suit] : "Not called";
 }
 
 function readTeamMarks(
@@ -279,9 +316,15 @@ function createWaitingMessage(
   const currentTurn = toSeatIndex(currentTurnSeat);
 
   if (viewerSeat === currentTurn) {
-    return phase === "dealt" || phase === "bidding"
-      ? "Your bid."
-      : "Your turn.";
+    if (phase === "dealt" || phase === "bidding") {
+      return "Your bid.";
+    }
+
+    if (phase === "trump") {
+      return "Call trump.";
+    }
+
+    return "Your turn.";
   }
 
   return `Waiting for ${multiplayerSeatLabels[currentTurn]}.`;
@@ -337,6 +380,12 @@ function readSeatNumber(value: unknown): SeatNumber {
 function readNullableSeatNumber(value: unknown): SeatNumber | null {
   return value === 0 || value === 1 || value === 2 || value === 3
     ? value
+    : null;
+}
+
+function readTrumpSuit(value: unknown): MultiplayerTrumpSuit | null {
+  return multiplayerTrumpSuits.includes(value as MultiplayerTrumpSuit)
+    ? value as MultiplayerTrumpSuit
     : null;
 }
 

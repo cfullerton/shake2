@@ -6,7 +6,8 @@ import type {
   MultiplayerPublicGameSnapshotPayload,
   MultiplayerPublicGameSnapshot,
   MultiplayerSubmitGameActionResultPayload,
-  MultiplayerSubmitGameActionResult
+  MultiplayerSubmitGameActionResult,
+  MultiplayerTrumpSuit
 } from "./types";
 
 export type MultiplayerBid =
@@ -30,6 +31,15 @@ export interface SubmitMultiplayerBidInput {
   readonly gameId: string;
   readonly knownLastEventSequence: number;
   readonly knownSnapshotVersion: number;
+}
+
+export interface SubmitMultiplayerTrumpInput {
+  readonly actorId: string;
+  readonly actorSeat: AppSyncSeatIndex;
+  readonly gameId: string;
+  readonly knownLastEventSequence: number;
+  readonly knownSnapshotVersion: number;
+  readonly trumpSuit: MultiplayerTrumpSuit;
 }
 
 export class MultiplayerGameClient {
@@ -86,7 +96,7 @@ export class MultiplayerGameClient {
   async submitBid(
     input: SubmitMultiplayerBidInput
   ): Promise<MultiplayerSubmitGameActionResult> {
-    return this.submitGameAction({
+    return this.submitPlayerAction({
       action: {
         payload: {
           bid: input.bid,
@@ -94,6 +104,45 @@ export class MultiplayerGameClient {
         },
         type: "fortyTwo.bid.submit"
       },
+      actorId: input.actorId,
+      actorSeat: input.actorSeat,
+      gameId: input.gameId,
+      knownLastEventSequence: input.knownLastEventSequence,
+      knownSnapshotVersion: input.knownSnapshotVersion
+    });
+  }
+
+  async submitTrump(
+    input: SubmitMultiplayerTrumpInput
+  ): Promise<MultiplayerSubmitGameActionResult> {
+    return this.submitPlayerAction({
+      action: {
+        payload: {
+          trumpSuit: input.trumpSuit
+        },
+        type: "fortyTwo.trump.call"
+      },
+      actorId: input.actorId,
+      actorSeat: input.actorSeat,
+      gameId: input.gameId,
+      knownLastEventSequence: input.knownLastEventSequence,
+      knownSnapshotVersion: input.knownSnapshotVersion
+    });
+  }
+
+  private async submitPlayerAction(input: {
+    readonly action: Readonly<{
+      readonly payload: Readonly<Record<string, unknown>>;
+      readonly type: string;
+    }>;
+    readonly actorId: string;
+    readonly actorSeat: AppSyncSeatIndex;
+    readonly gameId: string;
+    readonly knownLastEventSequence: number;
+    readonly knownSnapshotVersion: number;
+  }): Promise<MultiplayerSubmitGameActionResult> {
+    return this.submitGameAction({
+      action: input.action,
       actionId: createActionId(),
       actorId: input.actorId,
       actorSeat: toSeatNumber(input.actorSeat),

@@ -5,6 +5,7 @@ import { Button } from "../components/Button";
 import { GameText } from "../components/GameText";
 import {
   multiplayerSeatLabels,
+  multiplayerTrumpSuitLabels,
   useMultiplayerActiveGame,
   type MultiplayerLobbyGameClient
 } from "../multiplayer";
@@ -12,7 +13,8 @@ import type {
   CognitoAuthSession,
   MultiplayerDomino,
   MultiplayerPublicGameSnapshot,
-  MultiplayerRoomView
+  MultiplayerRoomView,
+  MultiplayerTrumpSuit
 } from "../multiplayer";
 import { palette, radius, spacing } from "../theme";
 
@@ -65,6 +67,7 @@ export function MultiplayerActiveGamePanel({
         <InfoTile label="Turn" value={view.currentTurnLabel} />
         <InfoTile label="Dealer" value={view.dealerLabel} />
         <InfoTile label="Bid" value={view.currentBidLabel} />
+        <InfoTile label="Trump" value={view.currentTrumpLabel} />
         <InfoTile label="State" value={view.snapshotVersionLabel} />
       </View>
 
@@ -135,7 +138,21 @@ export function MultiplayerActiveGamePanel({
             Refresh
           </Button>
         </View>
-        {view.canPass || view.canSubmitBid ? (
+        {view.canCallTrump ? (
+          <>
+            <Text style={styles.copy}>Call trump for this hand.</Text>
+            <View style={styles.trumpGrid}>
+              {view.legalTrumpSuits.map((trumpSuit) => (
+                <TrumpSuitButton
+                  disabled={!canSubmitActions || game.busyAction === "submitTrump"}
+                  key={trumpSuit}
+                  onPress={() => game.submitTrump(trumpSuit)}
+                  trumpSuit={trumpSuit}
+                />
+              ))}
+            </View>
+          </>
+        ) : view.canPass || view.canSubmitBid ? (
           <>
             <Text style={styles.copy}>Your bid.</Text>
             <View style={styles.bidGrid}>
@@ -232,6 +249,51 @@ function DominoHalf({ pip }: { readonly pip: number }) {
   );
 }
 
+function TrumpSuitButton({
+  disabled,
+  onPress,
+  trumpSuit
+}: {
+  readonly disabled: boolean;
+  readonly onPress: () => void;
+  readonly trumpSuit: MultiplayerTrumpSuit;
+}) {
+  const label = multiplayerTrumpSuitLabels[trumpSuit];
+
+  return (
+    <Pressable
+      accessibilityLabel={`Call ${label} trump`}
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.trumpTile,
+        disabled ? styles.disabledTile : null,
+        pressed && !disabled ? styles.pressedTile : null
+      ]}
+    >
+      <TrumpSuitPips trumpSuit={trumpSuit} />
+      <Text style={styles.trumpTileLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function TrumpSuitPips({
+  trumpSuit
+}: {
+  readonly trumpSuit: MultiplayerTrumpSuit;
+}) {
+  const count = trumpSuitPipCount[trumpSuit];
+
+  return (
+    <View style={styles.trumpPipContainer}>
+      {Array.from({ length: count }, (_value, index) => (
+        <View key={index} style={styles.trumpPip} />
+      ))}
+    </View>
+  );
+}
+
 const pipCellsByValue: Record<number, readonly number[]> = {
   0: [],
   1: [4],
@@ -240,6 +302,16 @@ const pipCellsByValue: Record<number, readonly number[]> = {
   4: [0, 2, 6, 8],
   5: [0, 2, 4, 6, 8],
   6: [0, 2, 3, 5, 6, 8]
+};
+
+const trumpSuitPipCount: Record<MultiplayerTrumpSuit, number> = {
+  blanks: 0,
+  fives: 5,
+  fours: 4,
+  ones: 1,
+  sixes: 6,
+  threes: 3,
+  twos: 2
 };
 
 const styles = StyleSheet.create({
@@ -262,6 +334,9 @@ const styles = StyleSheet.create({
   currentSeatCard: {
     backgroundColor: palette.goldSoft,
     borderColor: palette.gold
+  },
+  disabledTile: {
+    opacity: 0.48
   },
   dominoDivider: {
     backgroundColor: palette.ink,
@@ -456,6 +531,47 @@ const styles = StyleSheet.create({
   title: {
     color: palette.ink,
     fontSize: 26
+  },
+  pressedTile: {
+    opacity: 0.78
+  },
+  trumpGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  trumpPip: {
+    backgroundColor: palette.ink,
+    borderRadius: 5,
+    height: 10,
+    width: 10
+  },
+  trumpPipContainer: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    height: 30,
+    justifyContent: "center",
+    width: 56
+  },
+  trumpTile: {
+    alignItems: "center",
+    backgroundColor: palette.goldSoft,
+    borderColor: palette.gold,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexBasis: "30%",
+    flexGrow: 1,
+    gap: spacing.xs,
+    minHeight: 82,
+    padding: spacing.sm
+  },
+  trumpTileLabel: {
+    color: palette.ink,
+    fontSize: 13,
+    fontWeight: "900",
+    textTransform: "uppercase"
   },
   viewerSeatCard: {
     borderColor: palette.crimson,

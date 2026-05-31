@@ -8,7 +8,8 @@ import type {
   AppSyncSeatIndex,
   MultiplayerPrivateHand,
   MultiplayerPublicGameSnapshot,
-  MultiplayerRoomView
+  MultiplayerRoomView,
+  MultiplayerTrumpSuit
 } from "./types";
 import type {
   MultiplayerBid,
@@ -18,7 +19,8 @@ import type {
 export type MultiplayerActiveGameAction =
   | "loadPrivateHand"
   | "refresh"
-  | "submitBid";
+  | "submitBid"
+  | "submitTrump";
 
 export interface UseMultiplayerActiveGameInput {
   readonly actorId: string | null;
@@ -37,6 +39,7 @@ export interface MultiplayerActiveGameController {
   clearError(): void;
   refresh(): Promise<void>;
   submitBid(bid: MultiplayerBid): Promise<void>;
+  submitTrump(trumpSuit: MultiplayerTrumpSuit): Promise<void>;
 }
 
 export function useMultiplayerActiveGame({
@@ -78,17 +81,11 @@ export function useMultiplayerActiveGame({
 
   async function submitBid(bid: MultiplayerBid): Promise<void> {
     await runAction("submitBid", async () => {
-      if (!actorId) {
-        throw new Error("A Cognito subject is required before submitting actions.");
-      }
-
-      if (!room.viewerSeat) {
-        throw new Error("Take a seat before submitting game actions.");
-      }
+      const identity = requireActionIdentity();
 
       const result = await client.submitBid({
-        actorId,
-        actorSeat: room.viewerSeat,
+        actorId: identity.actorId,
+        actorSeat: identity.actorSeat,
         bid,
         gameId: snapshot.gameId,
         knownLastEventSequence: snapshot.lastEventSequence,
@@ -100,7 +97,29 @@ export function useMultiplayerActiveGame({
       }
 
       setSnapshot(result.snapshot);
-      await loadPrivateHandFor(result.snapshot.gameId, room.viewerSeat);
+      await loadPrivateHandFor(result.snapshot.gameId, identity.actorSeat);
+    });
+  }
+
+  async function submitTrump(trumpSuit: MultiplayerTrumpSuit): Promise<void> {
+    await runAction("submitTrump", async () => {
+      const identity = requireActionIdentity();
+
+      const result = await client.submitTrump({
+        actorId: identity.actorId,
+        actorSeat: identity.actorSeat,
+        gameId: snapshot.gameId,
+        knownLastEventSequence: snapshot.lastEventSequence,
+        knownSnapshotVersion: snapshot.snapshotVersion,
+        trumpSuit
+      });
+
+      if (!result.accepted || !result.snapshot) {
+        throw new Error(result.error?.message ?? "The server rejected that action.");
+      }
+
+      setSnapshot(result.snapshot);
+      await loadPrivateHandFor(result.snapshot.gameId, identity.actorSeat);
     });
   }
 
@@ -141,6 +160,24 @@ export function useMultiplayerActiveGame({
     }
   }
 
+  function requireActionIdentity(): {
+    readonly actorId: string;
+    readonly actorSeat: AppSyncSeatIndex;
+  } {
+    if (!actorId) {
+      throw new Error("A Cognito subject is required before submitting actions.");
+    }
+
+    if (!room.viewerSeat) {
+      throw new Error("Take a seat before submitting game actions.");
+    }
+
+    return {
+      actorId,
+      actorSeat: room.viewerSeat
+    };
+  }
+
   return {
     busyAction,
     clearError: () => setError(null),
@@ -150,6 +187,7 @@ export function useMultiplayerActiveGame({
     room,
     snapshot,
     submitBid,
+    submitTrump,
     view
   };
 }

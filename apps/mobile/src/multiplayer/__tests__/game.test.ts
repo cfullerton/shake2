@@ -137,6 +137,88 @@ test("MultiplayerGameClient submits bids as AppSync AWSJSON actions", async () =
   });
 });
 
+test("MultiplayerGameClient submits trump calls as AppSync AWSJSON actions", async () => {
+  const graphql = new MockGraphqlClient({
+    submitGameAction: {
+      accepted: true,
+      committed: true,
+      duplicate: false,
+      events: [],
+      gameId: "game-1",
+      snapshot: createSnapshot({
+        phase: "trickPlay",
+        redactedState: {
+          contract: {
+            declarer: 1,
+            kind: "standardNumeric",
+            trump: {
+              kind: "pip",
+              suit: "sixes"
+            }
+          },
+          dealer: 0,
+          phase: "trickPlay"
+        }
+      })
+    } satisfies MultiplayerSubmitGameActionResult
+  });
+  const client = new MultiplayerGameClient(graphql);
+
+  await expect(
+    client.submitTrump({
+      actorId: "actor-sub",
+      actorSeat: "SEAT_1",
+      gameId: "game-1",
+      knownLastEventSequence: 6,
+      knownSnapshotVersion: 6,
+      trumpSuit: "sixes"
+    })
+  ).resolves.toMatchObject({
+    accepted: true,
+    snapshot: {
+      phase: "trickPlay",
+      redactedState: {
+        contract: {
+          trump: {
+            suit: "sixes"
+          }
+        }
+      }
+    }
+  });
+
+  const variables = graphql.requests[0]?.variables as {
+    readonly input?: {
+      readonly action?: string;
+      readonly gameId?: string;
+    };
+  };
+  const action = JSON.parse(variables.input?.action ?? "{}") as {
+    readonly action?: {
+      readonly payload?: {
+        readonly trumpSuit?: string;
+      };
+      readonly type?: string;
+    };
+    readonly actorId?: string;
+    readonly actorSeat?: number;
+    readonly gameId?: string;
+  };
+
+  expect(graphql.requests[0]?.operationName).toBe("SubmitGameAction");
+  expect(action).toMatchObject({
+    action: {
+      payload: {
+        trumpSuit: "sixes"
+      },
+      type: "fortyTwo.trump.call"
+    },
+    actorId: "actor-sub",
+    actorSeat: 1,
+    gameId: "game-1"
+  });
+});
+
 class MockGraphqlClient implements GraphqlClient {
   readonly requests: GraphqlRequest[] = [];
 
@@ -151,7 +233,9 @@ class MockGraphqlClient implements GraphqlClient {
   }
 }
 
-function createSnapshot(): MultiplayerPublicGameSnapshot {
+function createSnapshot(
+  overrides: Partial<MultiplayerPublicGameSnapshot> = {}
+): MultiplayerPublicGameSnapshot {
   return {
     gameId: "game-1",
     generatedAt: "2026-05-31T00:00:00.000Z",
@@ -162,6 +246,7 @@ function createSnapshot(): MultiplayerPublicGameSnapshot {
       phase: "bidding"
     },
     schemaVersion: 1,
-    snapshotVersion: 3
+    snapshotVersion: 3,
+    ...overrides
   };
 }
