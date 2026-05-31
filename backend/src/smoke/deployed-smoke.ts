@@ -1117,6 +1117,8 @@ async function waitForSeededSubscriptionUpdate(
     let settled = false;
     let submitted = false;
     let accepted = false;
+    let mutationFinished = false;
+    let pendingRealtimeError: string | null = null;
     let socket: RealtimeWebSocket | undefined;
 
     const timeout = setTimeout(() => {
@@ -1182,9 +1184,13 @@ async function waitForSeededSubscriptionUpdate(
           result
         );
 
+        mutationFinished = true;
+
         if (!evaluation.ok) {
           settle({
-            details: `Subscription registered, but mutation validation failed. ${evaluation.details}`,
+            details: pendingRealtimeError
+              ? `${pendingRealtimeError} Mutation validation also failed: ${evaluation.details}`
+              : `Subscription registered, but mutation validation failed. ${evaluation.details}`,
             ok: false,
             title: SEEDED_SUBSCRIPTION_TITLE
           });
@@ -1192,9 +1198,22 @@ async function waitForSeededSubscriptionUpdate(
         }
 
         accepted = true;
+
+        if (pendingRealtimeError) {
+          settle({
+            details: `${pendingRealtimeError} Mutation validation succeeded, so the failure is isolated to subscription delivery/filtering.`,
+            ok: false,
+            title: SEEDED_SUBSCRIPTION_TITLE
+          });
+        }
       } catch (error) {
+        mutationFinished = true;
         settle({
-          details: error instanceof Error ? error.message : String(error),
+          details: pendingRealtimeError
+            ? `${pendingRealtimeError} Mutation request also failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+            : error instanceof Error ? error.message : String(error),
           ok: false,
           title: SEEDED_SUBSCRIPTION_TITLE
         });
@@ -1211,6 +1230,19 @@ async function waitForSeededSubscriptionUpdate(
       });
       return;
     }
+
+    const handleRealtimeError = (details: string): void => {
+      if (submitted && !mutationFinished) {
+        pendingRealtimeError = details;
+        return;
+      }
+
+      settle({
+        details,
+        ok: false,
+        title: SEEDED_SUBSCRIPTION_TITLE
+      });
+    };
 
     socket.addEventListener("open", () => {
       safelySendRealtimeMessage(socket, {
@@ -1253,11 +1285,9 @@ async function waitForSeededSubscriptionUpdate(
 
       if (message.type === "error" &&
         (message.id === undefined || message.id === subscriptionId)) {
-        settle({
-          details: `AppSync realtime returned an error. ${summarizeRealtimePayload(message.payload)}`,
-          ok: false,
-          title: SEEDED_SUBSCRIPTION_TITLE
-        });
+        handleRealtimeError(
+          `AppSync realtime returned an error. ${summarizeRealtimePayload(message.payload)}`
+        );
       }
     });
     socket.addEventListener("error", () => {

@@ -127,11 +127,11 @@ type Query {
 }
 
 type Subscription {
-  onGameUpdated(gameId: ID!): SubmitGameActionResult!
+  onGameUpdated(gameId: ID!): SubmitGameActionResult
 }
 ```
 
-The subscription output intentionally matches the `submitGameAction` mutation result because AppSync mutation-backed subscriptions require a compatible output type. That result contains only safe event summaries and public/redacted snapshots. Private hand data is only represented through `getMyPrivateHand` and the reconnect player's own `privateHand` field after resolver-level ownership checks.
+The subscription output intentionally matches the `submitGameAction` mutation result because AppSync mutation-backed subscriptions require a compatible output type. The subscription field itself is nullable so AppSync can represent filtered or missing published payloads without turning that condition into a top-level non-null GraphQL protocol error; smoke validation still requires a non-null accepted-action payload. That result contains only safe event summaries and public/redacted snapshots. Private hand data is only represented through `getMyPrivateHand` and the reconnect player's own `privateHand` field after resolver-level ownership checks.
 
 ## Identity Model
 

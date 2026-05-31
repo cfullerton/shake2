@@ -239,6 +239,10 @@ test("subscription output matches submit mutation and remains public-safe", () =
 
   assert.match(
     subscriptionType,
+    /onGameUpdated\(gameId: ID!\): SubmitGameActionResult\b/
+  );
+  assert.doesNotMatch(
+    subscriptionType,
     /onGameUpdated\(gameId: ID!\): SubmitGameActionResult!/
   );
   assert.match(submitResultType, /\bgameId: ID\b/);
