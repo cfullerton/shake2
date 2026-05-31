@@ -15,9 +15,12 @@ export type FetchLike = (
 ) => Promise<FetchResponseLike>;
 
 export function getDefaultFetch(): FetchLike {
-  if (typeof fetch !== "function") {
+  const defaultFetch = globalThis.fetch;
+
+  if (typeof defaultFetch !== "function") {
     throw new Error("A fetch implementation is required for multiplayer network calls.");
   }
 
-  return fetch as FetchLike;
+  return (input, init) =>
+    defaultFetch.call(globalThis, input, init) as Promise<FetchResponseLike>;
 }
