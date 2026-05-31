@@ -228,94 +228,98 @@ export function MultiplayerLobbyContent({
 
           {!inStartedGame ? (
             <>
-              <View style={styles.panel}>
-                <GameText variant="label" style={styles.panelKicker}>Table Name</GameText>
-                <TextField
-                  autoCapitalize="words"
-                  label="Display Name"
-                  onChangeText={setDisplayName}
-                  value={displayName}
-                />
-              </View>
+              {signedIn ? (
+                <>
+                  <View style={styles.panel}>
+                    <GameText variant="label" style={styles.panelKicker}>Table Name</GameText>
+                    <TextField
+                      autoCapitalize="words"
+                      label="Display Name"
+                      onChangeText={setDisplayName}
+                      value={displayName}
+                    />
+                  </View>
 
-              <View style={styles.actionGrid}>
-                <View style={[styles.panel, styles.actionPanel]}>
-                  <View style={styles.actionTitleRow}>
-                    <Plus color={palette.crimson} size={20} />
-                    <Text style={styles.actionTitle}>Create</Text>
-                  </View>
-                  <RoomVisibilityControl
-                    onChange={setRoomVisibility}
-                    value={roomVisibility}
-                  />
-                  <Button
-                    disabled={!signedIn}
-                    icon={<Users color={palette.surface} size={18} />}
-                    loading={lobby.busyAction === "createRoom"}
-                    onPress={handleCreateRoom}
-                  >
-                    Create Room
-                  </Button>
-                </View>
+                  <View style={styles.actionGrid}>
+                    <View style={[styles.panel, styles.actionPanel]}>
+                      <View style={styles.actionTitleRow}>
+                        <Plus color={palette.crimson} size={20} />
+                        <Text style={styles.actionTitle}>Create</Text>
+                      </View>
+                      <RoomVisibilityControl
+                        onChange={setRoomVisibility}
+                        value={roomVisibility}
+                      />
+                      <Button
+                        disabled={!signedIn}
+                        icon={<Users color={palette.surface} size={18} />}
+                        loading={lobby.busyAction === "createRoom"}
+                        onPress={handleCreateRoom}
+                      >
+                        Create Room
+                      </Button>
+                    </View>
 
-                <View style={[styles.panel, styles.actionPanel]}>
-                  <View style={styles.actionTitleRow}>
-                    <DoorOpen color={palette.denim} size={20} />
-                    <Text style={styles.actionTitle}>Join</Text>
-                  </View>
-                  <TextField
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    label="Room Code"
-                    onChangeText={setRoomCode}
-                    value={roomCode}
-                  />
-                  <Button
-                    disabled={!signedIn || normalizeRoomCode(roomCode).length === 0}
-                    icon={<DoorOpen color={palette.denim} size={18} />}
-                    loading={lobby.busyAction === "joinRoom"}
-                    onPress={handleJoinRoom}
-                    variant="secondary"
-                  >
-                    Join Room
-                  </Button>
-                  <View style={styles.publicRoomsHeader}>
-                    <Text style={styles.publicRoomsTitle}>Public Rooms</Text>
-                    <Pressable
-                      accessibilityLabel="Refresh public rooms"
-                      accessibilityRole="button"
-                      disabled={!signedIn || lobby.busyAction === "refreshPublicRooms"}
-                      onPress={() => {
-                        void lobby.refreshPublicRooms();
-                      }}
-                      style={({ pressed }) => [
-                        styles.iconButton,
-                        pressed && styles.pressedSeat,
-                        (!signedIn || lobby.busyAction === "refreshPublicRooms") &&
-                          styles.disabledSeat
-                      ]}
-                    >
-                      <RefreshCw color={palette.ink} size={16} />
-                    </Pressable>
-                  </View>
-                  <View style={styles.publicRoomsList}>
-                    {lobby.publicRooms.length > 0 ? (
-                      lobby.publicRooms.map((room) => (
-                        <PublicRoomRow
-                          disabled={!signedIn || lobby.busyAction === "joinRoom"}
-                          key={room.roomId}
-                          onJoin={() => {
-                            void handleJoinPublicRoom(room.roomCode);
+                    <View style={[styles.panel, styles.actionPanel]}>
+                      <View style={styles.actionTitleRow}>
+                        <DoorOpen color={palette.denim} size={20} />
+                        <Text style={styles.actionTitle}>Join</Text>
+                      </View>
+                      <TextField
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        label="Room Code"
+                        onChangeText={setRoomCode}
+                        value={roomCode}
+                      />
+                      <Button
+                        disabled={!signedIn || normalizeRoomCode(roomCode).length === 0}
+                        icon={<DoorOpen color={palette.denim} size={18} />}
+                        loading={lobby.busyAction === "joinRoom"}
+                        onPress={handleJoinRoom}
+                        variant="secondary"
+                      >
+                        Join Room
+                      </Button>
+                      <View style={styles.publicRoomsHeader}>
+                        <Text style={styles.publicRoomsTitle}>Public Rooms</Text>
+                        <Pressable
+                          accessibilityLabel="Refresh public rooms"
+                          accessibilityRole="button"
+                          disabled={!signedIn || lobby.busyAction === "refreshPublicRooms"}
+                          onPress={() => {
+                            void lobby.refreshPublicRooms();
                           }}
-                          room={room}
-                        />
-                      ))
-                    ) : (
-                      <Text style={styles.emptyPublicRooms}>No public rooms</Text>
-                    )}
+                          style={({ pressed }) => [
+                            styles.iconButton,
+                            pressed && styles.pressedSeat,
+                            (!signedIn || lobby.busyAction === "refreshPublicRooms") &&
+                              styles.disabledSeat
+                          ]}
+                        >
+                          <RefreshCw color={palette.ink} size={16} />
+                        </Pressable>
+                      </View>
+                      <View style={styles.publicRoomsList}>
+                        {lobby.publicRooms.length > 0 ? (
+                          lobby.publicRooms.map((room) => (
+                            <PublicRoomRow
+                              disabled={!signedIn || lobby.busyAction === "joinRoom"}
+                              key={room.roomId}
+                              onJoin={() => {
+                                void handleJoinPublicRoom(room.roomCode);
+                              }}
+                              room={room}
+                            />
+                          ))
+                        ) : (
+                          <Text style={styles.emptyPublicRooms}>No public rooms</Text>
+                        )}
+                      </View>
+                    </View>
                   </View>
-                </View>
-              </View>
+                </>
+              ) : null}
 
               {lobby.error ? (
                 <Pressable onPress={lobby.clearError} style={styles.errorBanner}>
