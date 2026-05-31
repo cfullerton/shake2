@@ -70,7 +70,8 @@ test("loads game snapshot records from DynamoDB query results", async () => {
   });
   assert.equal(roomQuery.TableName, TABLE_NAME);
   assert.equal(roomQuery.IndexName, ROOM_GAME_ID_INDEX_NAME);
-  assert.equal(roomQuery.KeyConditionExpression, "#gameId = :gameId");
+  assert.equal(roomQuery.KeyConditionExpression, "#gameId = :gameId AND #sk = :sk");
+  assert.equal(roomQuery.FilterExpression, undefined);
   assert.deepEqual(roomQuery.ExpressionAttributeValues, {
     ":gameId": "game-1",
     ":sk": "META"

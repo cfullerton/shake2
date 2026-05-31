@@ -9,6 +9,7 @@ import {
   mapPrivateHandRecordToAppSyncResponse,
   mapReconnectViewToAppSyncResponse,
   mapSubmitGameActionHandlerResponse,
+  toAppSyncSeatIndex,
   toPublicGameSnapshot
 } from "./contracts.ts";
 import {
@@ -148,7 +149,7 @@ test("private hand query maps through an explicit seat ownership boundary", () =
     seatIndex: 0
   });
   assert.equal(response.gameId, "game-1");
-  assert.equal(response.seatIndex, 0);
+  assert.equal(response.seatIndex, "SEAT_0");
   assert.equal(response.dominoes.length, 7);
   assert.throws(
     () => mapPrivateHandRecordToAppSyncResponse(
@@ -193,6 +194,7 @@ test("subscription output matches submit mutation and remains public-safe", () =
   assert.doesNotMatch(serialized, /"hands"/);
   assert.doesNotMatch(serialized, /"viewerHand"/);
   assert.doesNotMatch(serialized, /"dominoes"/);
+  assert.equal(toAppSyncSeatIndex(0), "SEAT_0");
 });
 
 test("reconnect response represents accepted, rejected, and unknown pending actions", () => {

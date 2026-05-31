@@ -339,9 +339,8 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
           ":gameId": gameId,
           ":sk": "META"
         },
-        FilterExpression: "#sk = :sk",
         IndexName: this.config.roomGameIdIndexName,
-        KeyConditionExpression: "#gameId = :gameId",
+        KeyConditionExpression: "#gameId = :gameId AND #sk = :sk",
         TableName: this.config.tableName
       })
     );

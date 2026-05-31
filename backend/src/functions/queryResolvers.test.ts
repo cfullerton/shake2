@@ -89,7 +89,7 @@ test("private hand resolver allows the seat owner", async () => {
   });
 
   assert.equal(response.gameId, "game-1");
-  assert.equal(response.seatIndex, 0);
+  assert.equal(response.seatIndex, "SEAT_0");
   assert.equal(response.dominoes.length, 7);
   assert.equal(store.loadPrivateHandCalls.length, 1);
   assert.deepEqual(store.loadPrivateHandCalls[0], {
@@ -118,7 +118,7 @@ test("private hand resolver uses Cognito sub for ownership", async () => {
     }
   });
 
-  assert.equal(response.seatIndex, 0);
+  assert.equal(response.seatIndex, "SEAT_0");
   assert.equal(response.dominoes.length, 7);
 });
 
@@ -188,7 +188,7 @@ test("reconnect resolver returns accepted, rejected, and unknown pending actions
   assert.equal(response.requiresSnapshotRefresh, true);
   assert.equal(response.serverLastEventSequence, records.snapshot.lastEventSequence);
   assert.equal(response.serverSnapshotVersion, records.snapshot.snapshotVersion);
-  assert.equal(response.privateHand?.seatIndex, 0);
+  assert.equal(response.privateHand?.seatIndex, "SEAT_0");
   assert.equal(response.privateHand?.dominoes.length, 7);
   assert.equal(store.loadReconnectRecordsCalls.length, 1);
   assert.deepEqual(store.loadReconnectRecordsCalls[0], {

@@ -57,6 +57,14 @@ Then run:
 npm run smoke:deployed -w @shake2/backend
 ```
 
+For the larger live-data smoke path:
+
+```text
+export SHAKE2_SMOKE_SEED_GAME=true
+```
+
+That path writes a disposable started game into DynamoDB, submits one legal pass bid through AppSync as the authenticated Cognito user, submits the same action again to prove idempotency, reads the public snapshot, reads the actor private hand, verifies another seat's private hand is rejected, and checks reconnect pending-action classification. `SHAKE2_SMOKE_SEEDED_GAME_ID` is optional; omit it for a generated one-time game ID.
+
 ## What The Smoke Test Proves
 
 - AppSync rejects unauthenticated `submitGameAction` calls.
@@ -64,12 +72,13 @@ npm run smoke:deployed -w @shake2/backend
 - `submitGameAction` uses Cognito identity rather than a client-claimed actor ID.
 - `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView` invoke their Lambda resolvers.
 - Missing smoke game data returns controlled GraphQL errors instead of exposing private records.
+- With `SHAKE2_SMOKE_SEED_GAME=true`, the deployed stack can persist and read a real started game, accept a legal action, return an idempotent duplicate result, enforce private-hand ownership, and classify accepted/unknown pending actions during reconnect.
 
 ## Expected Result
 
 The command prints JSON with `ok: true` and one entry per smoke check.
 
-The read resolver checks intentionally use a missing game ID. That avoids seeding real hands while still proving the deployed Lambda and DynamoDB read path is wired.
+By default, the read resolver checks intentionally use a missing game ID. That avoids seeding real hands while still proving the deployed Lambda and DynamoDB read path is wired. The optional seeded mode creates real smoke records in the multiplayer table.
 
 ## Cleanup
 
@@ -84,6 +93,6 @@ Confirm the stack and any smoke Cognito users are removed before leaving a sandb
 ## Known Limits
 
 - Does not validate live subscription delivery.
-- Does not seed a full multiplayer room or complete a game.
+- Seeded mode starts a real room/game and submits one bid, but does not complete a full hand or game.
 - Does not test DynamoDB transaction cancellation mapping.
 - Does not replace the local backend and engine test suite.
