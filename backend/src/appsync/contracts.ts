@@ -55,6 +55,11 @@ export interface AppSyncTakeSeatInput {
   readonly seatIndex: SeatIndex;
 }
 
+export interface AppSyncStartGameInput {
+  readonly roomId: string;
+  readonly targetMarks?: number;
+}
+
 export type AppSyncSeatIndex =
   | "SEAT_0"
   | "SEAT_1"
@@ -140,6 +145,11 @@ export interface AppSyncRoomView {
   readonly status: string;
   readonly updatedAt: string;
   readonly viewerSeat?: AppSyncSeatIndex;
+}
+
+export interface AppSyncStartGameResult {
+  readonly room: AppSyncRoomView;
+  readonly snapshot: AppSyncPublicGameSnapshot;
 }
 
 export type AppSyncSubmitGameActionResult =

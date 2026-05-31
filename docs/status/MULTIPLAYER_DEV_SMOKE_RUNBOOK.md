@@ -102,6 +102,7 @@ Confirm the stack and any smoke Cognito users are removed before leaving a sandb
 ## Known Limits
 
 - Does not validate live subscription delivery.
+- Does not yet exercise the organic create/join/take-seat/start AppSync room flow.
 - Seeded mode starts a real room/game and submits one bid, but does not complete a full hand or game.
 - Does not test DynamoDB transaction cancellation mapping.
 - Does not replace the local backend and engine test suite.

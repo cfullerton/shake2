@@ -53,6 +53,10 @@ export class MultiplayerAppSyncConstruct extends Construct {
       "TakeSeatDataSource",
       props.functions.takeSeat
     );
+    const startGameDataSource = this.api.addLambdaDataSource(
+      "StartGameDataSource",
+      props.functions.startGame
+    );
     const getRoomDataSource = this.api.addLambdaDataSource(
       "GetRoomDataSource",
       props.functions.getRoom
@@ -88,6 +92,10 @@ export class MultiplayerAppSyncConstruct extends Construct {
     });
     takeSeatDataSource.createResolver("TakeSeatResolver", {
       fieldName: "takeSeat",
+      typeName: "Mutation"
+    });
+    startGameDataSource.createResolver("StartGameResolver", {
+      fieldName: "startGame",
       typeName: "Mutation"
     });
     submitGameActionDataSource.createResolver("SubmitGameActionResolver", {

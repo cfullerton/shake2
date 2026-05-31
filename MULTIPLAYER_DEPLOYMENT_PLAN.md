@@ -8,7 +8,7 @@ The CDK stack in `infra/` defines the development multiplayer environment:
 - Cognito App Client for the Expo app.
 - DynamoDB multiplayer table for rooms, game events, public snapshots, private hands, and idempotency results.
 - AppSync GraphQL API using `backend/src/appsync/schema.graphql`.
-- Lambda resolvers for room lifecycle operations, `submitGameAction`, `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView`.
+- Lambda resolvers for room lifecycle/game-start operations, `submitGameAction`, `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView`.
 - IAM roles for Lambda execution and DynamoDB access.
 
 ## Deployment Flow

@@ -6,10 +6,11 @@ This workspace contains the CDK v2 development infrastructure for multiplayer Te
 
 - Cognito User Pool and public app client.
 - DynamoDB multiplayer table with `pk`/`sk`, TTL, point-in-time recovery, and GSIs for current/near-term access patterns.
-- Nine Lambda functions:
+- Ten Lambda functions:
   - `createRoom`
   - `joinRoom`
   - `takeSeat`
+  - `startGame`
   - `getRoom`
   - `getRoomByCode`
   - `submitGameAction`
@@ -77,4 +78,4 @@ Use an AWS profile/role with permission to create Cognito, DynamoDB, AppSync, La
 - No WAF/rate limiting.
 - No frontend multiplayer wiring.
 - No Cognito-hosted UI or app auth flow.
-- No room creation/join resolvers.
+- No deployed room-flow smoke coverage yet.

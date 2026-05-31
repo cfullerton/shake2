@@ -1,8 +1,11 @@
 import {
+  toPublicGameSnapshot,
   toAppSyncRoomView,
   type AppSyncCreateRoomInput,
   type AppSyncJoinRoomInput,
   type AppSyncRoomView,
+  type AppSyncStartGameInput,
+  type AppSyncStartGameResult,
   type AppSyncTakeSeatInput
 } from "../../appsync/contracts.ts";
 import { extractBackendActor } from "../../auth/identity.ts";
@@ -12,14 +15,22 @@ import {
 } from "../../dynamodb/store.ts";
 import { BackendResolverError } from "../../errors/errors.ts";
 import {
+  createMultiplayerDynamoDbTransactionWritePlan,
+  createMultiplayerGameStartWritePlan,
   createMultiplayerRoom,
   createMultiplayerRoomRecord,
+  createMultiplayerVisibleSnapshot,
   joinMultiplayerRoom,
+  startMultiplayerGame,
   takeMultiplayerSeat,
   type EngineContext,
   type MultiplayerResult,
-  type MultiplayerRoom
+  type MultiplayerRoom,
+  type MultiplayerWritePlan
 } from "../../game-engine.ts";
+import {
+  type ResolverContext
+} from "../../types/index.ts";
 import {
   parseArguments,
   parseInputObject,
@@ -33,9 +44,18 @@ export interface RoomLifecycleHandlerDependencies {
   readonly store: MultiplayerStore;
 }
 
+export interface StartGameHandlerDependencies
+  extends RoomLifecycleHandlerDependencies {
+  readonly resolverContext: ResolverContext;
+}
+
 export type RoomLifecycleHandler = (
   event: AppSyncResolverEvent
 ) => Promise<AppSyncRoomView>;
+
+export type StartGameHandler = (
+  event: AppSyncResolverEvent
+) => Promise<AppSyncStartGameResult>;
 
 export function createCreateRoomHandler(
   dependencies: RoomLifecycleHandlerDependencies
@@ -124,6 +144,66 @@ export function createTakeSeatHandler(
   };
 }
 
+export function createStartGameHandler(
+  dependencies: StartGameHandlerDependencies
+): StartGameHandler {
+  return async (event) => {
+    const actor = extractBackendActor(event.identity);
+    const input = parseStartGameInput(event);
+    const previousRoom = await dependencies.store.loadRoom({
+      roomId: input.roomId
+    });
+
+    if (previousRoom.room.status === "inGame" && previousRoom.room.gameId) {
+      assertRoomHost(previousRoom.room, actor.playerId);
+
+      const snapshot = await dependencies.store.loadPublicSnapshot({
+        actorPlayerId: actor.playerId,
+        gameId: previousRoom.room.gameId
+      });
+
+      return {
+        room: toAppSyncRoomView(previousRoom.room, actor),
+        snapshot: toPublicGameSnapshot(snapshot.payload)
+      };
+    }
+
+    const session = unwrapMultiplayerResult(
+      startMultiplayerGame(
+        previousRoom.room,
+        {
+          actorId: actor.playerId,
+          ...(input.targetMarks !== undefined
+            ? { targetMarks: input.targetMarks }
+            : {})
+        },
+        dependencies.engineContext
+      )
+    );
+    const writePlan = createMultiplayerGameStartWritePlan(
+      previousRoom.room,
+      session
+    );
+    const transaction = createTransaction(
+      writePlan,
+      dependencies.resolverContext
+    );
+
+    await dependencies.store.commitWritePlan({
+      gameId: session.snapshot.gameId,
+      transaction,
+      writePlan
+    });
+
+    return {
+      room: toAppSyncRoomView(session.room, actor),
+      snapshot: toPublicGameSnapshot(
+        createMultiplayerVisibleSnapshot(session.snapshot, null)
+      )
+    };
+  };
+}
+
 export function createGetRoomHandler(
   dependencies: Pick<RoomLifecycleHandlerDependencies, "store">
 ): RoomLifecycleHandler {
@@ -172,6 +252,15 @@ export const takeSeatHandler = createTakeSeatHandler({
   store: createUnimplementedMultiplayerStore()
 });
 
+export const startGameHandler = createStartGameHandler({
+  engineContext: createSystemEngineContext(),
+  resolverContext: {
+    requestId: "unconfigured",
+    tableName: "UNCONFIGURED_MULTIPLAYER_TABLE"
+  },
+  store: createUnimplementedMultiplayerStore()
+});
+
 export const getRoomHandler = createGetRoomHandler({
   store: createUnimplementedMultiplayerStore()
 });
@@ -213,14 +302,76 @@ function parseTakeSeatInput(event: AppSyncResolverEvent): AppSyncTakeSeatInput {
   };
 }
 
+function parseStartGameInput(
+  event: AppSyncResolverEvent
+): AppSyncStartGameInput {
+  const args = parseArguments(event, "startGame");
+  const input = parseInputObject(args.input, "startGame.input");
+  const targetMarks = parseOptionalPositiveInteger(
+    input.targetMarks,
+    "startGame.targetMarks"
+  );
+
+  return {
+    roomId: parseNonEmptyString(input.roomId, "startGame.roomId").trim(),
+    ...(targetMarks !== undefined ? { targetMarks } : {})
+  };
+}
+
+function parseOptionalPositiveInteger(
+  value: unknown,
+  label: string
+): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value <= 0
+  ) {
+    throw new BackendResolverError(
+      "MALFORMED_REQUEST",
+      `${label} must be a positive integer.`
+    );
+  }
+
+  return value;
+}
+
 function unwrapRoomResult(
   result: MultiplayerResult<MultiplayerRoom>
 ): MultiplayerRoom {
+  return unwrapMultiplayerResult(result);
+}
+
+function unwrapMultiplayerResult<TValue>(
+  result: MultiplayerResult<TValue>
+): TValue {
   if (!result.ok) {
     throw new BackendResolverError(result.error.code, result.error.message);
   }
 
   return result.value;
+}
+
+function createTransaction(
+  writePlan: MultiplayerWritePlan,
+  resolverContext: ResolverContext
+) {
+  return createMultiplayerDynamoDbTransactionWritePlan(writePlan, {
+    tableName: resolverContext.tableName
+  });
+}
+
+function assertRoomHost(room: MultiplayerRoom, playerId: string): void {
+  if (room.hostPlayerId !== playerId) {
+    throw new BackendResolverError(
+      "INVALID_ACTOR",
+      "Only the room host can start the game."
+    );
+  }
 }
 
 function createSystemEngineContext(): EngineContext {

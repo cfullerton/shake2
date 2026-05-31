@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  type CommitWritePlanInput,
   type CreateRoomRecordInput,
   type LoadRoomByCodeInput,
   type LoadRoomInput,
+  type LoadPublicSnapshotInput,
   type SaveRoomRecordInput,
   type MultiplayerStore
 } from "../../dynamodb/store.ts";
@@ -12,10 +14,13 @@ import { BackendResolverError } from "../../errors/errors.ts";
 import {
   createMultiplayerRoom,
   createMultiplayerRoomRecord,
+  createMultiplayerSnapshotRecord,
   joinMultiplayerRoom,
+  startMultiplayerGame,
   takeMultiplayerSeat,
   type EngineContext,
   type MultiplayerActionIdempotencyRecord,
+  type MultiplayerGameSession,
   type MultiplayerPrivateHandRecord,
   type MultiplayerResult,
   type MultiplayerRoom,
@@ -29,6 +34,7 @@ import {
   createGetRoomByCodeHandler,
   createGetRoomHandler,
   createJoinRoomHandler,
+  createStartGameHandler,
   createTakeSeatHandler
 } from "./handler.ts";
 
@@ -154,6 +160,142 @@ test("takeSeat rejects occupied seats before persistence", async () => {
   assert.equal(mock.saveRoomRecordCalls.length, 0);
 });
 
+test("startGame commits a game-start write plan and returns public state", async () => {
+  const context = createTestContext();
+  const readyRoom = createRoomWithPlayersAndSeats(context, [0, 1, 2, 3]);
+  const mock = createMockStore([readyRoom]);
+  const handler = createStartGameHandler({
+    engineContext: context,
+    resolverContext: {
+      requestId: "test-request",
+      tableName: "Shake2Multiplayer"
+    },
+    store: mock.store
+  });
+  const response = await handler({
+    arguments: {
+      input: {
+        roomId: "room-1",
+        targetMarks: 5
+      }
+    },
+    identity: {
+      playerId: "player-0"
+    }
+  });
+
+  assert.equal(response.room.status, "inGame");
+  assert.equal(response.room.gameId, "id-1");
+  assert.equal(response.room.isHost, true);
+  assert.equal(response.snapshot.gameId, "id-1");
+  assert.equal(response.snapshot.phase, "dealt");
+  assert.deepEqual(response.snapshot.handCounts, {
+    seat0: 7,
+    seat1: 7,
+    seat2: 7,
+    seat3: 7
+  });
+  assert.equal("hands" in response.snapshot.redactedState, false);
+  assert.equal("viewerHand" in response.snapshot.redactedState, false);
+  assert.equal(mock.commitWritePlanCalls.length, 1);
+  assert.equal(mock.commitWritePlanCalls[0]?.writePlan.kind, "gameStart");
+  assert.equal(mock.commitWritePlanCalls[0]?.transaction.tableName, "Shake2Multiplayer");
+});
+
+test("startGame rejects non-hosts before persistence", async () => {
+  const context = createTestContext();
+  const readyRoom = createRoomWithPlayersAndSeats(context, [0, 1, 2, 3]);
+  const mock = createMockStore([readyRoom]);
+  const handler = createStartGameHandler({
+    engineContext: context,
+    resolverContext: {
+      requestId: "test-request",
+      tableName: "Shake2Multiplayer"
+    },
+    store: mock.store
+  });
+
+  await assert.rejects(
+    () => handler({
+      arguments: {
+        input: {
+          roomId: "room-1"
+        }
+      },
+      identity: {
+        playerId: "player-1"
+      }
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "INVALID_ACTOR"
+  );
+  assert.equal(mock.commitWritePlanCalls.length, 0);
+});
+
+test("startGame requires a ready room before persistence", async () => {
+  const context = createTestContext();
+  const waitingRoom = createRoomWithPlayersAndSeats(context, [0, 1, 2]);
+  const mock = createMockStore([waitingRoom]);
+  const handler = createStartGameHandler({
+    engineContext: context,
+    resolverContext: {
+      requestId: "test-request",
+      tableName: "Shake2Multiplayer"
+    },
+    store: mock.store
+  });
+
+  await assert.rejects(
+    () => handler({
+      arguments: {
+        input: {
+          roomId: "room-1"
+        }
+      },
+      identity: {
+        playerId: "player-0"
+      }
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "INVALID_PHASE"
+  );
+  assert.equal(mock.commitWritePlanCalls.length, 0);
+});
+
+test("startGame returns an already-started room for host retries", async () => {
+  const context = createTestContext();
+  const readyRoom = createRoomWithPlayersAndSeats(context, [0, 1, 2, 3]);
+  const session = createStartedSession(context, readyRoom);
+  const mock = createMockStore([session.room], {
+    snapshots: [createMultiplayerSnapshotRecord(session.snapshot)]
+  });
+  const handler = createStartGameHandler({
+    engineContext: context,
+    resolverContext: {
+      requestId: "test-request",
+      tableName: "Shake2Multiplayer"
+    },
+    store: mock.store
+  });
+  const response = await handler({
+    arguments: {
+      input: {
+        roomId: "room-1"
+      }
+    },
+    identity: {
+      playerId: "player-0"
+    }
+  });
+
+  assert.equal(response.room.status, "inGame");
+  assert.equal(response.snapshot.gameId, session.snapshot.gameId);
+  assert.equal(mock.loadPublicSnapshotCalls.length, 1);
+  assert.equal(mock.commitWritePlanCalls.length, 0);
+});
+
 test("getRoom and getRoomByCode return safe room views", async () => {
   const context = createTestContext();
   const room = createRoomWithPlayersAndSeats(context, [0]);
@@ -211,8 +353,17 @@ test("room handlers reject missing identity before persistence", async () => {
   assert.equal(mock.loadRoomByCodeCalls.length, 0);
 });
 
-function createMockStore(initialRooms: readonly MultiplayerRoom[] = []): {
+interface MockStoreOptions {
+  readonly snapshots?: readonly MultiplayerSnapshotRecord[];
+}
+
+function createMockStore(
+  initialRooms: readonly MultiplayerRoom[] = [],
+  options: MockStoreOptions = {}
+): {
+  readonly commitWritePlanCalls: CommitWritePlanInput[];
   readonly createRoomRecordCalls: CreateRoomRecordInput[];
+  readonly loadPublicSnapshotCalls: LoadPublicSnapshotInput[];
   readonly loadRoomByCodeCalls: LoadRoomByCodeInput[];
   readonly loadRoomCalls: LoadRoomInput[];
   readonly saveRoomRecordCalls: SaveRoomRecordInput[];
@@ -222,13 +373,21 @@ function createMockStore(initialRooms: readonly MultiplayerRoom[] = []): {
     room.roomId,
     createMultiplayerRoomRecord(room)
   ]));
+  const snapshots = new Map((options.snapshots ?? []).map((snapshot) => [
+    snapshot.gameId,
+    snapshot
+  ]));
+  const commitWritePlanCalls: CommitWritePlanInput[] = [];
   const createRoomRecordCalls: CreateRoomRecordInput[] = [];
+  const loadPublicSnapshotCalls: LoadPublicSnapshotInput[] = [];
   const loadRoomByCodeCalls: LoadRoomByCodeInput[] = [];
   const loadRoomCalls: LoadRoomInput[] = [];
   const saveRoomRecordCalls: SaveRoomRecordInput[] = [];
 
   return {
+    commitWritePlanCalls,
     createRoomRecordCalls,
+    loadPublicSnapshotCalls,
     loadRoomByCodeCalls,
     loadRoomCalls,
     saveRoomRecordCalls,
@@ -278,8 +437,19 @@ function createMockStore(initialRooms: readonly MultiplayerRoom[] = []): {
       async loadGameSnapshot(): Promise<MultiplayerStoredGameRecords> {
         throw new Error("Not implemented.");
       },
-      async loadPublicSnapshot(): Promise<MultiplayerSnapshotRecord> {
-        throw new Error("Not implemented.");
+      async loadPublicSnapshot(input): Promise<MultiplayerSnapshotRecord> {
+        loadPublicSnapshotCalls.push(input);
+
+        const snapshot = snapshots.get(input.gameId);
+
+        if (!snapshot) {
+          throw new BackendResolverError(
+            "GAME_NOT_FOUND",
+            "Multiplayer game snapshot was not found."
+          );
+        }
+
+        return snapshot;
       },
       async loadPrivateHand(): Promise<MultiplayerPrivateHandRecord> {
         throw new Error("Not implemented.");
@@ -290,8 +460,18 @@ function createMockStore(initialRooms: readonly MultiplayerRoom[] = []): {
       async loadReconnectRecords() {
         throw new Error("Not implemented.");
       },
-      async commitWritePlan(): Promise<void> {
-        throw new Error("Not implemented.");
+      async commitWritePlan(input): Promise<void> {
+        commitWritePlanCalls.push(input);
+
+        for (const operation of input.writePlan.operations) {
+          if (operation.kind === "putRoom") {
+            rooms.set(operation.record.roomId, operation.record);
+          }
+
+          if (operation.kind === "putSnapshot") {
+            snapshots.set(operation.record.gameId, operation.record);
+          }
+        }
       }
     }
   };
@@ -342,6 +522,22 @@ function createRoomWithPlayersAndSeats(
   }
 
   return room;
+}
+
+function createStartedSession(
+  context: EngineContext,
+  readyRoom: MultiplayerRoom
+): MultiplayerGameSession {
+  return unwrapResult(
+    startMultiplayerGame(
+      readyRoom,
+      {
+        actorId: "player-0",
+        gameId: "started-game-1"
+      },
+      context
+    )
+  );
 }
 
 function unwrapResult<TValue>(result: MultiplayerResult<TValue>): TValue {

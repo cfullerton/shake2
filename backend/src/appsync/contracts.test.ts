@@ -37,6 +37,7 @@ test("schema file exists and includes required operations", () => {
   assertTypeField(schema, "Mutation", "createRoom");
   assertTypeField(schema, "Mutation", "joinRoom");
   assertTypeField(schema, "Mutation", "takeSeat");
+  assertTypeField(schema, "Mutation", "startGame");
   assertTypeField(schema, "Mutation", "submitGameAction");
   assertTypeField(schema, "Query", "getRoom");
   assertTypeField(schema, "Query", "getRoomByCode");

@@ -55,20 +55,21 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
   - Shared deployed-runtime wiring for DynamoDB store construction, resolver context, and engine context.
 
 - `src/functions/rooms/handler.ts`
-  - Accepts AppSync-like `createRoom`, `joinRoom`, `takeSeat`, `getRoom`, and `getRoomByCode` events.
+  - Accepts AppSync-like `createRoom`, `joinRoom`, `takeSeat`, `startGame`, `getRoom`, and `getRoomByCode` events.
   - Uses Cognito/mock identity as the authoritative room actor.
-  - Delegates room creation, joining, and seating rules to the shared multiplayer engine.
+  - Delegates room creation, joining, seating, and host-only game-start rules to the shared multiplayer engine.
   - Persists room metadata through conditional DynamoDB store methods.
+  - Commits game-start write plans through the same DynamoDB transaction path used by gameplay actions.
   - Returns safe room views without raw Cognito/player IDs.
 
-- `src/functions/createRoom`, `src/functions/joinRoom`, `src/functions/takeSeat`, `src/functions/getRoom`, and `src/functions/getRoomByCode`
+- `src/functions/createRoom`, `src/functions/joinRoom`, `src/functions/takeSeat`, `src/functions/startGame`, `src/functions/getRoom`, and `src/functions/getRoomByCode`
   - Deployed Lambda entrypoints for the room lifecycle AppSync fields.
 
 - `src/smoke/deployed-smoke.ts`
   - Loads CDK stack outputs.
   - Optionally creates/resets a temporary Cognito smoke user.
   - Authenticates through Cognito and calls the deployed AppSync API.
-  - Verifies unauthenticated rejection, Cognito actor propagation, and invocation of each deployed resolver.
+  - Verifies unauthenticated rejection, Cognito actor propagation, and invocation of current gameplay/read resolvers.
   - In seeded mode, can authenticate a second Cognito smoke user and verify non-members cannot read public snapshots or private hands.
 
 - `src/dynamodb/store.ts`
@@ -80,7 +81,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 
 - `src/appsync/schema.graphql`
   - Defines the AppSync GraphQL boundary used by the CDK API.
-  - Defines `submitGameAction`, public snapshot, private hand, reconnect, and game-update subscription operations.
+  - Defines room lifecycle, start-game, `submitGameAction`, public snapshot, private hand, reconnect, and game-update subscription operations.
   - Uses `AWSJSON` for submit-action envelopes; deployed GraphQL clients should send the action as a JSON-encoded string, while local resolver tests may still pass already-parsed objects.
   - Separates public/redacted snapshots from private hand responses.
   - Uses safe event summaries and subscription notifications instead of raw trusted event payloads.
@@ -88,6 +89,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 - `src/appsync/contracts.ts`
   - Maps AppSync submit-action inputs to the existing submit-game-action handler event shape.
   - Maps handler responses to GraphQL-safe accepted/rejected result shapes.
+  - Defines room and start-game result shapes that keep private hands out of public mutation responses.
   - Maps reconnect inputs to the engine client-sync state shape.
   - Defines the private-hand store boundary with an explicit seat-ownership check.
   - Is covered by local contract tests that do not require AWS credentials.
@@ -111,6 +113,7 @@ type Mutation {
   createRoom(input: CreateRoomInput!): RoomView!
   joinRoom(input: JoinRoomInput!): RoomView!
   takeSeat(input: TakeSeatInput!): RoomView!
+  startGame(input: StartGameInput!): StartGameResult!
   submitGameAction(input: SubmitGameActionInput!): SubmitGameActionResult!
 }
 
@@ -216,8 +219,7 @@ npm test
 
 ## Next Steps
 
-1. Add a backend `startGame` room lifecycle mutation that turns a ready room into persisted game records.
-2. Add deployed smoke coverage for create/join/take-seat room flows.
-3. Add DynamoDB Local or equivalent integration tests for conditional transaction failures and retry behavior.
-4. Validate AppSync subscription delivery and client-side sequence-gap recovery.
-5. Add frontend multiplayer configuration and session UI behind a feature flag.
+1. Add deployed smoke coverage for create/join/take-seat/start room flows.
+2. Add DynamoDB Local or equivalent integration tests for conditional transaction failures and retry behavior.
+3. Validate AppSync subscription delivery and client-side sequence-gap recovery.
+4. Add frontend multiplayer configuration and session UI behind a feature flag.

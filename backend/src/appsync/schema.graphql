@@ -25,6 +25,7 @@ type Mutation {
   createRoom(input: CreateRoomInput!): RoomView!
   joinRoom(input: JoinRoomInput!): RoomView!
   takeSeat(input: TakeSeatInput!): RoomView!
+  startGame(input: StartGameInput!): StartGameResult!
   submitGameAction(input: SubmitGameActionInput!): SubmitGameActionResult!
 }
 
@@ -50,6 +51,11 @@ input JoinRoomInput {
 input TakeSeatInput {
   roomId: ID!
   seatIndex: SeatIndex!
+}
+
+input StartGameInput {
+  roomId: ID!
+  targetMarks: Int
 }
 
 input GetMyPrivateHandInput {
@@ -122,6 +128,11 @@ type RoomSeat {
   occupied: Boolean!
   displayName: String
   isViewer: Boolean!
+}
+
+type StartGameResult {
+  room: RoomView!
+  snapshot: PublicGameSnapshot!
 }
 
 type PrivateHandResponse {

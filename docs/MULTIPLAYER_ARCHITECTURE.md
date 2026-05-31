@@ -26,7 +26,7 @@ Implemented now:
 - Validated replay for restored event streams, including forged trick-winner and forged hand-score rejection.
 - Runtime boundary parsers for action envelopes, durable records, public snapshots, private hands, idempotency records, and client reconnect state.
 - Backend-neutral write plans for game start, accepted player actions, and rejected player actions.
-- AppSync/Lambda room lifecycle fields for creating rooms, joining by room code, taking seats, and reading safe room views.
+- AppSync/Lambda room lifecycle fields for creating rooms, joining by room code, taking seats, starting ready rooms, and reading safe room views.
 
 ## Authority Model
 
@@ -36,6 +36,7 @@ Clients may request actions:
 
 - join room
 - take seat
+- start game as host once the room is ready
 - submit bid
 - call trump
 - play domino
@@ -182,9 +183,8 @@ The current reconnect helper returns:
 
 ## Still Missing
 
-- Backend `startGame` mutation that turns a ready room into persisted game records.
 - Schema migration/version-compatibility tooling for future payload changes.
-- Deployed smoke coverage for organic create/join/take-seat room flows.
+- Deployed smoke coverage for organic create/join/take-seat/start room flows.
 - Live AppSync subscription validation.
 - Subscription gap detection.
 - Leave/rejoin/replacement behavior.
