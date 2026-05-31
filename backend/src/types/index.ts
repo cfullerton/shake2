@@ -8,6 +8,7 @@ import {
 export type BackendErrorCode =
   | EngineErrorCode
   | "MALFORMED_REQUEST"
+  | "PERSISTENCE_CONFLICT"
   | "PERSISTENCE_ERROR"
   | "UNAUTHENTICATED";
 

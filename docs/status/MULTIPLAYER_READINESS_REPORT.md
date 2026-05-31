@@ -1,6 +1,6 @@
 # Multiplayer Readiness Report
 
-Last reviewed: 2026-05-30
+Last reviewed: 2026-05-31
 
 ## Executive Summary
 
@@ -8,7 +8,7 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. The dev stack has completed a basic deployed smoke run for Cognito/AppSync/Lambda wiring. The largest remaining gap is proving seeded real-game data and realtime behavior in AWS: the optional seeded smoke path has not yet been run live, subscription delivery has not been validated, and no multiplayer UI exists yet.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring and the optional seeded gameplay/read/reconnect path. The largest remaining gaps are subscription delivery, client reconnect behavior, broader room lifecycle/abuse handling, and mobile multiplayer UI.
 
 ## Current Multiplayer Architecture
 
@@ -23,10 +23,10 @@ Current multiplayer code is backend-neutral and lives under `packages/game-engin
 Backend shell code now lives under `backend`.
 
 - `src/functions/submitGameAction/handler.ts`: AppSync-like Lambda resolver shell for submit-game-action requests.
-- `src/functions/getGameSnapshot/handler.ts`: AppSync-like query resolver shell that returns only public/redacted game snapshots.
+- `src/functions/getGameSnapshot/handler.ts`: AppSync-like query resolver shell that returns only public/redacted game snapshots after room membership authorization.
 - `src/functions/getMyPrivateHand/handler.ts`: AppSync-like query resolver shell that enforces private-hand seat ownership before returning dominoes.
 - `src/functions/getReconnectView/handler.ts`: AppSync-like query resolver shell that returns latest public state, actor private hand when seated, and accepted/rejected/unknown pending action status.
-- `src/dynamodb/store.ts`: `MultiplayerStore` interface plus AWS SDK v3 `DynamoDBMultiplayerStore` for loading stored game records, public snapshots, private hands, reconnect records, idempotency results, and committing write plans.
+- `src/dynamodb/store.ts`: `MultiplayerStore` interface plus AWS SDK v3 `DynamoDBMultiplayerStore` for loading stored game records, authorizing public snapshot reads, loading private hands, reconnect records, idempotency results, committing write plans, and mapping DynamoDB transaction cancellations to stable backend errors.
 - `src/appsync/schema.graphql`: undeployed draft schema for submit action, public snapshot, private hand, reconnect, and game-update subscription operations.
 - `src/appsync/contracts.ts`: local AppSync contract adapters for safe submit-action results, reconnect views, private-hand ownership boundaries, and public update notifications.
 - `src/auth/identity.ts`: shared actor extraction boundary that prefers AppSync Cognito `sub` as the stable multiplayer `playerId` and preserves mock identity support for tests.
@@ -60,7 +60,7 @@ Production multiplayer blockers:
    - A production-shaped AppSync Cognito parser now maps authenticated `sub` values to backend `playerId`.
    - CDK now defines Cognito resources and AppSync user-pool authorization.
    - A smoke script validates real sign-in and AppSync identity payloads after deployment.
-   - Need the optional seeded smoke path run against the deployed stack before multiplayer UI work begins.
+   - Seeded smoke has run against the deployed stack; add a second-user smoke path for negative room-membership checks.
    - Need guest/anonymous account decision.
 
 2. Physical persistence adapter
@@ -69,18 +69,19 @@ Production multiplayer blockers:
    - An AWS SDK v3 DynamoDB store implementation exists behind the interface and is tested with mocked clients.
    - CDK now defines a DynamoDB table, Lambda functions, and IAM grants.
    - No DynamoDB table or Lambda has been deployed yet.
-   - Need physical adapter tests for AWS error mapping, transaction cancellation reasons, partial failures, and retry handling against a local or integration test environment.
+   - Mocked AWS SDK tests cover transaction cancellation mapping to duplicate-action, stale-action, and persistence-conflict errors.
+   - Need DynamoDB Local or equivalent integration tests for partial failures and retry handling.
 
 3. AppSync or realtime transport
    - A GraphQL schema, local contract tests, and CDK AppSync/Lambda resolver wiring now exist.
-   - A deployed smoke script is available for the mutation and query resolvers, including an optional seeded happy-path action check.
+   - A deployed smoke script is available for the mutation and query resolvers, including a seeded happy-path action/read/reconnect check.
    - Live subscription delivery has not been validated.
    - No subscription gap detection is wired into the app.
-   - A basic deployed reconnect resolver smoke has completed against missing data; seeded reconnect over real stored data still needs a live run.
+   - Basic and seeded deployed reconnect smoke checks have completed.
 
 4. Hidden-information enforcement
    - Engine redaction exists, and query resolver tests enforce public/private separation.
-   - CDK prevents direct client table access by routing through Lambda/AppSync, but resolver-level room membership checks are still incomplete.
+   - CDK prevents direct client table access by routing through Lambda/AppSync, and `getGameSnapshot` now enforces room membership before returning a public snapshot.
    - Trusted event records may contain private hands and must remain server-only.
    - Public subscriptions must never publish raw hand-dealt events.
 
@@ -244,7 +245,7 @@ Current backend contract tests cover:
 - Private hand query maps through an explicit seat-ownership boundary.
 - Subscription output matches the subscribed mutation result and includes only safe event summaries plus public snapshots.
 - Reconnect response can represent accepted, rejected, and unknown pending actions.
-- Query resolver shell tests enforce public/private separation and private-hand ownership.
+- Query resolver shell tests enforce public/private separation, public snapshot room membership, and private-hand ownership.
 - Infrastructure tests assert AppSync uses Cognito authorization, Lambda resolvers, and native-app Cognito client settings.
 - Submit-action tests assert rejected actions persist idempotency results without writing public snapshots, trusted events, or private hand records.
 - Smoke harness tests assert the deployed smoke checks cover all current AppSync resolvers without requiring seeded private hand data.
@@ -319,18 +320,17 @@ Production-quality casual multiplayer:
 
 ## Recommended Next Slices
 
-1. Run seeded deployed smoke
-   - Deploy the latest CDK stack into the disposable AWS development account/region.
-   - Run `SHAKE2_SMOKE_SEED_GAME=true npm run smoke:deployed -w @shake2/backend`.
-   - Capture and review the accepted action, duplicate action, private hand, and reconnect checks.
+1. Add second-user deployed authorization smoke
+   - Create or reset a second Cognito smoke user.
+   - Seed a game as the primary smoke user.
+   - Prove the second user cannot read the public snapshot or private hand before joining the room.
 
-2. DynamoDB failure mapping and local integration test harness
-   - Map transaction cancellation reasons back to stable `EngineError` codes.
+2. DynamoDB local integration test harness
    - Add DynamoDB Local or equivalent integration tests for conditional failures.
    - Keep AWS SDK dependencies isolated inside `backend`.
 
 3. Read-side authorization hardening
-   - Enforce room membership on `getGameSnapshot`.
+   - Keep room membership enforcement on `getGameSnapshot`.
    - Keep seat ownership enforcement on `getMyPrivateHand`.
    - Add abuse/rate-limit behavior for reconnect and snapshot reads.
 

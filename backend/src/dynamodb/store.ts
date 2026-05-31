@@ -26,6 +26,7 @@ import {
   type MultiplayerRoomRecord,
   type MultiplayerSnapshotRecord,
   type MultiplayerStoredGameRecords,
+  type MultiplayerWriteOperation,
   type MultiplayerWritePlan,
   type SeatIndex
 } from "../game-engine.ts";
@@ -35,6 +36,7 @@ export interface LoadGameSnapshotInput {
 }
 
 export interface LoadPublicSnapshotInput {
+  readonly actorPlayerId: string;
   readonly gameId: string;
 }
 
@@ -155,11 +157,24 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
   async loadPublicSnapshot(
     input: LoadPublicSnapshotInput
   ): Promise<MultiplayerSnapshotRecord> {
+    const [snapshot, room] = await Promise.all([
+      this.loadPublicSnapshotRecord(input.gameId),
+      this.loadRoomRecord(input.gameId)
+    ]);
+
+    assertPlayerIsRoomMember(room, input.actorPlayerId);
+
+    return snapshot;
+  }
+
+  private async loadPublicSnapshotRecord(
+    gameId: string
+  ): Promise<MultiplayerSnapshotRecord> {
     const output = await this.client.send(
       new GetCommand({
         ConsistentRead: this.config.consistentRead,
         Key: {
-          pk: `GAME#${input.gameId}`,
+          pk: `GAME#${gameId}`,
           sk: "SNAPSHOT#LATEST"
         },
         TableName: this.config.tableName
@@ -227,20 +242,13 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
     input: LoadReconnectRecordsInput
   ): Promise<MultiplayerReconnectRecords> {
     const [snapshot, room, idempotency] = await Promise.all([
-      this.loadPublicSnapshot({
-        gameId: input.gameId
-      }),
+      this.loadPublicSnapshotRecord(input.gameId),
       this.loadRoomRecord(input.gameId),
       this.loadPendingIdempotencyResults(input.gameId, input.pendingActionIds)
     ]);
     const actorSeat = getSeatForPlayer(room, input.actorPlayerId);
 
-    if (!room.room.participants[input.actorPlayerId]) {
-      throw new BackendResolverError(
-        "INVALID_ACTOR",
-        "Player is not a member of this room."
-      );
-    }
+    assertPlayerIsRoomMember(room, input.actorPlayerId);
 
     const privateHand = actorSeat === null
       ? null
@@ -264,11 +272,15 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
       );
     }
 
-    await this.client.send(
-      new TransactWriteCommand({
-        TransactItems: createSdkTransactItems(input.transaction)
-      })
-    );
+    try {
+      await this.client.send(
+        new TransactWriteCommand({
+          TransactItems: createSdkTransactItems(input.transaction)
+        })
+      );
+    } catch (error) {
+      throw mapDynamoDbTransactionError(error, input.writePlan);
+    }
   }
 
   private async loadGameRecords(gameKey: string): Promise<{
@@ -459,6 +471,109 @@ function createSdkTransactItems(
   });
 }
 
+function mapDynamoDbTransactionError(
+  error: unknown,
+  writePlan: MultiplayerWritePlan
+): Error {
+  if (!isTransactionCanceledError(error)) {
+    return error instanceof Error
+      ? error
+      : new BackendResolverError(
+          "PERSISTENCE_ERROR",
+          "Unexpected DynamoDB transaction failure."
+        );
+  }
+
+  const failedOperation = findFirstFailedOperation(
+    error.CancellationReasons ?? [],
+    writePlan.operations
+  );
+
+  if (!failedOperation) {
+    return new BackendResolverError(
+      "PERSISTENCE_CONFLICT",
+      "DynamoDB transaction was cancelled before the write could commit."
+    );
+  }
+
+  if (failedOperation.reason.Code !== "ConditionalCheckFailed") {
+    return new BackendResolverError(
+      "PERSISTENCE_ERROR",
+      failedOperation.reason.Message ??
+        "DynamoDB transaction failed before the write could commit."
+    );
+  }
+
+  return mapConditionalWriteFailure(failedOperation.operation);
+}
+
+function findFirstFailedOperation(
+  reasons: readonly DynamoDbCancellationReason[],
+  operations: readonly MultiplayerWriteOperation[]
+): {
+  readonly operation: MultiplayerWriteOperation;
+  readonly reason: DynamoDbCancellationReason;
+} | null {
+  for (const [index, reason] of reasons.entries()) {
+    if (reason.Code === undefined || reason.Code === "None") {
+      continue;
+    }
+
+    const operation = operations[index];
+
+    if (operation) {
+      return {
+        operation,
+        reason
+      };
+    }
+  }
+
+  return null;
+}
+
+function mapConditionalWriteFailure(
+  operation: MultiplayerWriteOperation
+): BackendResolverError {
+  if (operation.kind === "putActionResult") {
+    return new BackendResolverError(
+      "DUPLICATE_ACTION",
+      "Action result already exists."
+    );
+  }
+
+  if (
+    operation.condition.kind === "snapshotMatches" ||
+    operation.kind === "putEvent" ||
+    operation.kind === "putRoom"
+  ) {
+    return new BackendResolverError(
+      "STALE_ACTION",
+      "Game state changed before the action could commit."
+    );
+  }
+
+  return new BackendResolverError(
+    "PERSISTENCE_CONFLICT",
+    "Multiplayer write conflicted with existing persisted records."
+  );
+}
+
+interface DynamoDbTransactionCanceledError extends Error {
+  readonly CancellationReasons?: readonly DynamoDbCancellationReason[];
+}
+
+interface DynamoDbCancellationReason {
+  readonly Code?: string;
+  readonly Message?: string;
+}
+
+function isTransactionCanceledError(
+  error: unknown
+): error is DynamoDbTransactionCanceledError {
+  return error instanceof Error && error.name === "TransactionCanceledException";
+}
+
 export function createDynamoDBMultiplayerStoreFromEnv(
   env: DynamoDBMultiplayerStoreEnvConfig,
   client?: DynamoDBDocumentClientLike
@@ -515,6 +630,18 @@ function getSeatForPlayer(
   );
 
   return seat ?? null;
+}
+
+function assertPlayerIsRoomMember(
+  room: MultiplayerRoomRecord,
+  playerId: string
+): void {
+  if (!room.room.participants[playerId]) {
+    throw new BackendResolverError(
+      "INVALID_ACTOR",
+      "Player is not a member of this room."
+    );
+  }
 }
 
 function getOutputItems(

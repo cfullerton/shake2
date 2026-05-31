@@ -66,7 +66,35 @@ test("public snapshot resolver never returns hands or viewerHand", async () => {
   assert.doesNotMatch(serialized, /"hands"/);
   assert.doesNotMatch(serialized, /"viewerHand"/);
   assert.equal(store.loadPublicSnapshotCalls.length, 1);
+  assert.deepEqual(store.loadPublicSnapshotCalls[0], {
+    actorPlayerId: "player-0",
+    gameId: "game-1"
+  });
   assert.equal(store.loadPrivateHandCalls.length, 0);
+});
+
+test("public snapshot resolver rejects non-member access", async () => {
+  const context = createTestContext();
+  const records = createRecordsWithPendingResults(createStartedSession(context));
+  const store = createMockStore(records);
+  const handler = createGetGameSnapshotHandler({
+    store: store.store
+  });
+
+  await assert.rejects(
+    () => handler({
+      arguments: {
+        gameId: "game-1"
+      },
+      identity: {
+        playerId: "not-a-room-member"
+      }
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "INVALID_ACTOR"
+  );
+  assert.equal(store.loadPublicSnapshotCalls.length, 1);
 });
 
 test("private hand resolver allows the seat owner", async () => {
@@ -305,6 +333,14 @@ function createMockStore(records: MultiplayerStoredGameRecords): MockStore {
       },
       async loadPublicSnapshot(input): Promise<MultiplayerSnapshotRecord> {
         loadPublicSnapshotCalls.push(input);
+
+        if (!records.room.room.participants[input.actorPlayerId]) {
+          throw new BackendResolverError(
+            "INVALID_ACTOR",
+            "Player is not a member of this room."
+          );
+        }
+
         return records.snapshot;
       },
       async loadPrivateHand(input): Promise<MultiplayerPrivateHandRecord> {

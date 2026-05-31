@@ -14,6 +14,7 @@ import {
   type DynamoDBMultiplayerStoreCommand,
   type DynamoDBMultiplayerStoreCommandOutput
 } from "./store.ts";
+import { BackendResolverError } from "../errors/errors.ts";
 import {
   createMultiplayerAcceptedActionWritePlan,
   createMultiplayerActionEnvelope,
@@ -32,6 +33,8 @@ import {
   type MultiplayerRoom,
   type MultiplayerStoredGameRecords,
   type MultiplayerSubmitActionResult,
+  type MultiplayerWriteOperation,
+  type MultiplayerWritePlan,
   type SeatIndex
 } from "../game-engine.ts";
 
@@ -119,17 +122,40 @@ test("loads a public snapshot record without private hands", async () => {
     tableName: TABLE_NAME
   });
   const result = await store.loadPublicSnapshot({
+    actorPlayerId: "player-0",
     gameId: "game-1"
   });
   const get = getCommandInput(client.commands[0], GetCommand);
+  const roomQuery = getCommandInput(client.commands[1], QueryCommand);
 
   assert.deepEqual(result, records.snapshot);
   assert.deepEqual(get.Key, {
     pk: "GAME#game-1",
     sk: "SNAPSHOT#LATEST"
   });
+  assert.equal(roomQuery.IndexName, ROOM_GAME_ID_INDEX_NAME);
   assert.doesNotMatch(JSON.stringify(result), /"hands"/);
   assert.doesNotMatch(JSON.stringify(result), /"viewerHand"/);
+});
+
+test("rejects public snapshot reads for non-members", async () => {
+  const context = createTestContext();
+  const records = createMultiplayerStorageRecords(createStartedSession(context));
+  const client = createMockDynamoClient(records);
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+
+  await assert.rejects(
+    () => store.loadPublicSnapshot({
+      actorPlayerId: "not-a-room-member",
+      gameId: "game-1"
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "INVALID_ACTOR"
+  );
 });
 
 test("loads a private hand record by game and seat", async () => {
@@ -277,6 +303,144 @@ test("commits game-start room status conditions through TransactWriteCommand", a
   });
 });
 
+test("maps duplicate action transaction conflicts to stable errors", async () => {
+  const context = createTestContext();
+  const previousSession = createStartedSession(context);
+  const result = submitSeatBidResult(previousSession, 1, "bid-1", context);
+  const writePlan = createMultiplayerAcceptedActionWritePlan(
+    previousSession,
+    result
+  );
+  const transaction = createMultiplayerDynamoDbTransactionWritePlan(writePlan, {
+    tableName: TABLE_NAME
+  });
+  const client = createMockDynamoClient(
+    createMultiplayerStorageRecords(previousSession),
+    createTransactionCanceledError(
+      createCancellationReasons(writePlan, (operation) =>
+        operation.kind === "putActionResult"
+      )
+    )
+  );
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+
+  await assert.rejects(
+    () => store.commitWritePlan({
+      gameId: "game-1",
+      transaction,
+      writePlan
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "DUPLICATE_ACTION"
+  );
+});
+
+test("maps stale snapshot transaction conflicts to stable errors", async () => {
+  const context = createTestContext();
+  const previousSession = createStartedSession(context);
+  const result = submitSeatBidResult(previousSession, 1, "bid-1", context);
+  const writePlan = createMultiplayerAcceptedActionWritePlan(
+    previousSession,
+    result
+  );
+  const transaction = createMultiplayerDynamoDbTransactionWritePlan(writePlan, {
+    tableName: TABLE_NAME
+  });
+  const client = createMockDynamoClient(
+    createMultiplayerStorageRecords(previousSession),
+    createTransactionCanceledError(
+      createCancellationReasons(writePlan, (operation) =>
+        operation.kind === "putSnapshot"
+      )
+    )
+  );
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+
+  await assert.rejects(
+    () => store.commitWritePlan({
+      gameId: "game-1",
+      transaction,
+      writePlan
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "STALE_ACTION"
+  );
+});
+
+test("maps transaction cancellations without item reasons to persistence conflicts", async () => {
+  const context = createTestContext();
+  const previousSession = createStartedSession(context);
+  const result = submitSeatBidResult(previousSession, 1, "bid-1", context);
+  const writePlan = createMultiplayerAcceptedActionWritePlan(
+    previousSession,
+    result
+  );
+  const transaction = createMultiplayerDynamoDbTransactionWritePlan(writePlan, {
+    tableName: TABLE_NAME
+  });
+  const client = createMockDynamoClient(
+    createMultiplayerStorageRecords(previousSession),
+    createTransactionCanceledError(
+      writePlan.operations.map(() => ({ Code: "None" }))
+    )
+  );
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+
+  await assert.rejects(
+    () => store.commitWritePlan({
+      gameId: "game-1",
+      transaction,
+      writePlan
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "PERSISTENCE_CONFLICT"
+  );
+});
+
+test("maps transaction cancellations without cancellation reasons to persistence conflicts", async () => {
+  const context = createTestContext();
+  const previousSession = createStartedSession(context);
+  const result = submitSeatBidResult(previousSession, 1, "bid-1", context);
+  const writePlan = createMultiplayerAcceptedActionWritePlan(
+    previousSession,
+    result
+  );
+  const transaction = createMultiplayerDynamoDbTransactionWritePlan(writePlan, {
+    tableName: TABLE_NAME
+  });
+  const client = createMockDynamoClient(
+    createMultiplayerStorageRecords(previousSession),
+    createTransactionCanceledError()
+  );
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+
+  await assert.rejects(
+    () => store.commitWritePlan({
+      gameId: "game-1",
+      transaction,
+      writePlan
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "PERSISTENCE_CONFLICT"
+  );
+});
+
 test("env factory uses injected config and mock client without AWS credentials", async () => {
   const context = createTestContext();
   const records = createMultiplayerStorageRecords(createStartedSession(context));
@@ -299,12 +463,19 @@ test("env factory uses injected config and mock client without AWS credentials",
 class MockDynamoClient implements DynamoDBDocumentClientLike {
   readonly commands: DynamoDBMultiplayerStoreCommand[] = [];
 
-  constructor(private readonly records: MultiplayerStoredGameRecords) {}
+  constructor(
+    private readonly records: MultiplayerStoredGameRecords,
+    private readonly transactionFailure?: Error
+  ) {}
 
   async send(
     command: DynamoDBMultiplayerStoreCommand
   ): Promise<DynamoDBMultiplayerStoreCommandOutput> {
     this.commands.push(command);
+
+    if (command instanceof TransactWriteCommand && this.transactionFailure) {
+      throw this.transactionFailure;
+    }
 
     if (command instanceof QueryCommand) {
       const input = getCommandInput(command, QueryCommand);
@@ -384,9 +555,42 @@ class MockDynamoClient implements DynamoDBDocumentClientLike {
 }
 
 function createMockDynamoClient(
-  records: MultiplayerStoredGameRecords
+  records: MultiplayerStoredGameRecords,
+  transactionFailure?: Error
 ): MockDynamoClient {
-  return new MockDynamoClient(records);
+  return new MockDynamoClient(records, transactionFailure);
+}
+
+function createCancellationReasons(
+  writePlan: MultiplayerWritePlan,
+  isFailedOperation: (operation: MultiplayerWriteOperation) => boolean
+): readonly { readonly Code: string; readonly Message?: string }[] {
+  return writePlan.operations.map((operation) =>
+    isFailedOperation(operation)
+      ? {
+          Code: "ConditionalCheckFailed",
+          Message: "The conditional request failed."
+        }
+      : {
+          Code: "None"
+        }
+  );
+}
+
+function createTransactionCanceledError(
+  cancellationReasons?: readonly { readonly Code: string; readonly Message?: string }[]
+): Error {
+  const error = new Error("Transaction cancelled") as Error & {
+    CancellationReasons?: readonly { readonly Code: string; readonly Message?: string }[];
+  };
+
+  error.name = "TransactionCanceledException";
+
+  if (cancellationReasons) {
+    error.CancellationReasons = cancellationReasons;
+  }
+
+  return error;
 }
 
 function getCommandInput<TCommand extends DynamoDBMultiplayerStoreCommand>(

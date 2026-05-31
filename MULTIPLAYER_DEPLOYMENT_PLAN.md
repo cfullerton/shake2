@@ -82,16 +82,17 @@ SHAKE2_ROOM_GAME_ID_INDEX_NAME
 Current tests verify:
 
 - Public snapshot responses do not expose private hands.
+- Public snapshot reads require authenticated room membership.
 - Private hand resolver responses require actor/seat ownership.
 - Cognito `sub` is propagated as the backend multiplayer `playerId`.
 - Rejected player actions persist idempotency results without game-state mutations.
-- The deployed smoke script can validate AppSync auth, Cognito ID-token flow, and Lambda resolver invocation once a dev stack exists.
+- DynamoDB transaction cancellation reasons are mapped to stable backend errors for duplicate action, stale action, and persistence conflicts.
+- The deployed smoke script can validate AppSync auth, Cognito ID-token flow, Lambda resolver invocation, and the optional seeded gameplay/read/reconnect path once a dev stack exists.
 
 Required before production:
 
-- Room membership checks on public snapshot reads.
 - AppSync resolver integration tests against deployed Cognito identities.
-- DynamoDB transaction cancellation mapping and retry policy.
+- DynamoDB retry policy and integration coverage for transaction cancellation behavior.
 - Rate limiting or WAF protection for public API traffic.
 - Resolver log review to ensure private hands are never emitted.
 

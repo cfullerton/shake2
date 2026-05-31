@@ -27,7 +27,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 - `src/functions/getGameSnapshot/handler.ts`
   - Accepts an AppSync-like query resolver event.
   - Requires an authenticated actor identity.
-  - Loads only the latest public/redacted snapshot.
+  - Verifies room membership through the DynamoDB store before returning the latest public/redacted snapshot.
   - Returns an `AppSyncPublicGameSnapshot` without private hands or raw trusted events.
 
 - `src/functions/getGameSnapshot/lambda.ts`
@@ -64,6 +64,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
   - Defines `MultiplayerStore`.
   - Implements `DynamoDBMultiplayerStore` with AWS SDK v3 DynamoDB DocumentClient commands.
   - Supports loading full game records for command validation, loading public snapshots, loading private hand records, loading reconnect records, loading one idempotency result, and committing transaction intents.
+  - Maps DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes for duplicate action, stale action, and persistence conflicts.
   - Is unit-tested with a mocked client and does not require AWS credentials in tests.
 
 - `src/appsync/schema.graphql`
@@ -195,8 +196,8 @@ npm test
 
 ## Next Steps
 
-1. Map DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes.
-2. Add resolver-level room membership authorization for public snapshot reads before deployment.
-3. Deploy a disposable development stack from `infra/` and smoke test real AppSync/Cognito Lambda events.
+1. Add a deployed non-member smoke check with a second Cognito test user for public snapshot denial.
+2. Add DynamoDB Local or equivalent integration tests for conditional transaction failures and retry behavior.
+3. Validate AppSync subscription delivery and client-side sequence-gap recovery.
 4. Add frontend multiplayer configuration and session UI behind a feature flag.
 5. Add production hardening: rate limits, alarms, log review, and retention policies.

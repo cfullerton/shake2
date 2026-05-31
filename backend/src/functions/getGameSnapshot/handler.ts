@@ -25,11 +25,12 @@ export function createGetGameSnapshotHandler(
   dependencies: GetGameSnapshotHandlerDependencies
 ): GetGameSnapshotHandler {
   return async (event) => {
-    extractBackendActor(event.identity);
+    const actor = extractBackendActor(event.identity);
 
     const args = parseArguments(event, "getGameSnapshot");
     const gameId = parseNonEmptyString(args.gameId, "getGameSnapshot.gameId");
     const snapshot = await dependencies.store.loadPublicSnapshot({
+      actorPlayerId: actor.playerId,
       gameId
     });
 
