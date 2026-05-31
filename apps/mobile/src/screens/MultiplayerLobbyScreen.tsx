@@ -26,6 +26,7 @@ import {
 import type { MultiplayerRoomSeat } from "../multiplayer/types";
 import type { RootStackParamList } from "../navigation/types";
 import { letterSpacing, palette, radius, spacing } from "../theme";
+import { MultiplayerActiveGamePanel } from "./MultiplayerActiveGamePanel";
 
 type MultiplayerLobbyScreenProps =
   NativeStackScreenProps<RootStackParamList, "MultiplayerLobby">;
@@ -50,6 +51,7 @@ export function MultiplayerLobbyContent({
   const signedIn = lobby.session !== null;
   const needsNewPassword = lobby.newPasswordChallenge !== null;
   const canStart = canStartMultiplayerRoom(lobby.room);
+  const inStartedGame = lobby.startedGame !== null;
 
   async function handleSignIn() {
     await lobby.signIn({
@@ -183,148 +185,162 @@ export function MultiplayerLobbyContent({
             )}
           </View>
 
-          <View style={styles.panel}>
-            <GameText variant="label" style={styles.panelKicker}>Table Name</GameText>
-            <TextField
-              autoCapitalize="words"
-              label="Display Name"
-              onChangeText={setDisplayName}
-              value={displayName}
-            />
-          </View>
-
-          <View style={styles.actionGrid}>
-            <View style={[styles.panel, styles.actionPanel]}>
-              <View style={styles.actionTitleRow}>
-                <Plus color={palette.crimson} size={20} />
-                <Text style={styles.actionTitle}>Create</Text>
-              </View>
-              <Button
-                disabled={!signedIn}
-                icon={<Users color={palette.surface} size={18} />}
-                loading={lobby.busyAction === "createRoom"}
-                onPress={handleCreateRoom}
-              >
-                Create Room
-              </Button>
-            </View>
-
-            <View style={[styles.panel, styles.actionPanel]}>
-              <View style={styles.actionTitleRow}>
-                <DoorOpen color={palette.denim} size={20} />
-                <Text style={styles.actionTitle}>Join</Text>
-              </View>
-              <TextField
-                autoCapitalize="characters"
-                autoCorrect={false}
-                label="Room Code"
-                onChangeText={setRoomCode}
-                value={roomCode}
-              />
-              <Button
-                disabled={!signedIn || normalizeRoomCode(roomCode).length === 0}
-                icon={<DoorOpen color={palette.denim} size={18} />}
-                loading={lobby.busyAction === "joinRoom"}
-                onPress={handleJoinRoom}
-                variant="secondary"
-              >
-                Join Room
-              </Button>
-            </View>
-          </View>
-
-          {lobby.error ? (
-            <Pressable onPress={lobby.clearError} style={styles.errorBanner}>
-              <AlertCircle color={palette.red} size={18} />
-              <Text style={styles.errorText}>{lobby.error}</Text>
-            </Pressable>
-          ) : null}
-
-          {lobby.room ? (
-            <View style={styles.panel}>
-              <View style={styles.roomHeader}>
-                <View>
-                  <GameText style={styles.roomCode}>{lobby.room.roomCode}</GameText>
-                  <Text style={styles.roomMeta}>
-                    {formatRoomStatus(lobby.room.status)} · {lobby.room.participantCount} players
-                  </Text>
-                </View>
-                <View style={styles.statusPill}>
-                  <Text style={styles.statusPillText}>{formatRoomStatus(lobby.room.status)}</Text>
-                </View>
+          {!inStartedGame ? (
+            <>
+              <View style={styles.panel}>
+                <GameText variant="label" style={styles.panelKicker}>Table Name</GameText>
+                <TextField
+                  autoCapitalize="words"
+                  label="Display Name"
+                  onChangeText={setDisplayName}
+                  value={displayName}
+                />
               </View>
 
-              <View style={styles.seatsGrid}>
-                {orderedSeatIndexes.map((seatIndex) => {
-                  const seat = findSeat(lobby.room?.seats ?? [], seatIndex);
-                  const takingSeat = lobby.busyAction === "takeSeat";
-
-                  return (
-                    <SeatButton
-                      key={seatIndex}
-                      disabled={!seat || seat.occupied || takingSeat}
-                      loading={takingSeat && !seat?.occupied}
-                      onPress={() => {
-                        if (lobby.room) {
-                          void lobby.takeSeat({
-                            roomId: lobby.room.roomId,
-                            seatIndex
-                          });
-                        }
-                      }}
-                      seat={seat}
-                    />
-                  );
-                })}
-              </View>
-
-              <View style={styles.participantList}>
-                {lobby.room.participants.map((participant) => (
-                  <View key={`${participant.displayName}-${participant.joinedAt}`} style={styles.participantRow}>
-                    <Text numberOfLines={1} style={styles.participantName}>
-                      {participant.displayName}
-                    </Text>
-                    <Text style={styles.participantStatus}>
-                      {participant.isViewer ? "You" : participant.connectionStatus}
-                    </Text>
+              <View style={styles.actionGrid}>
+                <View style={[styles.panel, styles.actionPanel]}>
+                  <View style={styles.actionTitleRow}>
+                    <Plus color={palette.crimson} size={20} />
+                    <Text style={styles.actionTitle}>Create</Text>
                   </View>
-                ))}
-              </View>
-
-              {lobby.room.isHost ? (
-                <View style={styles.startRow}>
-                  <TextField
-                    keyboardType="number-pad"
-                    label="Target Marks"
-                    onChangeText={setTargetMarks}
-                    value={targetMarks}
-                  />
                   <Button
-                    disabled={!canStart}
-                    icon={<Play color={palette.surface} size={18} />}
-                    loading={lobby.busyAction === "startGame"}
-                    onPress={handleStartGame}
+                    disabled={!signedIn}
+                    icon={<Users color={palette.surface} size={18} />}
+                    loading={lobby.busyAction === "createRoom"}
+                    onPress={handleCreateRoom}
                   >
-                    Start Game
+                    Create Room
                   </Button>
                 </View>
-              ) : (
-                <StatusPanel
-                  icon={<Users color={palette.denim} size={20} />}
-                  title="Waiting for host"
-                  value="Waiting for a full table."
-                />
-              )}
-            </View>
+
+                <View style={[styles.panel, styles.actionPanel]}>
+                  <View style={styles.actionTitleRow}>
+                    <DoorOpen color={palette.denim} size={20} />
+                    <Text style={styles.actionTitle}>Join</Text>
+                  </View>
+                  <TextField
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    label="Room Code"
+                    onChangeText={setRoomCode}
+                    value={roomCode}
+                  />
+                  <Button
+                    disabled={!signedIn || normalizeRoomCode(roomCode).length === 0}
+                    icon={<DoorOpen color={palette.denim} size={18} />}
+                    loading={lobby.busyAction === "joinRoom"}
+                    onPress={handleJoinRoom}
+                    variant="secondary"
+                  >
+                    Join Room
+                  </Button>
+                </View>
+              </View>
+
+              {lobby.error ? (
+                <Pressable onPress={lobby.clearError} style={styles.errorBanner}>
+                  <AlertCircle color={palette.red} size={18} />
+                  <Text style={styles.errorText}>{lobby.error}</Text>
+                </Pressable>
+              ) : null}
+
+              {lobby.room ? (
+                <View style={styles.panel}>
+                  <View style={styles.roomHeader}>
+                    <View>
+                      <GameText style={styles.roomCode}>{lobby.room.roomCode}</GameText>
+                      <Text style={styles.roomMeta}>
+                        {formatRoomStatus(lobby.room.status)} · {lobby.room.participantCount} players
+                      </Text>
+                    </View>
+                    <View style={styles.statusPill}>
+                      <Text style={styles.statusPillText}>{formatRoomStatus(lobby.room.status)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.seatsGrid}>
+                    {orderedSeatIndexes.map((seatIndex) => {
+                      const seat = findSeat(lobby.room?.seats ?? [], seatIndex);
+                      const takingSeat = lobby.busyAction === "takeSeat";
+
+                      return (
+                        <SeatButton
+                          key={seatIndex}
+                          disabled={!seat || seat.occupied || takingSeat}
+                          loading={takingSeat && !seat?.occupied}
+                          onPress={() => {
+                            if (lobby.room) {
+                              void lobby.takeSeat({
+                                roomId: lobby.room.roomId,
+                                seatIndex
+                              });
+                            }
+                          }}
+                          seat={seat}
+                        />
+                      );
+                    })}
+                  </View>
+
+                  <View style={styles.participantList}>
+                    {lobby.room.participants.map((participant) => (
+                      <View key={`${participant.displayName}-${participant.joinedAt}`} style={styles.participantRow}>
+                        <Text numberOfLines={1} style={styles.participantName}>
+                          {participant.displayName}
+                        </Text>
+                        <Text style={styles.participantStatus}>
+                          {participant.isViewer ? "You" : participant.connectionStatus}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {lobby.room.isHost ? (
+                    <View style={styles.startRow}>
+                      <TextField
+                        keyboardType="number-pad"
+                        label="Target Marks"
+                        onChangeText={setTargetMarks}
+                        value={targetMarks}
+                      />
+                      <Button
+                        disabled={!canStart}
+                        icon={<Play color={palette.surface} size={18} />}
+                        loading={lobby.busyAction === "startGame"}
+                        onPress={handleStartGame}
+                      >
+                        Start Game
+                      </Button>
+                    </View>
+                  ) : (
+                    <StatusPanel
+                      icon={<Users color={palette.denim} size={20} />}
+                      title="Waiting for host"
+                      value="Waiting for a full table."
+                    />
+                  )}
+                </View>
+              ) : null}
+            </>
           ) : null}
 
           {lobby.startedGame ? (
-            <StatusPanel
-              icon={<Play color={palette.felt} size={20} />}
-              tone="felt"
-              title="Game starting"
-              value={`Snapshot ${lobby.startedGame.snapshot.snapshotVersion} · ${formatRoomStatus(lobby.startedGame.room.status)}`}
-            />
+            lobby.gameClient && lobby.session ? (
+              <MultiplayerActiveGamePanel
+                actorId={lobby.session.subject ?? null}
+                client={lobby.gameClient}
+                initialRoom={lobby.startedGame.room}
+                initialSnapshot={lobby.startedGame.snapshot}
+                session={lobby.session}
+              />
+            ) : (
+              <StatusPanel
+                icon={<Play color={palette.felt} size={20} />}
+                tone="felt"
+                title="Game starting"
+                value={`Snapshot ${lobby.startedGame.snapshot.snapshotVersion} · ${formatRoomStatus(lobby.startedGame.room.status)}`}
+              />
+            )
           ) : null}
         </>
       )}

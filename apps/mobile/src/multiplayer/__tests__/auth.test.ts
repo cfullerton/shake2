@@ -68,6 +68,32 @@ test("CognitoPasswordAuthClient sends USER_PASSWORD_AUTH request", async () => {
   });
 });
 
+test("CognitoPasswordAuthClient exposes the Cognito subject from the ID token", async () => {
+  const fetcher: FetchLike = async () =>
+    createJsonResponse({
+      AuthenticationResult: {
+        AccessToken: "access-token",
+        IdToken: "header.eyJzdWIiOiJhY3Rvci1zdWIifQ.signature"
+      }
+    });
+  const client = new CognitoPasswordAuthClient(
+    {
+      awsRegion: "us-east-1",
+      cognitoUserPoolClientId: "client-id"
+    },
+    fetcher
+  );
+
+  await expect(
+    client.signIn({
+      password: "temporary-password",
+      username: "smoke-user"
+    })
+  ).resolves.toMatchObject({
+    subject: "actor-sub"
+  });
+});
+
 test("CognitoPasswordAuthClient maps Cognito errors without echoing passwords", async () => {
   const fetcher: FetchLike = async () =>
     createJsonResponse(

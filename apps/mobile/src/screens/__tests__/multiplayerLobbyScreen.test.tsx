@@ -82,29 +82,12 @@ test("lobby screen renders seats and starts ready host rooms", async () => {
   const room = createRoomView({
     status: "ready"
   });
-  const startedGame: MultiplayerStartGameResult = {
-    room: {
-      ...room,
-      gameId: "game-1",
-      status: "inGame"
-    },
-    snapshot: {
-      gameId: "game-1",
-      generatedAt: "2026-05-31T00:00:00.000Z",
-      lastEventSequence: 2,
-      phase: "dealt",
-      redactedState: {},
-      schemaVersion: 1,
-      snapshotVersion: 2
-    }
-  };
   const startGame = jest.fn(async () => undefined);
   const takeSeat = jest.fn(async () => undefined);
   const view = render(
     <MultiplayerLobbyContent
       lobby={createLobbyController({
         room,
-        startedGame,
         startGame,
         takeSeat
       })}
@@ -129,7 +112,25 @@ test("lobby screen renders seats and starts ready host rooms", async () => {
       targetMarks: 7
     });
   });
+  expect(view.queryByText("Game starting")).toBeNull();
+});
+
+test("lobby screen hands started games to the active-game surface", () => {
+  const room = createRoomView({
+    status: "ready"
+  });
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        room,
+        startedGame: createStartedGame(room)
+      })}
+    />
+  );
+
   expect(view.getByText("Game starting")).toBeTruthy();
+  expect(view.queryByText("Create Room")).toBeNull();
+  expect(view.queryByText("Start Game")).toBeNull();
 });
 
 function createLobbyController(
@@ -143,6 +144,7 @@ function createLobbyController(
     configured: true,
     createRoom: jest.fn(async () => undefined),
     error: null,
+    gameClient: null,
     joinRoom: jest.fn(async () => undefined),
     newPasswordChallenge: null,
     room: null,
@@ -162,6 +164,25 @@ function createSession(): CognitoAuthSession {
     idToken: "id-token",
     tokenType: "Bearer",
     username: "smoke-user"
+  };
+}
+
+function createStartedGame(room: MultiplayerRoomView): MultiplayerStartGameResult {
+  return {
+    room: {
+      ...room,
+      gameId: "game-1",
+      status: "inGame"
+    },
+    snapshot: {
+      gameId: "game-1",
+      generatedAt: "2026-05-31T00:00:00.000Z",
+      lastEventSequence: 2,
+      phase: "dealt",
+      redactedState: {},
+      schemaVersion: 1,
+      snapshotVersion: 2
+    }
   };
 }
 

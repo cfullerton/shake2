@@ -4,7 +4,7 @@
 
 The core multiplayer authority model lives in `packages/game-engine/src/multiplayer`.
 
-It is backend-neutral and pure TypeScript. A backend workspace and CDK development stack now adapt that authority model to Cognito, AppSync, Lambda, and DynamoDB. The mobile app now has the first lobby UI slice for sign-in, create/join, seat selection, and host start.
+It is backend-neutral and pure TypeScript. A backend workspace and CDK development stack now adapt that authority model to Cognito, AppSync, Lambda, and DynamoDB. The mobile app now has lobby UI for sign-in, create/join, seat selection, and host start, plus the first active-game shell for public snapshots, private hands, and bidding actions.
 
 Implemented now:
 
@@ -29,6 +29,7 @@ Implemented now:
 - AppSync/Lambda room lifecycle fields for creating rooms, joining by room code, taking seats, starting ready rooms, and reading safe room views.
 - Mobile multiplayer network foundation for public environment config, Cognito ID-token sign-in, authenticated AppSync GraphQL calls, and typed room/start operations.
 - Mobile multiplayer lobby UI for account sign-in, create/join by room code, room/seat display, seat taking, and host-only start-game.
+- Mobile multiplayer active-game UI for the started-room handoff, public table/score/turn rendering, private-hand loading, manual snapshot refresh, and pass/numeric bid submission.
 
 ## Authority Model
 
@@ -67,7 +68,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI, and an optional deployed smoke path for live AppSync subscription validation. Mobile subscription handling, reconnect UX, and the active multiplayer game screen are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI, a first active-game bidding UI, and an optional deployed smoke path for live AppSync subscription validation. Mobile subscription handling, reconnect UX, and active-game trump/trick-play controls are still missing.
 
 ## Durable Record Shape
 
@@ -189,4 +190,4 @@ The current reconnect helper returns:
 - Deployed smoke coverage for organic create/join/take-seat/start room flows.
 - Subscription gap detection.
 - Leave/rejoin/replacement behavior.
-- Mobile active-game screen.
+- Mobile active-game trump selection and trick-play controls.

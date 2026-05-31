@@ -15,6 +15,7 @@ import {
   readMobileMultiplayerConfig
 } from "./config";
 import { AppSyncGraphqlClient } from "./graphql";
+import { MultiplayerGameClient } from "./game";
 import {
   type CreateRoomInput,
   type JoinRoomInput,
@@ -43,6 +44,8 @@ export interface MultiplayerLobbyClient {
   takeSeat(input: TakeSeatInput): Promise<MultiplayerRoomView>;
 }
 
+export type MultiplayerLobbyGameClient = MultiplayerGameClient;
+
 export interface MultiplayerLobbyAuthClient {
   completeNewPassword(
     input: CognitoCompleteNewPasswordInput
@@ -62,6 +65,10 @@ export interface MultiplayerLobbyDependencies {
     config: MobileMultiplayerConfig,
     session: CognitoAuthSession
   ) => MultiplayerLobbyClient;
+  readonly createGameClient?: (
+    config: MobileMultiplayerConfig,
+    session: CognitoAuthSession
+  ) => MultiplayerLobbyGameClient;
   readonly readConfig?: () => MobileMultiplayerConfig | null;
 }
 
@@ -70,6 +77,7 @@ export interface MultiplayerLobbyState {
   readonly configError: string | null;
   readonly configured: boolean;
   readonly error: string | null;
+  readonly gameClient: MultiplayerLobbyGameClient | null;
   readonly newPasswordChallenge: CognitoNewPasswordChallenge | null;
   readonly room: MultiplayerRoomView | null;
   readonly session: CognitoAuthSession | null;
@@ -121,6 +129,8 @@ export function useMultiplayerLobby(
   const [busyAction, setBusyAction] = useState<MultiplayerLobbyAction | null>(null);
   const [client, setClient] = useState<MultiplayerLobbyClient | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gameClient, setGameClient] =
+    useState<MultiplayerLobbyGameClient | null>(null);
   const [newPasswordChallenge, setNewPasswordChallenge] =
     useState<CognitoNewPasswordChallenge | null>(null);
   const [room, setRoom] = useState<MultiplayerRoomView | null>(null);
@@ -144,6 +154,7 @@ export function useMultiplayerLobby(
       } catch (caught) {
         if (caught instanceof CognitoNewPasswordRequiredError) {
           setClient(null);
+          setGameClient(null);
           setNewPasswordChallenge(caught.challenge);
           setRoom(null);
           setSession(null);
@@ -240,8 +251,12 @@ export function useMultiplayerLobby(
       config,
       nextSession
     );
+    const nextGameClient = (
+      dependencies.createGameClient ?? createDefaultGameClient
+    )(config, nextSession);
 
     setClient(nextClient);
+    setGameClient(nextGameClient);
     setNewPasswordChallenge(null);
     setRoom(null);
     setSession(nextSession);
@@ -256,6 +271,7 @@ export function useMultiplayerLobby(
     configured,
     createRoom,
     error,
+    gameClient,
     joinRoom,
     newPasswordChallenge,
     room,
@@ -278,6 +294,15 @@ function createDefaultRoomClient(
   session: CognitoAuthSession
 ): MultiplayerLobbyClient {
   return new MultiplayerRoomClient(
+    new AppSyncGraphqlClient(config, new StaticAuthSessionProvider(session))
+  );
+}
+
+function createDefaultGameClient(
+  config: MobileMultiplayerConfig,
+  session: CognitoAuthSession
+): MultiplayerLobbyGameClient {
+  return new MultiplayerGameClient(
     new AppSyncGraphqlClient(config, new StaticAuthSessionProvider(session))
   );
 }

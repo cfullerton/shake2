@@ -39,6 +39,12 @@ export interface MultiplayerSeatHandCounts {
   readonly seat3: number;
 }
 
+export interface MultiplayerDomino {
+  readonly high: number;
+  readonly key: string;
+  readonly low: number;
+}
+
 export interface MultiplayerPublicGameSnapshot {
   readonly gameId: string;
   readonly generatedAt: string;
@@ -50,7 +56,49 @@ export interface MultiplayerPublicGameSnapshot {
   readonly snapshotVersion: number;
 }
 
+export type MultiplayerPublicGameSnapshotPayload =
+  Omit<MultiplayerPublicGameSnapshot, "redactedState"> & {
+    readonly redactedState: unknown;
+  };
+
 export interface MultiplayerStartGameResult {
   readonly room: MultiplayerRoomView;
   readonly snapshot: MultiplayerPublicGameSnapshot;
 }
+
+export interface MultiplayerPrivateHand {
+  readonly dominoes: readonly MultiplayerDomino[];
+  readonly gameId: string;
+  readonly handNumber: number;
+  readonly seatIndex: AppSyncSeatIndex;
+  readonly updatedAt: string;
+}
+
+export interface MultiplayerBackendError {
+  readonly code: string;
+  readonly message: string;
+}
+
+export interface MultiplayerSafeGameEventSummary {
+  readonly actionId: string;
+  readonly actorId: string;
+  readonly actorSeat?: AppSyncSeatIndex | null;
+  readonly eventId: string;
+  readonly eventType: string;
+  readonly sequence: number;
+}
+
+export interface MultiplayerSubmitGameActionResult {
+  readonly accepted: boolean;
+  readonly committed: boolean;
+  readonly duplicate: boolean;
+  readonly error?: MultiplayerBackendError | null;
+  readonly events: readonly MultiplayerSafeGameEventSummary[];
+  readonly gameId?: string | null;
+  readonly snapshot?: MultiplayerPublicGameSnapshot | null;
+}
+
+export type MultiplayerSubmitGameActionResultPayload =
+  Omit<MultiplayerSubmitGameActionResult, "snapshot"> & {
+    readonly snapshot?: MultiplayerPublicGameSnapshotPayload | null;
+  };

@@ -1,9 +1,11 @@
 import type { GraphqlClient } from "./graphql";
 import type {
   AppSyncSeatIndex,
+  MultiplayerPublicGameSnapshotPayload,
   MultiplayerRoomView,
   MultiplayerStartGameResult
 } from "./types";
+import { normalizeMultiplayerPublicGameSnapshot } from "./snapshots";
 
 export interface CreateRoomInput {
   readonly displayName: string;
@@ -89,7 +91,7 @@ export class MultiplayerRoomClient {
 
   async startGame(input: StartGameInput): Promise<MultiplayerStartGameResult> {
     const data = await this.graphql.execute<{
-      readonly startGame: MultiplayerStartGameResult;
+      readonly startGame: MultiplayerStartGameResultPayload;
     }>({
       operationName: "StartGame",
       query: `
@@ -114,9 +116,17 @@ export class MultiplayerRoomClient {
       }
     });
 
-    return data.startGame;
+    return {
+      ...data.startGame,
+      snapshot: normalizeMultiplayerPublicGameSnapshot(data.startGame.snapshot)
+    };
   }
 }
+
+type MultiplayerStartGameResultPayload =
+  Omit<MultiplayerStartGameResult, "snapshot"> & {
+    readonly snapshot: MultiplayerPublicGameSnapshotPayload;
+  };
 
 const ROOM_VIEW_SELECTION = `
   roomId

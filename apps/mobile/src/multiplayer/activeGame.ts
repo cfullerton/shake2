@@ -1,0 +1,363 @@
+import type {
+  AppSyncSeatIndex,
+  MultiplayerDomino,
+  MultiplayerPrivateHand,
+  MultiplayerPublicGameSnapshot,
+  MultiplayerRoomSeat,
+  MultiplayerRoomView
+} from "./types";
+
+type SeatNumber = 0 | 1 | 2 | 3;
+type TeamId = "teamA" | "teamB";
+
+export interface MultiplayerActiveSeatSummary {
+  readonly displayName: string;
+  readonly handCount: number | null;
+  readonly isCurrentTurn: boolean;
+  readonly isDealer: boolean;
+  readonly isViewer: boolean;
+  readonly occupied: boolean;
+  readonly seatIndex: AppSyncSeatIndex;
+}
+
+export interface MultiplayerActiveTeamSummary {
+  readonly id: TeamId;
+  readonly marks: number;
+  readonly name: string;
+}
+
+export interface MultiplayerActiveGameView {
+  readonly canPass: boolean;
+  readonly canSubmitBid: boolean;
+  readonly currentBidLabel: string;
+  readonly currentTurnLabel: string;
+  readonly dealerLabel: string;
+  readonly handNumber: number;
+  readonly legalBidAmounts: readonly number[];
+  readonly phase: string;
+  readonly phaseTitle: string;
+  readonly privateHand: readonly MultiplayerDomino[];
+  readonly roomCode: string;
+  readonly seatSummaries: readonly MultiplayerActiveSeatSummary[];
+  readonly snapshotVersionLabel: string;
+  readonly teams: readonly [MultiplayerActiveTeamSummary, MultiplayerActiveTeamSummary];
+  readonly viewerSeat: AppSyncSeatIndex | null;
+  readonly viewerSeatLabel: string;
+  readonly waitingMessage: string;
+}
+
+export const multiplayerSeatLabels: Record<AppSyncSeatIndex, string> = {
+  SEAT_0: "North",
+  SEAT_1: "East",
+  SEAT_2: "South",
+  SEAT_3: "West"
+};
+
+export function createMultiplayerActiveGameView(input: {
+  readonly privateHand: MultiplayerPrivateHand | null;
+  readonly room: MultiplayerRoomView;
+  readonly snapshot: MultiplayerPublicGameSnapshot;
+}): MultiplayerActiveGameView {
+  const state = input.snapshot.redactedState;
+  const viewerSeat = input.room.viewerSeat ?? null;
+  const dealer = readSeatNumber(state.dealer);
+  const currentTurnSeat = readCurrentTurnSeat(state, dealer);
+  const handCounts = readHandCounts(input.snapshot, state);
+  const bidding = readRecord(state.bidding);
+  const currentBidAmount = readHighestBidAmount(bidding);
+  const legalBidAmounts = viewerSeat !== null &&
+    currentTurnSeat === toSeatNumber(viewerSeat) &&
+    isBiddingPhase(input.snapshot.phase)
+      ? createLegalBidAmounts(state, currentBidAmount)
+      : [];
+
+  return {
+    canPass: viewerSeat !== null &&
+      currentTurnSeat === toSeatNumber(viewerSeat) &&
+      isBiddingPhase(input.snapshot.phase),
+    canSubmitBid: legalBidAmounts.length > 0,
+    currentBidLabel: currentBidAmount === null ? "No bid yet" : String(currentBidAmount),
+    currentTurnLabel: currentTurnSeat === null
+      ? "Waiting"
+      : formatSeatLabel(toSeatIndex(currentTurnSeat), viewerSeat),
+    dealerLabel: formatSeatLabel(toSeatIndex(dealer), viewerSeat),
+    handNumber: readNumber(state.handNumber, 1),
+    legalBidAmounts,
+    phase: input.snapshot.phase,
+    phaseTitle: formatPhaseTitle(input.snapshot.phase),
+    privateHand: input.privateHand?.dominoes ?? [],
+    roomCode: input.room.roomCode,
+    seatSummaries: input.room.seats.map((seat) =>
+      createSeatSummary(seat, viewerSeat, dealer, currentTurnSeat, handCounts)
+    ),
+    snapshotVersionLabel: `Snapshot ${input.snapshot.snapshotVersion} · Event ${input.snapshot.lastEventSequence}`,
+    teams: [
+      {
+        id: "teamA",
+        marks: readTeamMarks(state, "teamA"),
+        name: readTeamName(state, "teamA", "North/South")
+      },
+      {
+        id: "teamB",
+        marks: readTeamMarks(state, "teamB"),
+        name: readTeamName(state, "teamB", "East/West")
+      }
+    ],
+    viewerSeat,
+    viewerSeatLabel: viewerSeat ? multiplayerSeatLabels[viewerSeat] : "Spectator",
+    waitingMessage: createWaitingMessage(input.snapshot.phase, currentTurnSeat, viewerSeat)
+  };
+}
+
+export function toSeatNumber(seat: AppSyncSeatIndex): SeatNumber {
+  switch (seat) {
+    case "SEAT_0":
+      return 0;
+    case "SEAT_1":
+      return 1;
+    case "SEAT_2":
+      return 2;
+    case "SEAT_3":
+      return 3;
+  }
+}
+
+export function toSeatIndex(seat: SeatNumber): AppSyncSeatIndex {
+  switch (seat) {
+    case 0:
+      return "SEAT_0";
+    case 1:
+      return "SEAT_1";
+    case 2:
+      return "SEAT_2";
+    case 3:
+      return "SEAT_3";
+  }
+}
+
+function createSeatSummary(
+  seat: MultiplayerRoomSeat,
+  viewerSeat: AppSyncSeatIndex | null,
+  dealer: SeatNumber,
+  currentTurnSeat: SeatNumber | null,
+  handCounts: Readonly<Record<SeatNumber, number | null>>
+): MultiplayerActiveSeatSummary {
+  const seatNumber = toSeatNumber(seat.seatIndex);
+
+  return {
+    displayName: seat.displayName ?? multiplayerSeatLabels[seat.seatIndex],
+    handCount: handCounts[seatNumber],
+    isCurrentTurn: currentTurnSeat === seatNumber,
+    isDealer: dealer === seatNumber,
+    isViewer: viewerSeat === seat.seatIndex,
+    occupied: seat.occupied,
+    seatIndex: seat.seatIndex
+  };
+}
+
+function readCurrentTurnSeat(
+  state: Readonly<Record<string, unknown>>,
+  dealer: SeatNumber
+): SeatNumber | null {
+  const phase = readString(state.phase, "unknown");
+
+  if (phase === "dealt") {
+    return getNextSeat(dealer);
+  }
+
+  if (phase === "bidding") {
+    const bidding = readRecord(state.bidding);
+
+    return readNullableSeatNumber(bidding?.currentSeat);
+  }
+
+  if (phase === "trump") {
+    const trump = readRecord(state.trump);
+
+    return readNullableSeatNumber(trump?.declarer);
+  }
+
+  if (phase === "trickPlay") {
+    const currentTrick = readRecord(state.currentTrick);
+    const leader = readSeatNumber(currentTrick?.leader);
+    const playedDominoes = Array.isArray(currentTrick?.playedDominoes)
+      ? currentTrick.playedDominoes
+      : [];
+
+    return advanceSeat(leader, playedDominoes.length);
+  }
+
+  return null;
+}
+
+function createLegalBidAmounts(
+  state: Readonly<Record<string, unknown>>,
+  currentBidAmount: number | null
+): readonly number[] {
+  const rules = readRecord(state.rules);
+  const bidding = readRecord(rules?.bidding);
+  const minimumBid = readNumber(bidding?.minimumBid, 30);
+  const maximumBid = readNumber(bidding?.maximumNumericBid, 42);
+  const start = Math.max(minimumBid, (currentBidAmount ?? minimumBid - 1) + 1);
+
+  if (start > maximumBid) {
+    return [];
+  }
+
+  return Array.from(
+    {
+      length: maximumBid - start + 1
+    },
+    (_value, index) => start + index
+  );
+}
+
+function readHandCounts(
+  snapshot: MultiplayerPublicGameSnapshot,
+  state: Readonly<Record<string, unknown>>
+): Readonly<Record<SeatNumber, number | null>> {
+  const handCounts = snapshot.handCounts;
+
+  if (handCounts) {
+    return {
+      0: handCounts.seat0,
+      1: handCounts.seat1,
+      2: handCounts.seat2,
+      3: handCounts.seat3
+    };
+  }
+
+  const stateHandCounts = readRecord(state.handCounts);
+
+  return {
+    0: readNullableNumber(stateHandCounts?.[0]),
+    1: readNullableNumber(stateHandCounts?.[1]),
+    2: readNullableNumber(stateHandCounts?.[2]),
+    3: readNullableNumber(stateHandCounts?.[3])
+  };
+}
+
+function readHighestBidAmount(
+  bidding: Readonly<Record<string, unknown>> | undefined
+): number | null {
+  const highestBid = readRecord(bidding?.highestBid);
+  const bid = readRecord(highestBid?.bid);
+  const amount = bid?.amount;
+
+  return typeof amount === "number" && Number.isFinite(amount) ? amount : null;
+}
+
+function readTeamMarks(
+  state: Readonly<Record<string, unknown>>,
+  teamId: TeamId
+): number {
+  const marks = readRecord(state.marks);
+
+  return readNumber(marks?.[teamId], 0);
+}
+
+function readTeamName(
+  state: Readonly<Record<string, unknown>>,
+  teamId: TeamId,
+  fallback: string
+): string {
+  const teams = readRecord(state.teams);
+  const team = readRecord(teams?.[teamId]);
+
+  return readString(team?.name, fallback);
+}
+
+function createWaitingMessage(
+  phase: string,
+  currentTurnSeat: SeatNumber | null,
+  viewerSeat: AppSyncSeatIndex | null
+): string {
+  if (currentTurnSeat === null) {
+    return "Waiting for the next server update.";
+  }
+
+  const currentTurn = toSeatIndex(currentTurnSeat);
+
+  if (viewerSeat === currentTurn) {
+    return phase === "dealt" || phase === "bidding"
+      ? "Your bid."
+      : "Your turn.";
+  }
+
+  return `Waiting for ${multiplayerSeatLabels[currentTurn]}.`;
+}
+
+function formatSeatLabel(
+  seat: AppSyncSeatIndex,
+  viewerSeat: AppSyncSeatIndex | null
+): string {
+  return viewerSeat === seat
+    ? `${multiplayerSeatLabels[seat]} (You)`
+    : multiplayerSeatLabels[seat];
+}
+
+function formatPhaseTitle(phase: string): string {
+  switch (phase) {
+    case "dealt":
+    case "bidding":
+      return "Bidding";
+    case "trump":
+      return "Call Trump";
+    case "trickPlay":
+      return "Trick Play";
+    case "handComplete":
+      return "Hand Complete";
+    case "gameComplete":
+      return "Game Complete";
+    default:
+      return phase.length > 0
+        ? `${phase[0]?.toUpperCase() ?? ""}${phase.slice(1)}`
+        : "Unknown";
+  }
+}
+
+function isBiddingPhase(phase: string): boolean {
+  return phase === "dealt" || phase === "bidding";
+}
+
+function getNextSeat(seat: SeatNumber): SeatNumber {
+  return advanceSeat(seat, 1);
+}
+
+function advanceSeat(seat: SeatNumber, offset: number): SeatNumber {
+  return ((seat + offset) % 4) as SeatNumber;
+}
+
+function readSeatNumber(value: unknown): SeatNumber {
+  const seat = readNullableSeatNumber(value);
+
+  return seat ?? 0;
+}
+
+function readNullableSeatNumber(value: unknown): SeatNumber | null {
+  return value === 0 || value === 1 || value === 2 || value === 3
+    ? value
+    : null;
+}
+
+function readRecord(value: unknown): Readonly<Record<string | number, unknown>> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Readonly<Record<string | number, unknown>>
+    : undefined;
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : fallback;
+}
+
+function readNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : fallback;
+}
+
+function readNullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}

@@ -8,7 +8,7 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows. The mobile app now has a multiplayer network/auth foundation and the first lobby UI slice for Cognito sign-in, create/join, seat taking, and host start. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client reconnect behavior, abuse handling, and the active multiplayer game UI.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows. The mobile app now has a multiplayer network/auth foundation, lobby UI for Cognito sign-in/create/join/seat/start, and the first active-game UI slice for public snapshots, private hands, and bidding. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client reconnect behavior, abuse handling, and completing the active multiplayer game UI beyond bidding.
 
 ## Current Multiplayer Architecture
 
@@ -40,11 +40,15 @@ Mobile multiplayer foundation now lives under `apps/mobile/src/multiplayer`.
 - `auth.ts`: signs in to Cognito through the public app client and exposes an ID-token provider boundary.
 - `graphql.ts`: sends authenticated AppSync GraphQL requests without leaking token handling into UI code.
 - `rooms.ts`: wraps create/join/take-seat/start room GraphQL operations behind typed helpers.
+- `game.ts`: wraps public snapshot, private hand, and submit-action GraphQL operations behind typed helpers.
+- `activeGame.ts`: projects normalized public snapshots plus the viewer private hand into table, score, turn, and bidding UI state outside React components.
+- `useMultiplayerActiveGame.ts`: owns active-game snapshot/private-hand loading, manual refresh, and pass/numeric bid submission state.
 - `useMultiplayerLobby.ts`: owns mobile lobby auth/client/session state and room lifecycle operations outside screen components.
 
-The first mobile lobby screen now lives under `apps/mobile/src/screens`.
+The first mobile multiplayer screens now live under `apps/mobile/src/screens`.
 
-- `MultiplayerLobbyScreen.tsx`: gates missing config, signs in through Cognito, creates or joins rooms, renders room code/participants/seats, lets players take seats, and lets the host start a ready room before handing off to a placeholder game-starting state.
+- `MultiplayerLobbyScreen.tsx`: gates missing config, signs in through Cognito, creates or joins rooms, renders room code/participants/seats, lets players take seats, and lets the host start a ready room before handing off to the active-game panel.
+- `MultiplayerActiveGamePanel.tsx`: renders a started multiplayer game with public table state, scores, turn/dealer/bid status, the viewer private hand, refresh, and pass/numeric bidding controls.
 
 Infrastructure code now lives under `infra`.
 
@@ -102,7 +106,8 @@ Production multiplayer blockers:
 
 5. Mobile multiplayer UI
    - Room creation/join/start lobby screen now exists and uses the mobile multiplayer client foundation.
-   - No multiplayer active-game screen.
+   - First active-game screen now exists for snapshot rendering, private hand loading, refresh, and bidding actions.
+   - No multiplayer trump selection or trick-play controls yet.
    - No reconnect/offline/pending-action UX.
 
 6. Lifecycle and abuse handling
@@ -320,7 +325,7 @@ Rough effort for multiplayer v1, assuming one experienced engineer with this cod
 | Room authorization and lifecycle resolver hardening | 3-5 days |
 | Mobile subscription handling and reconnect gap behavior | 3-6 days |
 | Reconnect endpoint and client sync queue | 4-6 days |
-| Mobile active-game multiplayer UX | 5-8 days |
+| Mobile active-game multiplayer UX completion | 3-6 days |
 | Hidden-information security tests and redaction tests | 2-4 days |
 | Load/contention/idempotency tests | 2-4 days |
 | Room lifecycle cleanup, expiry, replacement basics | 3-5 days |
@@ -353,7 +358,12 @@ Production-quality casual multiplayer:
 4. Reconnect client model
    - Add pending action queue and gap detection in the app without real network transport.
 
-5. Security test matrix
+5. Active-game trump and trick-play UI
+   - Add trump-call controls for the declarer once bidding completes.
+   - Add legal domino selection/play controls for trick play.
+   - Keep action derivation in `apps/mobile/src/multiplayer`, not in screen components.
+
+6. Security test matrix
    - Actor not in room.
    - Actor claiming wrong seat.
    - Private hand access by wrong player.

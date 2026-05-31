@@ -75,7 +75,7 @@ test("MultiplayerRoomClient joins, seats, and starts rooms through AppSync", asy
       roomId: "room-1",
       targetMarks: 5
     })
-  ).resolves.toBe(started);
+  ).resolves.toEqual(started);
 
   expect(graphql.requests.map((request) => request.operationName)).toEqual([
     "JoinRoom",

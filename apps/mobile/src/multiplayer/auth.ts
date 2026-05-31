@@ -17,6 +17,7 @@ export interface CognitoAuthSession {
   readonly expiresAt: number;
   readonly idToken: string;
   readonly refreshToken?: string;
+  readonly subject?: string;
   readonly tokenType: string;
   readonly username: string;
 }
@@ -173,12 +174,14 @@ function toAuthSession(
   const expiresIn = readOptionalNumber(result.ExpiresIn) ?? 3600;
   const tokenType = readOptionalString(result.TokenType) ?? "Bearer";
   const refreshToken = readOptionalString(result.RefreshToken);
+  const subject = readSubjectFromIdToken(idToken);
 
   return {
     accessToken,
     expiresAt: Date.now() + expiresIn * 1000,
     idToken,
     ...(refreshToken ? { refreshToken } : {}),
+    ...(subject ? { subject } : {}),
     tokenType,
     username
   };
@@ -271,4 +274,29 @@ function readOptionalNumber(value: unknown): number | undefined {
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readSubjectFromIdToken(idToken: string): string | undefined {
+  const [, payload] = idToken.split(".");
+
+  if (!payload || typeof globalThis.atob !== "function") {
+    return undefined;
+  }
+
+  try {
+    const normalizedPayload = payload
+      .replace(/-/gu, "+")
+      .replace(/_/gu, "/")
+      .padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    const decodedPayload = globalThis.atob(normalizedPayload);
+    const parsed = JSON.parse(decodedPayload) as unknown;
+
+    if (!isRecord(parsed)) {
+      return undefined;
+    }
+
+    return readOptionalString(parsed.sub);
+  } catch {
+    return undefined;
+  }
 }
