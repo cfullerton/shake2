@@ -57,14 +57,16 @@ test("createRoom persists a host-owned room and returns a safe view", async () =
     }
   });
 
-  assert.equal(response.roomCode, "id-1");
-  assert.equal(response.roomId, "id-2");
+  assert.match(response.roomCode, /^[A-HJ-NP-Z2-9]{6}$/u);
+  assert.doesNotMatch(response.roomCode, /^(id|lambda)-/u);
+  assert.equal(response.roomId, "id-1");
   assert.equal(response.status, "waiting");
   assert.equal(response.isHost, true);
   assert.equal(response.participantCount, 1);
   assert.equal(response.participants[0]?.displayName, "Alice");
   assert.equal(response.participants[0]?.isViewer, true);
   assert.equal(mock.createRoomRecordCalls.length, 1);
+  assert.equal(mock.createRoomRecordCalls[0]?.room.roomCode, response.roomCode);
   assert.doesNotMatch(JSON.stringify(response), /host-sub/);
 });
 
@@ -80,7 +82,7 @@ test("joinRoom loads by room code, joins the actor, and saves conditionally", as
     arguments: {
       input: {
         displayName: "Bob",
-        roomCode: "ROOM42"
+        roomCode: " room-42 "
       }
     },
     identity: {
@@ -317,13 +319,18 @@ test("getRoom and getRoomByCode return safe room views", async () => {
   });
   const byCode = await getRoomByCode({
     arguments: {
-      roomCode: "ROOM42"
+      roomCode: " room-42 "
     },
     identity
   });
 
   assert.equal(byId.roomId, "room-1");
   assert.equal(byCode.roomId, "room-1");
+  assert.deepEqual(mock.loadRoomByCodeCalls, [
+    {
+      roomCode: "ROOM42"
+    }
+  ]);
   assert.equal(byId.isHost, false);
   assert.equal(byId.viewerSeat, undefined);
   assert.doesNotMatch(JSON.stringify(byId), /player-0/);

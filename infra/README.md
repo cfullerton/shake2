@@ -5,7 +5,7 @@ This workspace contains the CDK v2 development infrastructure for multiplayer Te
 ## What It Defines
 
 - Cognito User Pool and public app client.
-- DynamoDB multiplayer table with `pk`/`sk`, TTL, point-in-time recovery, and GSIs for current/near-term access patterns.
+- DynamoDB multiplayer table with `pk`/`sk`, TTL, point-in-time recovery, and GSIs for current/near-term access patterns, including normalized uppercase room invite-code lookup.
 - Ten Lambda functions:
   - `createRoom`
   - `joinRoom`

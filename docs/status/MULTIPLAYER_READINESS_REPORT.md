@@ -8,7 +8,7 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows. The mobile app now has a multiplayer network/auth foundation, lobby UI for Cognito sign-in/create/join/seat/start, and an active-game UI slice for public snapshots, private hands, bidding, and declarer trump selection. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client reconnect behavior, abuse handling, and completing the active multiplayer game UI beyond trump selection.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows, with non-sensitive generated invite codes and normalized code lookup. The mobile app now has a multiplayer network/auth foundation, lobby UI for Cognito sign-in/create/join/seat/start, and an active-game UI slice for public snapshots, private hands, bidding, and declarer trump selection. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client reconnect behavior, abuse handling, and completing the active multiplayer game UI beyond trump selection.
 
 ## Current Multiplayer Architecture
 
@@ -23,7 +23,7 @@ Current multiplayer code is backend-neutral and lives under `packages/game-engin
 Backend shell code now lives under `backend`.
 
 - `src/functions/submitGameAction/handler.ts`: AppSync-like Lambda resolver shell for submit-game-action requests.
-- `src/functions/rooms/handler.ts`: AppSync-like room lifecycle resolver shells for creating rooms, joining by room code, taking seats, starting ready rooms, and reading safe room views.
+- `src/functions/rooms/handler.ts`: AppSync-like room lifecycle resolver shells for creating rooms with safe invite codes, joining by normalized room code, taking seats, starting ready rooms, and reading safe room views.
 - `src/functions/getGameSnapshot/handler.ts`: AppSync-like query resolver shell that returns only public/redacted game snapshots after room membership authorization.
 - `src/functions/getMyPrivateHand/handler.ts`: AppSync-like query resolver shell that enforces private-hand seat ownership before returning dominoes.
 - `src/functions/getReconnectView/handler.ts`: AppSync-like query resolver shell that returns latest public state, actor private hand when seated, and accepted/rejected/unknown pending action status.
@@ -91,7 +91,7 @@ Production multiplayer blockers:
 
 3. AppSync or realtime transport
    - A GraphQL schema, local contract tests, and CDK AppSync/Lambda resolver wiring now exist.
-   - Room lifecycle fields now exist for create/join/take-seat/start and room lookups.
+   - Room lifecycle fields now exist for create/join/take-seat/start and room lookups, and new rooms now use short generated invite codes instead of infrastructure-derived fallback IDs.
    - A deployed smoke script is available for the mutation and query resolvers, including a seeded happy-path action/read/reconnect check.
    - The smoke harness can validate live AppSync `onGameUpdated` delivery after registering the subscription and before submitting the seeded action.
    - Need to run and record the subscription smoke mode against the current deployed dev stack.
@@ -154,7 +154,7 @@ Recommended DynamoDB layout should follow current backend-neutral records:
 
 Recommended indexes:
 
-- Room code lookup: `roomCode -> roomId`.
+- Room code lookup: normalized uppercase `roomCode -> roomId`.
 - Player rooms: `playerId -> active room/game summaries`.
 - Expiry/archive scan: `expiresAt`.
 

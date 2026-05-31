@@ -146,7 +146,7 @@ test("loads room records by room code index", async () => {
     tableName: TABLE_NAME
   });
   const result = await store.loadRoomByCode({
-    roomCode: "ROOM42"
+    roomCode: " room-42 "
   });
   const query = getCommandInput(client.commands[0], QueryCommand);
 

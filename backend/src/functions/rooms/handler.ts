@@ -20,6 +20,7 @@ import {
   createMultiplayerRoom,
   createMultiplayerRoomRecord,
   createMultiplayerVisibleSnapshot,
+  getEngineRandom,
   joinMultiplayerRoom,
   startMultiplayerGame,
   takeMultiplayerSeat,
@@ -66,7 +67,8 @@ export function createCreateRoomHandler(
     const room = createMultiplayerRoom(
       {
         hostDisplayName: input.displayName,
-        hostPlayerId: actor.playerId
+        hostPlayerId: actor.playerId,
+        roomCode: createRoomCode(dependencies.engineContext)
       },
       dependencies.engineContext
     );
@@ -225,10 +227,10 @@ export function createGetRoomByCodeHandler(
   return async (event) => {
     const actor = extractBackendActor(event.identity);
     const args = parseArguments(event, "getRoomByCode");
-    const roomCode = parseNonEmptyString(
+    const roomCode = parseRoomCode(
       args.roomCode,
       "getRoomByCode.roomCode"
-    ).trim();
+    );
     const record = await dependencies.store.loadRoomByCode({
       roomCode
     });
@@ -288,7 +290,7 @@ function parseJoinRoomInput(event: AppSyncResolverEvent): AppSyncJoinRoomInput {
   return {
     displayName: parseNonEmptyString(input.displayName, "joinRoom.displayName")
       .trim(),
-    roomCode: parseNonEmptyString(input.roomCode, "joinRoom.roomCode").trim()
+    roomCode: parseRoomCode(input.roomCode, "joinRoom.roomCode")
   };
 }
 
@@ -363,6 +365,36 @@ function createTransaction(
   return createMultiplayerDynamoDbTransactionWritePlan(writePlan, {
     tableName: resolverContext.tableName
   });
+}
+
+const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const ROOM_CODE_LENGTH = 6;
+
+function createRoomCode(context: Pick<EngineContext, "random">): string {
+  return Array.from({ length: ROOM_CODE_LENGTH }, () => {
+    const index = Math.floor(
+      getEngineRandom(context) * ROOM_CODE_ALPHABET.length
+    );
+
+    return ROOM_CODE_ALPHABET[index] ?? "A";
+  }).join("");
+}
+
+function parseRoomCode(value: unknown, label: string): string {
+  const roomCode = normalizeRoomCode(parseNonEmptyString(value, label));
+
+  if (roomCode.length === 0) {
+    throw new BackendResolverError(
+      "MALFORMED_REQUEST",
+      `${label} must include at least one room code character.`
+    );
+  }
+
+  return roomCode;
+}
+
+function normalizeRoomCode(value: string): string {
+  return value.trim().replace(/[\s-]/gu, "").toUpperCase();
 }
 
 function assertRoomHost(room: MultiplayerRoom, playerId: string): void {

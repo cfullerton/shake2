@@ -12,6 +12,7 @@ Implemented now:
 - Player join and four-seat assignment.
 - Ready/in-game/completed room status.
 - Host-only game start.
+- Short uppercase room invite codes that are generated separately from room IDs and normalized before join/look-up.
 - `FortyTwoState.mode = "multiplayer"`.
 - Server-managed game creation and initial hand deal.
 - Authorized player action submission for bid, trump call, and domino play.
@@ -68,7 +69,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI, active-game bidding/trump UI, and an optional deployed smoke path for live AppSync subscription validation. Mobile subscription handling, reconnect UX, and active-game trick-play controls are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI, active-game bidding/trump UI, and an optional deployed smoke path for live AppSync subscription validation. Mobile subscription handling, reconnect UX, and active-game trick-play controls are still missing.
 
 ## Durable Record Shape
 

@@ -57,6 +57,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 - `src/functions/rooms/handler.ts`
   - Accepts AppSync-like `createRoom`, `joinRoom`, `takeSeat`, `startGame`, `getRoom`, and `getRoomByCode` events.
   - Uses Cognito/mock identity as the authoritative room actor.
+  - Generates short, non-sensitive uppercase room invite codes and normalizes pasted join/look-up codes before store access.
   - Delegates room creation, joining, seating, and host-only game-start rules to the shared multiplayer engine.
   - Persists room metadata through conditional DynamoDB store methods.
   - Commits game-start write plans through the same DynamoDB transaction path used by gameplay actions.
@@ -76,7 +77,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 - `src/dynamodb/store.ts`
   - Defines `MultiplayerStore`.
   - Implements `DynamoDBMultiplayerStore` with AWS SDK v3 DynamoDB DocumentClient commands.
-  - Supports creating, loading, and conditionally updating room records; loading full game records for command validation; loading public snapshots, private hand records, reconnect records, and one idempotency result; and committing transaction intents.
+  - Supports creating, loading, and conditionally updating room records; loading rooms by normalized invite code; loading full game records for command validation; loading public snapshots, private hand records, reconnect records, and one idempotency result; and committing transaction intents.
   - Maps DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes for duplicate action, stale action, and persistence conflicts.
   - Is unit-tested with a mocked client and does not require AWS credentials in tests.
 
@@ -202,7 +203,7 @@ Set `SHAKE2_SMOKE_SEED_GAME=true` to run the extended smoke path. That path writ
 
 Set `SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION=true` with `SHAKE2_SMOKE_SEED_GAME=true` to validate live AppSync delivery. In that mode the runner establishes `onGameUpdated(gameId)`, waits for `start_ack`, submits the seeded legal action over HTTPS, and verifies the WebSocket data message contains the accepted action, root `gameId`, safe event summaries, and a redacted public snapshot.
 
-The room code index must allow lookup of room metadata by `roomCode`, and the room game ID index must allow lookup by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
+The room code index must allow lookup of room metadata by `roomCode`, and the room game ID index must allow lookup by `gameId`. Newly created room codes are six-character uppercase invite codes generated separately from room IDs and actor IDs. Join and lookup handlers normalize case, spaces, and hyphens before querying. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 
 ## Test Commands
 

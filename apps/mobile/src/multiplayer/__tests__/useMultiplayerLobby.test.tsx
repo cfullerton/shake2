@@ -67,7 +67,7 @@ test("normalizes lobby form values before room requests", async () => {
   await act(async () => {
     await harness.current.joinRoom({
       displayName: " Alice ",
-      roomCode: " room42 "
+      roomCode: " room-42 "
     });
   });
   await act(async () => {
@@ -194,6 +194,7 @@ test("completes Cognito new-password challenges", async () => {
 
 test("normalizes lobby strings", () => {
   expect(normalizeRoomCode(" room42 ")).toBe("ROOM42");
+  expect(normalizeRoomCode(" ab-c 12 ")).toBe("ABC12");
   expect(normalizeDisplayName("  ")).toBe("Player");
 });
 

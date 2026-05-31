@@ -111,7 +111,7 @@ export const orderedSeatIndexes: readonly AppSyncSeatIndex[] = [
 ];
 
 export function normalizeRoomCode(value: string): string {
-  return value.trim().toUpperCase();
+  return value.trim().replace(/[\s-]/gu, "").toUpperCase();
 }
 
 export function normalizeDisplayName(value: string): string {

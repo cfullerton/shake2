@@ -200,13 +200,14 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
   async loadRoomByCode(
     input: LoadRoomByCodeInput
   ): Promise<MultiplayerRoomRecord> {
+    const roomCode = normalizeRoomCode(input.roomCode);
     const output = await this.client.send(
       new QueryCommand({
         ExpressionAttributeNames: {
           "#roomCode": "roomCode"
         },
         ExpressionAttributeValues: {
-          ":roomCode": input.roomCode
+          ":roomCode": roomCode
         },
         IndexName: this.config.roomCodeIndexName,
         KeyConditionExpression: "#roomCode = :roomCode",
@@ -217,7 +218,7 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
     );
     const room = getOutputItems(output)
       .map((item) => parseMultiplayerRoomRecord(item))
-      .find((record) => record.roomCode === input.roomCode);
+      .find((record) => record.roomCode === roomCode);
 
     if (!room) {
       throw new BackendResolverError(
@@ -839,6 +840,10 @@ function getOutputItems(
   }
 
   return output.Items as Record<string, unknown>[];
+}
+
+function normalizeRoomCode(value: string): string {
+  return value.trim().replace(/[\s-]/gu, "").toUpperCase();
 }
 
 function getItemSortKey(item: Record<string, unknown>): string {
