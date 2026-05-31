@@ -14,17 +14,22 @@ type Mutation {
 }
 ```
 
+`CreateRoomInput` includes a `visibility` enum so clients can create invite-only private rooms or discoverable public rooms.
+
 ## Queries
 
 ```graphql
 type Query {
   getRoom(roomId: ID!): RoomView
   getRoomByCode(roomCode: String!): RoomView
+  listPublicRooms: [RoomView!]!
   getGameSnapshot(gameId: ID!): GameSnapshotView
   getMyPrivateHand(gameId: ID!): PrivateHandView
   listMyGames: [GameSummary!]!
 }
 ```
+
+`listPublicRooms` returns safe room views only: no Cognito subjects, raw player IDs, private hands, or trusted event payloads.
 
 ## Subscriptions
 

@@ -65,6 +65,10 @@ export class MultiplayerAppSyncConstruct extends Construct {
       "GetRoomByCodeDataSource",
       props.functions.getRoomByCode
     );
+    const listPublicRoomsDataSource = this.api.addLambdaDataSource(
+      "ListPublicRoomsDataSource",
+      props.functions.listPublicRooms
+    );
     const submitGameActionDataSource = this.api.addLambdaDataSource(
       "SubmitGameActionDataSource",
       props.functions.submitGameAction
@@ -108,6 +112,10 @@ export class MultiplayerAppSyncConstruct extends Construct {
     });
     getRoomByCodeDataSource.createResolver("GetRoomByCodeResolver", {
       fieldName: "getRoomByCode",
+      typeName: "Query"
+    });
+    listPublicRoomsDataSource.createResolver("ListPublicRoomsResolver", {
+      fieldName: "listPublicRooms",
       typeName: "Query"
     });
     getGameSnapshotDataSource.createResolver("GetGameSnapshotResolver", {

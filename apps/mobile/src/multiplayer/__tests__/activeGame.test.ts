@@ -324,6 +324,7 @@ function createRoomView(
     status: "inGame",
     updatedAt: "2026-05-31T00:00:00.000Z",
     viewerSeat: "SEAT_1",
+    visibility: "private",
     ...overrides
   };
 }

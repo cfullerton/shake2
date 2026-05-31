@@ -2,6 +2,7 @@ import { RemovalPolicy } from "aws-cdk-lib";
 
 export interface MultiplayerInfrastructureConfig {
   readonly appName: string;
+  readonly publicRoomsIndexName: string;
   readonly removalPolicy: RemovalPolicy;
   readonly roomCodeIndexName: string;
   readonly roomGameIdIndexName: string;
@@ -13,6 +14,7 @@ export function createMultiplayerInfrastructureConfig(
 ): MultiplayerInfrastructureConfig {
   return {
     appName: "shake2",
+    publicRoomsIndexName: "PublicRoomsIndex",
     removalPolicy: stage === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
     roomCodeIndexName: "RoomCodeIndex",
     roomGameIdIndexName: "GameIdIndex",

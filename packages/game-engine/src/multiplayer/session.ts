@@ -58,6 +58,10 @@ export type MultiplayerRoomStatus =
   | "inGame"
   | "completed";
 
+export type MultiplayerRoomVisibility =
+  | "private"
+  | "public";
+
 export type MultiplayerConnectionStatus =
   | "online"
   | "backgrounded"
@@ -96,6 +100,7 @@ export interface MultiplayerRoom {
   readonly seats: MultiplayerSeats;
   readonly status: MultiplayerRoomStatus;
   readonly updatedAt: string;
+  readonly visibility: MultiplayerRoomVisibility;
 }
 
 export interface CreateMultiplayerRoomInput {
@@ -103,6 +108,7 @@ export interface CreateMultiplayerRoomInput {
   readonly hostPlayerId: string;
   readonly roomCode?: string;
   readonly roomId?: string;
+  readonly visibility?: MultiplayerRoomVisibility;
 }
 
 export interface JoinMultiplayerRoomInput {
@@ -234,7 +240,8 @@ export function createMultiplayerRoom(
     roomId: input.roomId ?? getEngineId(context),
     seats: createEmptySeats(),
     status: "waiting",
-    updatedAt: createdAt
+    updatedAt: createdAt,
+    visibility: input.visibility ?? "private"
   };
 }
 

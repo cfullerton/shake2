@@ -48,12 +48,14 @@ export interface MultiplayerRoomRecord {
   readonly gameId?: string;
   readonly hostPlayerId: string;
   readonly pk: `ROOM#${string}`;
+  readonly publicRoomListKey?: "PUBLIC#OPEN";
   readonly room: MultiplayerRoom;
   readonly roomCode: string;
   readonly roomId: string;
   readonly sk: "META";
   readonly status: MultiplayerRoom["status"];
   readonly updatedAt: string;
+  readonly visibility: MultiplayerRoom["visibility"];
 }
 
 export interface MultiplayerGameEventRecord<
@@ -244,13 +246,20 @@ export function createMultiplayerRoomRecord(
     ...(room.gameId !== undefined ? { gameId: room.gameId } : {}),
     hostPlayerId: room.hostPlayerId,
     pk: `ROOM#${room.roomId}`,
+    ...(isPublicOpenRoom(room) ? { publicRoomListKey: "PUBLIC#OPEN" as const } : {}),
     room,
     roomCode: room.roomCode,
     roomId: room.roomId,
     sk: "META",
     status: room.status,
-    updatedAt: room.updatedAt
+    updatedAt: room.updatedAt,
+    visibility: room.visibility
   };
+}
+
+function isPublicOpenRoom(room: MultiplayerRoom): boolean {
+  return room.visibility === "public" &&
+    (room.status === "waiting" || room.status === "ready");
 }
 
 export function createMultiplayerGameEventRecord(

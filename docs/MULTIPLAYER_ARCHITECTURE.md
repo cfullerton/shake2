@@ -4,7 +4,7 @@
 
 The core multiplayer authority model lives in `packages/game-engine/src/multiplayer`.
 
-It is backend-neutral and pure TypeScript. A backend workspace and CDK development stack now adapt that authority model to Cognito, AppSync, Lambda, and DynamoDB. The mobile app now has lobby UI for sign-in, create/join, seat selection, and host start, plus the first active-game shell for public snapshots, private hands, bidding actions, and declarer trump calls.
+It is backend-neutral and pure TypeScript. A backend workspace and CDK development stack now adapt that authority model to Cognito, AppSync, Lambda, and DynamoDB. The mobile app now has lobby UI for sign-in, private/public create and join flows, seat selection, host start, and polling-based lobby refresh, plus the first active-game shell for public snapshots, private hands, bidding actions, and declarer trump calls.
 
 Implemented now:
 
@@ -12,6 +12,7 @@ Implemented now:
 - Player join and four-seat assignment.
 - Ready/in-game/completed room status.
 - Host-only game start.
+- Private rooms by invite code and public rooms discoverable from an authenticated public-room list.
 - Short uppercase room invite codes that are generated separately from room IDs and normalized before join/look-up.
 - `FortyTwoState.mode = "multiplayer"`.
 - Server-managed game creation and initial hand deal.
@@ -29,7 +30,7 @@ Implemented now:
 - Backend-neutral write plans for game start, accepted player actions, and rejected player actions.
 - AppSync/Lambda room lifecycle fields for creating rooms, joining by room code, taking seats, starting ready rooms, and reading safe room views.
 - Mobile multiplayer network foundation for public environment config, Cognito ID-token sign-in, authenticated AppSync GraphQL calls, and typed room/start operations.
-- Mobile multiplayer lobby UI for account sign-in, create/join by room code, room/seat display, seat taking, and host-only start-game.
+- Mobile multiplayer lobby UI for account sign-in, private/public room creation, join by room code, public room listing, room/seat display, seat taking, and host-only start-game.
 - Mobile multiplayer active-game UI for the started-room handoff, public table/score/turn rendering, private-hand loading, manual snapshot refresh, pass/numeric bid submission, and declarer trump selection.
 
 ## Authority Model
@@ -69,7 +70,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI, active-game bidding/trump UI, and an optional deployed smoke path for live AppSync subscription validation. Mobile subscription handling, reconnect UX, and active-game trick-play controls are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh, active-game bidding/trump UI, and an optional deployed smoke path for live AppSync subscription validation. Mobile subscription handling, reconnect UX, and active-game trick-play controls are still missing.
 
 ## Durable Record Shape
 
@@ -77,7 +78,7 @@ The backend-neutral storage module lives in `packages/game-engine/src/multiplaye
 
 It produces records shaped for a future DynamoDB adapter:
 
-- `ROOM#<roomId> / META`
+- `ROOM#<roomId> / META` with `publicRoomListKey` only while a public room is waiting or ready
 - `GAME#<gameId> / EVENT#<sequence>`
 - `GAME#<gameId> / SNAPSHOT#LATEST`
 - `GAME#<gameId> / PRIVATE_HAND#<seatIndex>`

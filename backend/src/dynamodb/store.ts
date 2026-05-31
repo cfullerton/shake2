@@ -30,6 +30,7 @@ import {
   type MultiplayerStoredGameRecords,
   type MultiplayerWriteOperation,
   type MultiplayerWritePlan,
+  type MultiplayerRoomVisibility,
   type SeatIndex
 } from "../game-engine.ts";
 
@@ -43,6 +44,10 @@ export interface LoadRoomInput {
 
 export interface LoadRoomByCodeInput {
   readonly roomCode: string;
+}
+
+export interface ListPublicRoomsInput {
+  readonly limit?: number;
 }
 
 export interface CreateRoomRecordInput {
@@ -94,6 +99,9 @@ export interface MultiplayerStore {
   loadRoomByCode(
     input: LoadRoomByCodeInput
   ): Promise<MultiplayerRoomRecord>;
+  listPublicRooms(
+    input?: ListPublicRoomsInput
+  ): Promise<readonly MultiplayerRoomRecord[]>;
   createRoomRecord(input: CreateRoomRecordInput): Promise<MultiplayerRoomRecord>;
   saveRoomRecord(input: SaveRoomRecordInput): Promise<MultiplayerRoomRecord>;
   loadGameSnapshot(
@@ -134,6 +142,7 @@ export interface DynamoDBDocumentClientLike {
 
 export interface DynamoDBMultiplayerStoreConfig {
   readonly consistentRead?: boolean;
+  readonly publicRoomsIndexName?: string;
   readonly roomCodeIndexName?: string;
   readonly roomGameIdIndexName: string;
   readonly tableName: string;
@@ -142,6 +151,7 @@ export interface DynamoDBMultiplayerStoreConfig {
 export interface DynamoDBMultiplayerStoreEnvConfig {
   readonly AWS_REGION?: string;
   readonly SHAKE2_MULTIPLAYER_TABLE_NAME?: string;
+  readonly SHAKE2_PUBLIC_ROOMS_INDEX_NAME?: string;
   readonly SHAKE2_ROOM_CODE_INDEX_NAME?: string;
   readonly SHAKE2_ROOM_GAME_ID_INDEX_NAME?: string;
 }
@@ -150,6 +160,7 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
   private readonly client: DynamoDBDocumentClientLike;
   private readonly config: DynamoDBMultiplayerStoreConfig & {
     readonly consistentRead: boolean;
+    readonly publicRoomsIndexName: string;
     readonly roomCodeIndexName: string;
   };
 
@@ -161,12 +172,17 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
     this.config = {
       ...config,
       consistentRead: config.consistentRead ?? true,
+      publicRoomsIndexName: config.publicRoomsIndexName ?? "PublicRoomsIndex",
       roomCodeIndexName: config.roomCodeIndexName ?? "RoomCodeIndex"
     };
     assertNonEmptyString(this.config.tableName, "DynamoDB table name");
     assertNonEmptyString(
       this.config.roomGameIdIndexName,
       "DynamoDB room game ID index name"
+    );
+    assertNonEmptyString(
+      this.config.publicRoomsIndexName,
+      "DynamoDB public rooms index name"
     );
     assertNonEmptyString(
       this.config.roomCodeIndexName,
@@ -228,6 +244,30 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
     }
 
     return room;
+  }
+
+  async listPublicRooms(
+    input: ListPublicRoomsInput = {}
+  ): Promise<readonly MultiplayerRoomRecord[]> {
+    const output = await this.client.send(
+      new QueryCommand({
+        ExpressionAttributeNames: {
+          "#publicRoomListKey": "publicRoomListKey"
+        },
+        ExpressionAttributeValues: {
+          ":publicRoomListKey": "PUBLIC#OPEN"
+        },
+        IndexName: this.config.publicRoomsIndexName,
+        KeyConditionExpression: "#publicRoomListKey = :publicRoomListKey",
+        Limit: input.limit ?? 20,
+        ScanIndexForward: false,
+        TableName: this.config.tableName
+      })
+    );
+
+    return getOutputItems(output)
+      .map((item) => parseMultiplayerRoomRecord(item))
+      .filter((record) => isPublicOpenRoom(record));
   }
 
   async createRoomRecord(
@@ -760,6 +800,8 @@ export function createDynamoDBMultiplayerStoreFromEnv(
     env.SHAKE2_ROOM_GAME_ID_INDEX_NAME,
     "SHAKE2_ROOM_GAME_ID_INDEX_NAME"
   );
+  const publicRoomsIndexName =
+    env.SHAKE2_PUBLIC_ROOMS_INDEX_NAME ?? "PublicRoomsIndex";
   const roomCodeIndexName = env.SHAKE2_ROOM_CODE_INDEX_NAME ?? "RoomCodeIndex";
   const documentClient = client ?? DynamoDBDocumentClient.from(
     new DynamoDBClient(
@@ -768,6 +810,7 @@ export function createDynamoDBMultiplayerStoreFromEnv(
   );
 
   return new DynamoDBMultiplayerStore(documentClient, {
+    publicRoomsIndexName,
     roomCodeIndexName,
     roomGameIdIndexName,
     tableName
@@ -781,6 +824,9 @@ export function createUnimplementedMultiplayerStore(): MultiplayerStore {
     },
     async loadRoomByCode(): Promise<MultiplayerRoomRecord> {
       throw new Error("MultiplayerStore.loadRoomByCode is not implemented.");
+    },
+    async listPublicRooms(): Promise<readonly MultiplayerRoomRecord[]> {
+      throw new Error("MultiplayerStore.listPublicRooms is not implemented.");
     },
     async createRoomRecord(): Promise<MultiplayerRoomRecord> {
       throw new Error("MultiplayerStore.createRoomRecord is not implemented.");
@@ -844,6 +890,14 @@ function getOutputItems(
 
 function normalizeRoomCode(value: string): string {
   return value.trim().replace(/[\s-]/gu, "").toUpperCase();
+}
+
+function isPublicOpenRoom(record: {
+  readonly status: string;
+  readonly visibility: MultiplayerRoomVisibility;
+}): boolean {
+  return record.visibility === "public" &&
+    (record.status === "waiting" || record.status === "ready");
 }
 
 function getItemSortKey(item: Record<string, unknown>): string {

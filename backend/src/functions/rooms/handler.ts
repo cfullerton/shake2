@@ -54,6 +54,10 @@ export type RoomLifecycleHandler = (
   event: AppSyncResolverEvent
 ) => Promise<AppSyncRoomView>;
 
+export type ListPublicRoomsHandler = (
+  event: AppSyncResolverEvent
+) => Promise<readonly AppSyncRoomView[]>;
+
 export type StartGameHandler = (
   event: AppSyncResolverEvent
 ) => Promise<AppSyncStartGameResult>;
@@ -68,7 +72,8 @@ export function createCreateRoomHandler(
       {
         hostDisplayName: input.displayName,
         hostPlayerId: actor.playerId,
-        roomCode: createRoomCode(dependencies.engineContext)
+        roomCode: createRoomCode(dependencies.engineContext),
+        ...(input.visibility ? { visibility: input.visibility } : {})
       },
       dependencies.engineContext
     );
@@ -239,6 +244,17 @@ export function createGetRoomByCodeHandler(
   };
 }
 
+export function createListPublicRoomsHandler(
+  dependencies: Pick<RoomLifecycleHandlerDependencies, "store">
+): ListPublicRoomsHandler {
+  return async (event) => {
+    const actor = extractBackendActor(event.identity);
+    const records = await dependencies.store.listPublicRooms();
+
+    return records.map((record) => toAppSyncRoomView(record.room, actor));
+  };
+}
+
 export const createRoomHandler = createCreateRoomHandler({
   engineContext: createSystemEngineContext(),
   store: createUnimplementedMultiplayerStore()
@@ -271,15 +287,21 @@ export const getRoomByCodeHandler = createGetRoomByCodeHandler({
   store: createUnimplementedMultiplayerStore()
 });
 
+export const listPublicRoomsHandler = createListPublicRoomsHandler({
+  store: createUnimplementedMultiplayerStore()
+});
+
 function parseCreateRoomInput(
   event: AppSyncResolverEvent
 ): AppSyncCreateRoomInput {
   const args = parseArguments(event, "createRoom");
   const input = parseInputObject(args.input, "createRoom.input");
+  const visibility = parseRoomVisibility(input.visibility, "createRoom.visibility");
 
   return {
     displayName: parseNonEmptyString(input.displayName, "createRoom.displayName")
-      .trim()
+      .trim(),
+    ...(visibility ? { visibility } : {})
   };
 }
 
@@ -340,6 +362,24 @@ function parseOptionalPositiveInteger(
   }
 
   return value;
+}
+
+function parseRoomVisibility(
+  value: unknown,
+  label: string
+): AppSyncCreateRoomInput["visibility"] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (value === "private" || value === "public") {
+    return value;
+  }
+
+  throw new BackendResolverError(
+    "MALFORMED_REQUEST",
+    `${label} must be private or public.`
+  );
 }
 
 function unwrapRoomResult(

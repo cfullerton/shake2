@@ -6,9 +6,9 @@ The CDK stack in `infra/` defines the development multiplayer environment:
 
 - Cognito User Pool for authenticated players.
 - Cognito App Client for the Expo app.
-- DynamoDB multiplayer table for rooms, game events, public snapshots, private hands, and idempotency results.
+- DynamoDB multiplayer table for rooms, open public-room listings, game events, public snapshots, private hands, and idempotency results.
 - AppSync GraphQL API using `backend/src/appsync/schema.graphql`.
-- Lambda resolvers for room lifecycle/game-start operations, `submitGameAction`, `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView`.
+- Lambda resolvers for room lifecycle/game-start operations, public-room listing, `submitGameAction`, `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView`.
 - IAM roles for Lambda execution and DynamoDB access.
 
 ## Deployment Flow
@@ -77,6 +77,7 @@ For manual local resolver experiments, copy `backend/.env.example` and set:
 ```text
 AWS_REGION
 SHAKE2_MULTIPLAYER_TABLE_NAME
+SHAKE2_PUBLIC_ROOMS_INDEX_NAME
 SHAKE2_ROOM_CODE_INDEX_NAME
 SHAKE2_ROOM_GAME_ID_INDEX_NAME
 ```

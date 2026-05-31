@@ -16,6 +16,7 @@ scalar AWSJSON
 type Query {
   getRoom(roomId: ID!): RoomView!
   getRoomByCode(roomCode: String!): RoomView!
+  listPublicRooms: [RoomView!]!
   getGameSnapshot(gameId: ID!): PublicGameSnapshot!
   getMyPrivateHand(input: GetMyPrivateHandInput!): PrivateHandResponse!
   getReconnectView(input: GetReconnectViewInput!): ReconnectView!
@@ -41,6 +42,7 @@ input SubmitGameActionInput {
 
 input CreateRoomInput {
   displayName: String!
+  visibility: RoomVisibility = private
 }
 
 input JoinRoomInput {
@@ -107,6 +109,7 @@ type RoomView {
   roomId: ID!
   roomCode: String!
   status: String!
+  visibility: RoomVisibility!
   gameId: ID
   createdAt: AWSDateTime!
   updatedAt: AWSDateTime!
@@ -180,4 +183,9 @@ enum SeatIndex {
   SEAT_1
   SEAT_2
   SEAT_3
+}
+
+enum RoomVisibility {
+  private
+  public
 }

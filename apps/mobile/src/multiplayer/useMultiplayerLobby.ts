@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   CognitoNewPasswordRequiredError,
@@ -18,6 +18,7 @@ import { AppSyncGraphqlClient } from "./graphql";
 import { MultiplayerGameClient } from "./game";
 import {
   type CreateRoomInput,
+  type GetRoomInput,
   type JoinRoomInput,
   MultiplayerRoomClient,
   type StartGameInput,
@@ -33,13 +34,17 @@ export type MultiplayerLobbyAction =
   | "completeNewPassword"
   | "createRoom"
   | "joinRoom"
+  | "refreshPublicRooms"
+  | "refreshRoom"
   | "signIn"
   | "startGame"
   | "takeSeat";
 
 export interface MultiplayerLobbyClient {
   createRoom(input: CreateRoomInput): Promise<MultiplayerRoomView>;
+  getRoom(input: GetRoomInput): Promise<MultiplayerRoomView>;
   joinRoom(input: JoinRoomInput): Promise<MultiplayerRoomView>;
+  listPublicRooms(): Promise<readonly MultiplayerRoomView[]>;
   startGame(input: StartGameInput): Promise<MultiplayerStartGameResult>;
   takeSeat(input: TakeSeatInput): Promise<MultiplayerRoomView>;
 }
@@ -79,6 +84,7 @@ export interface MultiplayerLobbyState {
   readonly error: string | null;
   readonly gameClient: MultiplayerLobbyGameClient | null;
   readonly newPasswordChallenge: CognitoNewPasswordChallenge | null;
+  readonly publicRooms: readonly MultiplayerRoomView[];
   readonly room: MultiplayerRoomView | null;
   readonly session: CognitoAuthSession | null;
   readonly startedGame: MultiplayerStartGameResult | null;
@@ -91,6 +97,8 @@ export interface MultiplayerLobbyController extends MultiplayerLobbyState {
   ): Promise<void>;
   createRoom(input: CreateRoomInput): Promise<void>;
   joinRoom(input: JoinRoomInput): Promise<void>;
+  refreshPublicRooms(): Promise<void>;
+  refreshRoom(): Promise<void>;
   signIn(input: CognitoPasswordSignInInput): Promise<void>;
   startGame(input: StartGameInput): Promise<void>;
   takeSeat(input: TakeSeatInput): Promise<void>;
@@ -122,6 +130,9 @@ export function canStartMultiplayerRoom(room: MultiplayerRoomView | null): boole
   return Boolean(room?.isHost && room.status === "ready");
 }
 
+export const multiplayerRoomSyncIntervalMs = 2_000;
+export const multiplayerPublicRoomsSyncIntervalMs = 5_000;
+
 export function useMultiplayerLobby(
   dependencies: MultiplayerLobbyDependencies = {}
 ): MultiplayerLobbyController {
@@ -133,12 +144,48 @@ export function useMultiplayerLobby(
     useState<MultiplayerLobbyGameClient | null>(null);
   const [newPasswordChallenge, setNewPasswordChallenge] =
     useState<CognitoNewPasswordChallenge | null>(null);
+  const [publicRooms, setPublicRooms] =
+    useState<readonly MultiplayerRoomView[]>([]);
   const [room, setRoom] = useState<MultiplayerRoomView | null>(null);
   const [session, setSession] = useState<CognitoAuthSession | null>(null);
   const [startedGame, setStartedGame] =
     useState<MultiplayerStartGameResult | null>(null);
+  const publicRoomsRefreshInFlight = useRef(false);
+  const roomRefreshInFlight = useRef(false);
 
   const configured = configState.config !== null && configState.error === null;
+
+  useEffect(() => {
+    if (!client || !room || startedGame) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      void refreshRoomSilently();
+    }, multiplayerRoomSyncIntervalMs);
+
+    void refreshRoomSilently();
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [client, room?.roomId, startedGame]);
+
+  useEffect(() => {
+    if (!client || room || startedGame) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      void refreshPublicRoomsSilently();
+    }, multiplayerPublicRoomsSyncIntervalMs);
+
+    void refreshPublicRoomsSilently();
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [client, room?.roomId, startedGame]);
 
   async function signIn(input: CognitoPasswordSignInInput): Promise<void> {
     await runAction("signIn", async () => {
@@ -156,6 +203,7 @@ export function useMultiplayerLobby(
           setClient(null);
           setGameClient(null);
           setNewPasswordChallenge(caught.challenge);
+          setPublicRooms([]);
           setRoom(null);
           setSession(null);
           setStartedGame(null);
@@ -189,9 +237,11 @@ export function useMultiplayerLobby(
   async function createRoom(input: CreateRoomInput): Promise<void> {
     await runAction("createRoom", async () => {
       const nextRoom = await requireClient(client).createRoom({
-        displayName: normalizeDisplayName(input.displayName)
+        displayName: normalizeDisplayName(input.displayName),
+        ...(input.visibility ? { visibility: input.visibility } : {})
       });
 
+      setPublicRooms([]);
       setRoom(nextRoom);
       setStartedGame(null);
     });
@@ -204,6 +254,7 @@ export function useMultiplayerLobby(
         roomCode: normalizeRoomCode(input.roomCode)
       });
 
+      setPublicRooms([]);
       setRoom(nextRoom);
       setStartedGame(null);
     });
@@ -215,6 +266,7 @@ export function useMultiplayerLobby(
 
       setRoom(nextRoom);
       setStartedGame(null);
+      await maybeStartFromRoom(nextRoom);
     });
   }
 
@@ -225,6 +277,110 @@ export function useMultiplayerLobby(
       setRoom(result.room);
       setStartedGame(result);
     });
+  }
+
+  async function refreshRoom(): Promise<void> {
+    await runAction("refreshRoom", async () => {
+      await refreshCurrentRoom({
+        reportErrors: true
+      });
+    });
+  }
+
+  async function refreshPublicRooms(): Promise<void> {
+    await runAction("refreshPublicRooms", async () => {
+      await refreshPublicRoomsList({
+        reportErrors: true
+      });
+    });
+  }
+
+  async function refreshRoomSilently(): Promise<void> {
+    await refreshCurrentRoom({
+      reportErrors: false
+    });
+  }
+
+  async function refreshCurrentRoom({
+    reportErrors
+  }: {
+    readonly reportErrors: boolean;
+  }): Promise<void> {
+    if (roomRefreshInFlight.current) {
+      return;
+    }
+
+    const currentRoom = room;
+
+    if (!client || !currentRoom || startedGame) {
+      return;
+    }
+
+    roomRefreshInFlight.current = true;
+
+    try {
+      const nextRoom = await client.getRoom({
+        roomId: currentRoom.roomId
+      });
+
+      setRoom(nextRoom);
+      await maybeStartFromRoom(nextRoom);
+    } catch (caught) {
+      if (reportErrors) {
+        throw caught;
+      }
+    } finally {
+      roomRefreshInFlight.current = false;
+    }
+  }
+
+  async function maybeStartFromRoom(nextRoom: MultiplayerRoomView): Promise<void> {
+    if (startedGame || nextRoom.status !== "inGame" || !nextRoom.gameId) {
+      return;
+    }
+
+    const snapshot = await requireGameClient(gameClient).getGameSnapshot(
+      nextRoom.gameId
+    );
+
+    setStartedGame({
+      room: nextRoom,
+      snapshot
+    });
+  }
+
+  async function refreshPublicRoomsSilently(): Promise<void> {
+    await refreshPublicRoomsList({
+      reportErrors: false
+    });
+  }
+
+  async function refreshPublicRoomsList({
+    reportErrors
+  }: {
+    readonly reportErrors: boolean;
+  }): Promise<void> {
+    if (publicRoomsRefreshInFlight.current) {
+      return;
+    }
+
+    if (!client || room || startedGame) {
+      return;
+    }
+
+    publicRoomsRefreshInFlight.current = true;
+
+    try {
+      const nextRooms = await client.listPublicRooms();
+
+      setPublicRooms(nextRooms);
+    } catch (caught) {
+      if (reportErrors) {
+        throw caught;
+      }
+    } finally {
+      publicRoomsRefreshInFlight.current = false;
+    }
   }
 
   async function runAction(
@@ -258,6 +414,7 @@ export function useMultiplayerLobby(
     setClient(nextClient);
     setGameClient(nextGameClient);
     setNewPasswordChallenge(null);
+    setPublicRooms([]);
     setRoom(null);
     setSession(nextSession);
     setStartedGame(null);
@@ -274,6 +431,9 @@ export function useMultiplayerLobby(
     gameClient,
     joinRoom,
     newPasswordChallenge,
+    publicRooms,
+    refreshPublicRooms,
+    refreshRoom,
     room,
     session,
     signIn,
@@ -346,6 +506,16 @@ function requireClient(
 ): MultiplayerLobbyClient {
   if (!client) {
     throw new Error("Sign in before joining a multiplayer room.");
+  }
+
+  return client;
+}
+
+function requireGameClient(
+  client: MultiplayerLobbyGameClient | null
+): MultiplayerLobbyGameClient {
+  if (!client) {
+    throw new Error("Sign in before loading a multiplayer game.");
   }
 
   return client;

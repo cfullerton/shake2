@@ -14,11 +14,15 @@ type RoomRecord = {
   roomCode: string;
   hostUserId: string;
   status: string;
+  visibility: "private" | "public";
+  publicRoomListKey?: "PUBLIC#OPEN";
   createdAt: string;
   updatedAt: string;
   expiresAt?: number;
 };
 ```
+
+`publicRoomListKey` is present only while a public room is still joinable (`waiting` or `ready`). The public-room GSI uses that partition key with `updatedAt` as the sort key so the lobby can list recent open public rooms without scanning private rooms.
 
 ## Game Event
 

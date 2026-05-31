@@ -11,6 +11,7 @@ import {
   type MultiplayerPrivateHandRecord,
   type MultiplayerReconnectView,
   type MultiplayerRoom,
+  type MultiplayerRoomVisibility,
   type MultiplayerSnapshotRecord,
   type MultiplayerVisibleSnapshotEnvelope,
   type SeatIndex
@@ -43,6 +44,7 @@ export interface AppSyncGetReconnectViewInput {
 
 export interface AppSyncCreateRoomInput {
   readonly displayName: string;
+  readonly visibility?: MultiplayerRoomVisibility;
 }
 
 export interface AppSyncJoinRoomInput {
@@ -145,6 +147,7 @@ export interface AppSyncRoomView {
   readonly status: string;
   readonly updatedAt: string;
   readonly viewerSeat?: AppSyncSeatIndex;
+  readonly visibility: MultiplayerRoomVisibility;
 }
 
 export interface AppSyncStartGameResult {
@@ -354,7 +357,8 @@ export function toAppSyncRoomView(
     updatedAt: room.updatedAt,
     ...(viewerSeat !== null
       ? { viewerSeat: toAppSyncSeatIndex(viewerSeat) }
-      : {})
+      : {}),
+    visibility: room.visibility
   };
 }
 

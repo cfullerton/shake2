@@ -41,6 +41,7 @@ test("schema file exists and includes required operations", () => {
   assertTypeField(schema, "Mutation", "submitGameAction");
   assertTypeField(schema, "Query", "getRoom");
   assertTypeField(schema, "Query", "getRoomByCode");
+  assertTypeField(schema, "Query", "listPublicRooms");
   assertTypeField(schema, "Query", "getGameSnapshot");
   assertTypeField(schema, "Query", "getMyPrivateHand");
   assertTypeField(schema, "Query", "getReconnectView");
@@ -166,6 +167,7 @@ test("room view adapter hides raw player IDs and marks the viewer", () => {
 
   assert.equal(view.roomId, "room-1");
   assert.equal(view.roomCode, "ROOM42");
+  assert.equal(view.visibility, "private");
   assert.equal(view.participantCount, 2);
   assert.equal(view.isHost, false);
   assert.equal(view.viewerSeat, "SEAT_1");

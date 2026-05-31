@@ -1,10 +1,11 @@
-import { act, render } from "@testing-library/react-native";
+import { act, render, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
 
 import {
   normalizeDisplayName,
   normalizeRoomCode,
   useMultiplayerLobby,
+  type MultiplayerLobbyGameClient,
   type MultiplayerLobbyClient,
   type MultiplayerLobbyController,
   type MultiplayerLobbyDependencies
@@ -42,7 +43,9 @@ test("normalizes lobby form values before room requests", async () => {
   };
   const roomClient: MultiplayerLobbyClient = {
     createRoom: jest.fn(async () => room),
+    getRoom: jest.fn(async () => room),
     joinRoom: jest.fn(async () => room),
+    listPublicRooms: jest.fn(async () => [room]),
     startGame: jest.fn(async () => started),
     takeSeat: jest.fn(async () => room)
   };
@@ -106,6 +109,110 @@ test("normalizes lobby form values before room requests", async () => {
   expect(harness.current.startedGame).toBe(started);
 });
 
+test("refreshes room state and starts non-hosts when the host starts", async () => {
+  const session = createSession();
+  const readyRoom = createRoomView({
+    isHost: false,
+    status: "ready"
+  });
+  const startedRoom = {
+    ...readyRoom,
+    gameId: "game-1",
+    status: "inGame"
+  };
+  const snapshot = createSnapshot();
+  const authClient = {
+    completeNewPassword: jest.fn(async () => session),
+    signIn: jest.fn(async () => session)
+  };
+  const roomClient: MultiplayerLobbyClient = {
+    createRoom: jest.fn(async () => readyRoom),
+    getRoom: jest.fn(async () => startedRoom),
+    joinRoom: jest.fn(async () => readyRoom),
+    listPublicRooms: jest.fn(async () => []),
+    startGame: jest.fn(async () => ({
+      room: startedRoom,
+      snapshot
+    })),
+    takeSeat: jest.fn(async () => readyRoom)
+  };
+  const gameClient: MultiplayerLobbyGameClient = {
+    getGameSnapshot: jest.fn(async () => snapshot)
+  } as unknown as MultiplayerLobbyGameClient;
+  const harness = renderHookHarness({
+    createAuthClient: () => authClient,
+    createGameClient: () => gameClient,
+    createRoomClient: () => roomClient,
+    readConfig: () => createConfig()
+  });
+
+  await act(async () => {
+    await harness.current.signIn({
+      password: "temporary-password",
+      username: "smoke-user"
+    });
+  });
+  await act(async () => {
+    await harness.current.joinRoom({
+      displayName: "Bob",
+      roomCode: "ROOM42"
+    });
+  });
+  await act(async () => {
+    await harness.current.refreshRoom();
+  });
+
+  expect(roomClient.getRoom).toHaveBeenCalledWith({
+    roomId: "room-1"
+  });
+  expect(gameClient.getGameSnapshot).toHaveBeenCalledWith("game-1");
+  expect(harness.current.startedGame).toEqual({
+    room: startedRoom,
+    snapshot
+  });
+});
+
+test("refreshes public room listings", async () => {
+  const session = createSession();
+  const publicRoom = createRoomView({
+    visibility: "public"
+  });
+  const authClient = {
+    completeNewPassword: jest.fn(async () => session),
+    signIn: jest.fn(async () => session)
+  };
+  const roomClient: MultiplayerLobbyClient = {
+    createRoom: jest.fn(async () => publicRoom),
+    getRoom: jest.fn(async () => publicRoom),
+    joinRoom: jest.fn(async () => publicRoom),
+    listPublicRooms: jest.fn(async () => [publicRoom]),
+    startGame: jest.fn(async () => ({
+      room: publicRoom,
+      snapshot: createSnapshot()
+    })),
+    takeSeat: jest.fn(async () => publicRoom)
+  };
+  const harness = renderHookHarness({
+    createAuthClient: () => authClient,
+    createRoomClient: () => roomClient,
+    readConfig: () => createConfig()
+  });
+
+  await act(async () => {
+    await harness.current.signIn({
+      password: "temporary-password",
+      username: "smoke-user"
+    });
+  });
+  await act(async () => {
+    await harness.current.refreshPublicRooms();
+  });
+
+  await waitFor(() => {
+    expect(harness.current.publicRooms).toEqual([publicRoom]);
+  });
+});
+
 test("reports missing multiplayer config without creating clients", async () => {
   const createAuthClient = jest.fn();
   const harness = renderHookHarness({
@@ -140,7 +247,9 @@ test("completes Cognito new-password challenges", async () => {
   };
   const roomClient: MultiplayerLobbyClient = {
     createRoom: jest.fn(async () => createRoomView()),
+    getRoom: jest.fn(async () => createRoomView()),
     joinRoom: jest.fn(async () => createRoomView()),
+    listPublicRooms: jest.fn(async () => []),
     startGame: jest.fn(async () => ({
       room: createRoomView(),
       snapshot: {
@@ -242,7 +351,9 @@ function createSession(): CognitoAuthSession {
   };
 }
 
-function createRoomView(): MultiplayerRoomView {
+function createRoomView(
+  overrides: Partial<MultiplayerRoomView> = {}
+): MultiplayerRoomView {
   return {
     createdAt: "2026-05-31T00:00:00.000Z",
     isHost: true,
@@ -282,6 +393,20 @@ function createRoomView(): MultiplayerRoomView {
     ],
     status: "ready",
     updatedAt: "2026-05-31T00:00:00.000Z",
-    viewerSeat: "SEAT_1"
+    viewerSeat: "SEAT_1",
+    visibility: "private",
+    ...overrides
+  };
+}
+
+function createSnapshot(): MultiplayerStartGameResult["snapshot"] {
+  return {
+    gameId: "game-1",
+    generatedAt: "2026-05-31T00:00:00.000Z",
+    lastEventSequence: 2,
+    phase: "dealt",
+    redactedState: {},
+    schemaVersion: 1,
+    snapshotVersion: 2
   };
 }

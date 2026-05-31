@@ -68,6 +68,7 @@ import {
   type MultiplayerParticipants,
   type MultiplayerRoom,
   type MultiplayerRoomStatus,
+  type MultiplayerRoomVisibility,
   type MultiplayerSeatAssignment,
   type MultiplayerSeats,
   type MultiplayerVisibleFortyTwoState
@@ -79,6 +80,11 @@ const MULTIPLAYER_ROOM_STATUSES = [
   "inGame",
   "completed"
 ] as const satisfies readonly MultiplayerRoomStatus[];
+
+const MULTIPLAYER_ROOM_VISIBILITIES = [
+  "private",
+  "public"
+] as const satisfies readonly MultiplayerRoomVisibility[];
 
 const MULTIPLAYER_CONNECTION_STATUSES = [
   "online",
@@ -202,6 +208,10 @@ export function parseMultiplayerRoomRecord(
   const roomId = parseNonEmptyString(record.roomId, "roomRecord.roomId");
   const updatedAt = parseTimestamp(record.updatedAt, "roomRecord.updatedAt");
   const status = parseRoomStatus(record.status, "roomRecord.status");
+  const visibility = parseRoomVisibility(
+    record.visibility ?? room.visibility,
+    "roomRecord.visibility"
+  );
   const pk = parseNonEmptyString(record.pk, "roomRecord.pk");
   const sk = parseNonEmptyString(record.sk, "roomRecord.sk");
 
@@ -214,6 +224,7 @@ export function parseMultiplayerRoomRecord(
     room.roomCode !== roomCode ||
     room.hostPlayerId !== hostPlayerId ||
     room.status !== status ||
+    room.visibility !== visibility ||
     room.createdAt !== createdAt ||
     room.updatedAt !== updatedAt
   ) {
@@ -238,12 +249,16 @@ export function parseMultiplayerRoomRecord(
     ...(room.gameId !== undefined ? { gameId: room.gameId } : {}),
     hostPlayerId,
     pk: `ROOM#${roomId}`,
+    ...(record.publicRoomListKey === "PUBLIC#OPEN"
+      ? { publicRoomListKey: "PUBLIC#OPEN" as const }
+      : {}),
     room,
     roomCode,
     roomId,
     sk: "META",
     status,
-    updatedAt
+    updatedAt,
+    visibility
   };
 }
 
@@ -687,7 +702,11 @@ function parseMultiplayerRoom(value: unknown): MultiplayerRoom {
     roomId: parseNonEmptyString(room.roomId, "room.roomId"),
     seats,
     status: parseRoomStatus(room.status, "room.status"),
-    updatedAt: parseTimestamp(room.updatedAt, "room.updatedAt")
+    updatedAt: parseTimestamp(room.updatedAt, "room.updatedAt"),
+    visibility: parseRoomVisibility(
+      room.visibility ?? "private",
+      "room.visibility"
+    )
   };
 }
 
@@ -1165,6 +1184,18 @@ function parseRoomStatus(
   label: string
 ): MultiplayerRoomStatus {
   return parseEnum(value, MULTIPLAYER_ROOM_STATUSES, label, "INVALID_PHASE");
+}
+
+function parseRoomVisibility(
+  value: unknown,
+  label: string
+): MultiplayerRoomVisibility {
+  return parseEnum(
+    value,
+    MULTIPLAYER_ROOM_VISIBILITIES,
+    label,
+    "INVALID_ACTION"
+  );
 }
 
 function parseConnectionStatus(

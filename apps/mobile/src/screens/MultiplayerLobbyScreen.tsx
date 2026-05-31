@@ -3,8 +3,11 @@ import {
   AlertCircle,
   Check,
   DoorOpen,
+  Globe2,
+  Lock,
   Play,
   Plus,
+  RefreshCw,
   Users,
   Wifi
 } from "lucide-react-native";
@@ -46,6 +49,8 @@ export function MultiplayerLobbyContent({
   const [newPassword, setNewPassword] = useState("");
   const [password, setPassword] = useState("");
   const [roomCode, setRoomCode] = useState("");
+  const [roomVisibility, setRoomVisibility] =
+    useState<"private" | "public">("private");
   const [targetMarks, setTargetMarks] = useState("7");
   const [username, setUsername] = useState("");
   const signedIn = lobby.session !== null;
@@ -69,7 +74,8 @@ export function MultiplayerLobbyContent({
 
   async function handleCreateRoom() {
     await lobby.createRoom({
-      displayName
+      displayName,
+      visibility: roomVisibility
     });
   }
 
@@ -79,6 +85,14 @@ export function MultiplayerLobbyContent({
       roomCode
     });
     setRoomCode(normalizeRoomCode(roomCode));
+  }
+
+  async function handleJoinPublicRoom(code: string) {
+    setRoomCode(code);
+    await lobby.joinRoom({
+      displayName,
+      roomCode: code
+    });
   }
 
   async function handleStartGame() {
@@ -203,6 +217,10 @@ export function MultiplayerLobbyContent({
                     <Plus color={palette.crimson} size={20} />
                     <Text style={styles.actionTitle}>Create</Text>
                   </View>
+                  <RoomVisibilityControl
+                    onChange={setRoomVisibility}
+                    value={roomVisibility}
+                  />
                   <Button
                     disabled={!signedIn}
                     icon={<Users color={palette.surface} size={18} />}
@@ -234,6 +252,41 @@ export function MultiplayerLobbyContent({
                   >
                     Join Room
                   </Button>
+                  <View style={styles.publicRoomsHeader}>
+                    <Text style={styles.publicRoomsTitle}>Public Rooms</Text>
+                    <Pressable
+                      accessibilityLabel="Refresh public rooms"
+                      accessibilityRole="button"
+                      disabled={!signedIn || lobby.busyAction === "refreshPublicRooms"}
+                      onPress={() => {
+                        void lobby.refreshPublicRooms();
+                      }}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        pressed && styles.pressedSeat,
+                        (!signedIn || lobby.busyAction === "refreshPublicRooms") &&
+                          styles.disabledSeat
+                      ]}
+                    >
+                      <RefreshCw color={palette.ink} size={16} />
+                    </Pressable>
+                  </View>
+                  <View style={styles.publicRoomsList}>
+                    {lobby.publicRooms.length > 0 ? (
+                      lobby.publicRooms.map((room) => (
+                        <PublicRoomRow
+                          disabled={!signedIn || lobby.busyAction === "joinRoom"}
+                          key={room.roomId}
+                          onJoin={() => {
+                            void handleJoinPublicRoom(room.roomCode);
+                          }}
+                          room={room}
+                        />
+                      ))
+                    ) : (
+                      <Text style={styles.emptyPublicRooms}>No public rooms</Text>
+                    )}
+                  </View>
                 </View>
               </View>
 
@@ -250,7 +303,9 @@ export function MultiplayerLobbyContent({
                     <View>
                       <GameText style={styles.roomCode}>{lobby.room.roomCode}</GameText>
                       <Text style={styles.roomMeta}>
-                        {formatRoomStatus(lobby.room.status)} · {lobby.room.participantCount} players
+                        {formatRoomStatus(lobby.room.status)} ·{" "}
+                        {formatRoomVisibility(lobby.room.visibility)} ·{" "}
+                        {lobby.room.participantCount} players
                       </Text>
                     </View>
                     <View style={styles.statusPill}>
@@ -387,6 +442,104 @@ function SeatButton({
   );
 }
 
+function RoomVisibilityControl({
+  onChange,
+  value
+}: {
+  readonly onChange: (value: "private" | "public") => void;
+  readonly value: "private" | "public";
+}) {
+  return (
+    <View style={styles.visibilityControl}>
+      <VisibilityOption
+        active={value === "private"}
+        icon={
+          <Lock
+            color={value === "private" ? palette.surface : palette.ink}
+            size={15}
+          />
+        }
+        label="Private"
+        onPress={() => onChange("private")}
+      />
+      <VisibilityOption
+        active={value === "public"}
+        icon={
+          <Globe2
+            color={value === "public" ? palette.surface : palette.ink}
+            size={15}
+          />
+        }
+        label="Public"
+        onPress={() => onChange("public")}
+      />
+    </View>
+  );
+}
+
+function VisibilityOption({
+  active,
+  icon,
+  label,
+  onPress
+}: {
+  readonly active: boolean;
+  readonly icon: ReactNode;
+  readonly label: string;
+  readonly onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.visibilityOption,
+        active && styles.activeVisibilityOption,
+        pressed && styles.pressedSeat
+      ]}
+    >
+      {icon}
+      <Text
+        style={[
+          styles.visibilityOptionText,
+          active && styles.activeVisibilityOptionText
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function PublicRoomRow({
+  disabled,
+  onJoin,
+  room
+}: {
+  readonly disabled: boolean;
+  readonly onJoin: () => void;
+  readonly room: MultiplayerLobbyController["publicRooms"][number];
+}) {
+  return (
+    <View style={styles.publicRoomRow}>
+      <View style={styles.publicRoomCopy}>
+        <Text style={styles.publicRoomCode}>{room.roomCode}</Text>
+        <Text style={styles.publicRoomMeta}>
+          {formatRoomStatus(room.status)} · {room.participantCount} players
+        </Text>
+      </View>
+      <Button
+        disabled={disabled}
+        icon={<DoorOpen color={palette.denim} size={16} />}
+        onPress={onJoin}
+        variant="secondary"
+      >
+        Join
+      </Button>
+    </View>
+  );
+}
+
 function StatusPanel({
   icon,
   title,
@@ -426,6 +579,10 @@ function formatRoomStatus(status: string): string {
     : "Unknown";
 }
 
+function formatRoomVisibility(visibility: string): string {
+  return visibility === "public" ? "Public" : "Private";
+}
+
 const styles = StyleSheet.create({
   actionGrid: {
     gap: spacing.md
@@ -457,6 +614,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900"
   },
+  activeVisibilityOption: {
+    backgroundColor: palette.felt,
+    borderColor: palette.felt
+  },
+  activeVisibilityOptionText: {
+    color: palette.surface
+  },
   denimStatusPanel: {
     backgroundColor: palette.denimSoft,
     borderColor: palette.denim
@@ -478,6 +642,11 @@ const styles = StyleSheet.create({
     color: palette.red,
     flex: 1,
     fontSize: 14,
+    fontWeight: "800"
+  },
+  emptyPublicRooms: {
+    color: palette.subtle,
+    fontSize: 13,
     fontWeight: "800"
   },
   feltStatusPanel: {
@@ -522,6 +691,15 @@ const styles = StyleSheet.create({
     color: palette.gold,
     fontSize: 26,
     letterSpacing: 1.2
+  },
+  iconButton: {
+    alignItems: "center",
+    borderColor: palette.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34
   },
   occupiedSeat: {
     backgroundColor: palette.surfaceAlt
@@ -570,6 +748,42 @@ const styles = StyleSheet.create({
   },
   pressedSeat: {
     opacity: 0.78
+  },
+  publicRoomCode: {
+    color: palette.ink,
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  publicRoomCopy: {
+    flex: 1,
+    gap: 2
+  },
+  publicRoomMeta: {
+    color: palette.muted,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  publicRoomRow: {
+    alignItems: "center",
+    borderColor: palette.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  publicRoomsHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  publicRoomsList: {
+    gap: spacing.sm
+  },
+  publicRoomsTitle: {
+    color: palette.ink,
+    fontSize: 14,
+    fontWeight: "900"
   },
   roomCode: {
     color: palette.ink,
@@ -660,5 +874,30 @@ const styles = StyleSheet.create({
   viewerSeat: {
     borderColor: palette.crimson,
     borderWidth: 2
+  },
+  visibilityControl: {
+    backgroundColor: palette.surfaceAlt,
+    borderColor: palette.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    padding: 4
+  },
+  visibilityOption: {
+    alignItems: "center",
+    borderColor: "transparent",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    justifyContent: "center",
+    minHeight: 38
+  },
+  visibilityOptionText: {
+    color: palette.ink,
+    fontSize: 13,
+    fontWeight: "900"
   }
 });

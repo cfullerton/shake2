@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   type CommitWritePlanInput,
   type CreateRoomRecordInput,
+  type ListPublicRoomsInput,
   type LoadRoomByCodeInput,
   type LoadRoomInput,
   type LoadPublicSnapshotInput,
@@ -34,6 +35,7 @@ import {
   createGetRoomByCodeHandler,
   createGetRoomHandler,
   createJoinRoomHandler,
+  createListPublicRoomsHandler,
   createStartGameHandler,
   createTakeSeatHandler
 } from "./handler.ts";
@@ -48,7 +50,8 @@ test("createRoom persists a host-owned room and returns a safe view", async () =
   const response = await handler({
     arguments: {
       input: {
-        displayName: " Alice "
+        displayName: " Alice ",
+        visibility: "public"
       }
     },
     identity: {
@@ -61,12 +64,15 @@ test("createRoom persists a host-owned room and returns a safe view", async () =
   assert.doesNotMatch(response.roomCode, /^(id|lambda)-/u);
   assert.equal(response.roomId, "id-1");
   assert.equal(response.status, "waiting");
+  assert.equal(response.visibility, "public");
   assert.equal(response.isHost, true);
   assert.equal(response.participantCount, 1);
   assert.equal(response.participants[0]?.displayName, "Alice");
   assert.equal(response.participants[0]?.isViewer, true);
   assert.equal(mock.createRoomRecordCalls.length, 1);
   assert.equal(mock.createRoomRecordCalls[0]?.room.roomCode, response.roomCode);
+  assert.equal(mock.createRoomRecordCalls[0]?.room.visibility, "public");
+  assert.equal(mock.createRoomRecordCalls[0]?.room.publicRoomListKey, "PUBLIC#OPEN");
   assert.doesNotMatch(JSON.stringify(response), /host-sub/);
 });
 
@@ -336,6 +342,33 @@ test("getRoom and getRoomByCode return safe room views", async () => {
   assert.doesNotMatch(JSON.stringify(byId), /player-0/);
 });
 
+test("listPublicRooms returns safe public room views", async () => {
+  const context = createTestContext();
+  const publicRoom = createRoom(context, {
+    roomId: "public-room",
+    visibility: "public"
+  });
+  const privateRoom = createRoom(context, {
+    roomId: "private-room",
+    visibility: "private"
+  });
+  const mock = createMockStore([publicRoom, privateRoom]);
+  const handler = createListPublicRoomsHandler({
+    store: mock.store
+  });
+  const response = await handler({
+    identity: {
+      playerId: "player-1"
+    }
+  });
+
+  assert.deepEqual(response.map((room) => room.roomId), ["public-room"]);
+  assert.equal(response[0]?.visibility, "public");
+  assert.deepEqual(mock.listPublicRoomsCalls, [
+    {}
+  ]);
+});
+
 test("room handlers reject missing identity before persistence", async () => {
   const context = createTestContext();
   const mock = createMockStore([createRoom(context)]);
@@ -370,6 +403,7 @@ function createMockStore(
 ): {
   readonly commitWritePlanCalls: CommitWritePlanInput[];
   readonly createRoomRecordCalls: CreateRoomRecordInput[];
+  readonly listPublicRoomsCalls: ListPublicRoomsInput[];
   readonly loadPublicSnapshotCalls: LoadPublicSnapshotInput[];
   readonly loadRoomByCodeCalls: LoadRoomByCodeInput[];
   readonly loadRoomCalls: LoadRoomInput[];
@@ -386,6 +420,7 @@ function createMockStore(
   ]));
   const commitWritePlanCalls: CommitWritePlanInput[] = [];
   const createRoomRecordCalls: CreateRoomRecordInput[] = [];
+  const listPublicRoomsCalls: ListPublicRoomsInput[] = [];
   const loadPublicSnapshotCalls: LoadPublicSnapshotInput[] = [];
   const loadRoomByCodeCalls: LoadRoomByCodeInput[] = [];
   const loadRoomCalls: LoadRoomInput[] = [];
@@ -394,6 +429,7 @@ function createMockStore(
   return {
     commitWritePlanCalls,
     createRoomRecordCalls,
+    listPublicRoomsCalls,
     loadPublicSnapshotCalls,
     loadRoomByCodeCalls,
     loadRoomCalls,
@@ -428,6 +464,14 @@ function createMockStore(
         }
 
         return room;
+      },
+      async listPublicRooms(input = {}): Promise<readonly MultiplayerRoomRecord[]> {
+        listPublicRoomsCalls.push(input);
+
+        return [...rooms.values()].filter((record) =>
+          record.visibility === "public" &&
+          (record.status === "waiting" || record.status === "ready")
+        );
       },
       async createRoomRecord(input): Promise<MultiplayerRoomRecord> {
         createRoomRecordCalls.push(input);
@@ -484,13 +528,17 @@ function createMockStore(
   };
 }
 
-function createRoom(context: EngineContext): MultiplayerRoom {
+function createRoom(
+  context: EngineContext,
+  overrides: Partial<Pick<MultiplayerRoom, "roomId" | "visibility">> = {}
+): MultiplayerRoom {
   return createMultiplayerRoom(
     {
       hostDisplayName: "Alice",
       hostPlayerId: "player-0",
       roomCode: "ROOM42",
-      roomId: "room-1"
+      roomId: overrides.roomId ?? "room-1",
+      ...(overrides.visibility ? { visibility: overrides.visibility } : {})
     },
     context
   );

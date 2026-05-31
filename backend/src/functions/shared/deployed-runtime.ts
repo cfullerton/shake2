@@ -13,6 +13,7 @@ import {
 export interface DeployedResolverEnvironment {
   readonly AWS_REGION?: string;
   readonly SHAKE2_MULTIPLAYER_TABLE_NAME?: string;
+  readonly SHAKE2_PUBLIC_ROOMS_INDEX_NAME?: string;
   readonly SHAKE2_ROOM_CODE_INDEX_NAME?: string;
   readonly SHAKE2_ROOM_GAME_ID_INDEX_NAME?: string;
 }

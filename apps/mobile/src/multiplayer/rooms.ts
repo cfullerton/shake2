@@ -3,12 +3,14 @@ import type {
   AppSyncSeatIndex,
   MultiplayerPublicGameSnapshotPayload,
   MultiplayerRoomView,
+  MultiplayerRoomVisibility,
   MultiplayerStartGameResult
 } from "./types";
 import { normalizeMultiplayerPublicGameSnapshot } from "./snapshots";
 
 export interface CreateRoomInput {
   readonly displayName: string;
+  readonly visibility?: MultiplayerRoomVisibility;
 }
 
 export interface JoinRoomInput {
@@ -24,6 +26,10 @@ export interface TakeSeatInput {
 export interface StartGameInput {
   readonly roomId: string;
   readonly targetMarks?: number;
+}
+
+export interface GetRoomInput {
+  readonly roomId: string;
 }
 
 export class MultiplayerRoomClient {
@@ -67,6 +73,43 @@ export class MultiplayerRoomClient {
     });
 
     return data.joinRoom;
+  }
+
+  async getRoom(input: GetRoomInput): Promise<MultiplayerRoomView> {
+    const data = await this.graphql.execute<{
+      readonly getRoom: MultiplayerRoomView;
+    }>({
+      operationName: "GetRoom",
+      query: `
+        query GetRoom($roomId: ID!) {
+          getRoom(roomId: $roomId) {
+            ${ROOM_VIEW_SELECTION}
+          }
+        }
+      `,
+      variables: {
+        roomId: input.roomId
+      }
+    });
+
+    return data.getRoom;
+  }
+
+  async listPublicRooms(): Promise<readonly MultiplayerRoomView[]> {
+    const data = await this.graphql.execute<{
+      readonly listPublicRooms: readonly MultiplayerRoomView[];
+    }>({
+      operationName: "ListPublicRooms",
+      query: `
+        query ListPublicRooms {
+          listPublicRooms {
+            ${ROOM_VIEW_SELECTION}
+          }
+        }
+      `
+    });
+
+    return data.listPublicRooms;
   }
 
   async takeSeat(input: TakeSeatInput): Promise<MultiplayerRoomView> {
@@ -132,6 +175,7 @@ const ROOM_VIEW_SELECTION = `
   roomId
   roomCode
   status
+  visibility
   gameId
   createdAt
   updatedAt

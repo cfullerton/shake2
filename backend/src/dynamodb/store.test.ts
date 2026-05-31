@@ -159,6 +159,32 @@ test("loads room records by room code index", async () => {
   });
 });
 
+test("lists public open room records by public rooms index", async () => {
+  const context = createTestContext();
+  const records = {
+    ...createMultiplayerStorageRecords(createStartedSession(context)),
+    room: createMultiplayerRoomRecord(createRoom(context, {
+      visibility: "public"
+    }))
+  };
+  const client = createMockDynamoClient(records);
+  const store = new DynamoDBMultiplayerStore(client, {
+    publicRoomsIndexName: "PublicRoomsIndex",
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+  const result = await store.listPublicRooms();
+  const query = getCommandInput(client.commands[0], QueryCommand);
+
+  assert.deepEqual(result, [records.room]);
+  assert.equal(query.IndexName, "PublicRoomsIndex");
+  assert.equal(query.KeyConditionExpression, "#publicRoomListKey = :publicRoomListKey");
+  assert.equal(query.ScanIndexForward, false);
+  assert.deepEqual(query.ExpressionAttributeValues, {
+    ":publicRoomListKey": "PUBLIC#OPEN"
+  });
+});
+
 test("creates room records with a must-not-exist condition", async () => {
   const context = createTestContext();
   const room = createMultiplayerRoomRecord(createRoom(context));
@@ -830,13 +856,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function createRoom(context: EngineContext): MultiplayerRoom {
+function createRoom(
+  context: EngineContext,
+  overrides: Partial<Pick<MultiplayerRoom, "visibility">> = {}
+): MultiplayerRoom {
   return createMultiplayerRoom(
     {
       hostDisplayName: "Alice",
       hostPlayerId: "player-0",
       roomCode: "ROOM42",
-      roomId: "room-1"
+      roomId: "room-1",
+      ...(overrides.visibility ? { visibility: overrides.visibility } : {})
     },
     context
   );

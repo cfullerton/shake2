@@ -8,6 +8,7 @@ import {
 import { Construct } from "constructs";
 
 export interface MultiplayerDataConstructProps {
+  readonly publicRoomsIndexName: string;
   readonly removalPolicy: RemovalPolicy;
   readonly roomCodeIndexName: string;
   readonly roomGameIdIndexName: string;
@@ -57,6 +58,19 @@ export class MultiplayerDataConstruct extends Construct {
       indexName: props.roomCodeIndexName,
       partitionKey: {
         name: "roomCode",
+        type: AttributeType.STRING
+      },
+      projectionType: ProjectionType.ALL,
+      sortKey: {
+        name: "updatedAt",
+        type: AttributeType.STRING
+      }
+    });
+
+    this.multiplayerTable.addGlobalSecondaryIndex({
+      indexName: props.publicRoomsIndexName,
+      partitionKey: {
+        name: "publicRoomListKey",
         type: AttributeType.STRING
       },
       projectionType: ProjectionType.ALL,

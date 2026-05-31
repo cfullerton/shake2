@@ -25,6 +25,7 @@ export type MultiplayerLambdaId =
   | "startGame"
   | "getRoom"
   | "getRoomByCode"
+  | "listPublicRooms"
   | "submitGameAction"
   | "getGameSnapshot"
   | "getMyPrivateHand"
@@ -50,6 +51,7 @@ export class MultiplayerLambdaConstruct extends Construct {
     const environment = {
       NODE_OPTIONS: "--enable-source-maps",
       SHAKE2_MULTIPLAYER_TABLE_NAME: props.multiplayerTable.tableName,
+      SHAKE2_PUBLIC_ROOMS_INDEX_NAME: props.config.publicRoomsIndexName,
       SHAKE2_ROOM_CODE_INDEX_NAME: props.config.roomCodeIndexName,
       SHAKE2_ROOM_GAME_ID_INDEX_NAME: props.config.roomGameIdIndexName
     };
@@ -90,6 +92,12 @@ export class MultiplayerLambdaConstruct extends Construct {
       props,
       environment
     );
+    const listPublicRooms = this.createFunction(
+      "ListPublicRooms",
+      "listPublicRooms",
+      props,
+      environment
+    );
     const submitGameAction = this.createFunction(
       "SubmitGameAction",
       "submitGameAction",
@@ -121,6 +129,7 @@ export class MultiplayerLambdaConstruct extends Construct {
     props.multiplayerTable.grantReadWriteData(startGame);
     props.multiplayerTable.grantReadData(getRoom);
     props.multiplayerTable.grantReadData(getRoomByCode);
+    props.multiplayerTable.grantReadData(listPublicRooms);
     props.multiplayerTable.grantReadWriteData(submitGameAction);
     props.multiplayerTable.grantReadData(getGameSnapshot);
     props.multiplayerTable.grantReadData(getMyPrivateHand);
@@ -134,6 +143,7 @@ export class MultiplayerLambdaConstruct extends Construct {
       getRoomByCode,
       getReconnectView,
       joinRoom,
+      listPublicRooms,
       startGame,
       takeSeat,
       submitGameAction

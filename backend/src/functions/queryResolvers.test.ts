@@ -333,6 +333,9 @@ function createMockStore(records: MultiplayerStoredGameRecords): MockStore {
       async loadRoomByCode() {
         return records.room;
       },
+      async listPublicRooms() {
+        return [];
+      },
       async createRoomRecord() {
         return records.room;
       },

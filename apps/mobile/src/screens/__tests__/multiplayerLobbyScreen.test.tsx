@@ -115,6 +115,51 @@ test("lobby screen renders seats and starts ready host rooms", async () => {
   expect(view.queryByText("Game starting")).toBeNull();
 });
 
+test("lobby screen creates public rooms and joins public listings", async () => {
+  const publicRoom = createRoomView({
+    participantCount: 1,
+    status: "waiting",
+    visibility: "public"
+  });
+  const createRoom = jest.fn(async () => undefined);
+  const joinRoom = jest.fn(async () => undefined);
+  const refreshPublicRooms = jest.fn(async () => undefined);
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        createRoom,
+        joinRoom,
+        publicRooms: [publicRoom],
+        refreshPublicRooms
+      })}
+    />
+  );
+
+  fireEvent.press(view.getByText("Public"));
+  fireEvent.press(view.getByText("Create Room"));
+
+  await waitFor(() => {
+    expect(createRoom).toHaveBeenCalledWith({
+      displayName: "Player",
+      visibility: "public"
+    });
+  });
+
+  fireEvent.press(view.getByLabelText("Refresh public rooms"));
+  await waitFor(() => {
+    expect(refreshPublicRooms).toHaveBeenCalled();
+  });
+
+  const joinButtons = view.getAllByText("Join");
+  fireEvent.press(joinButtons[joinButtons.length - 1]!);
+  await waitFor(() => {
+    expect(joinRoom).toHaveBeenCalledWith({
+      displayName: "Player",
+      roomCode: "ROOM42"
+    });
+  });
+});
+
 test("lobby screen hands started games to the active-game surface", () => {
   const room = createRoomView({
     status: "ready"
@@ -147,6 +192,9 @@ function createLobbyController(
     gameClient: null,
     joinRoom: jest.fn(async () => undefined),
     newPasswordChallenge: null,
+    publicRooms: [],
+    refreshPublicRooms: jest.fn(async () => undefined),
+    refreshRoom: jest.fn(async () => undefined),
     room: null,
     session: createSession(),
     signIn: jest.fn(async () => undefined),
@@ -232,6 +280,7 @@ function createRoomView(
     status: "waiting",
     updatedAt: "2026-05-31T00:00:00.000Z",
     viewerSeat: "SEAT_2",
+    visibility: "private",
     ...overrides
   };
 }

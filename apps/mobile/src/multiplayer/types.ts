@@ -18,6 +18,10 @@ export interface MultiplayerRoomSeat {
   readonly seatIndex: AppSyncSeatIndex;
 }
 
+export type MultiplayerRoomVisibility =
+  | "private"
+  | "public";
+
 export interface MultiplayerRoomView {
   readonly createdAt: string;
   readonly gameId?: string | null;
@@ -30,6 +34,7 @@ export interface MultiplayerRoomView {
   readonly status: string;
   readonly updatedAt: string;
   readonly viewerSeat?: AppSyncSeatIndex | null;
+  readonly visibility: MultiplayerRoomVisibility;
 }
 
 export interface MultiplayerSeatHandCounts {

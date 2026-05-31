@@ -12,7 +12,8 @@ test("MultiplayerRoomClient creates a room with the expected mutation", async ()
   });
   const client = new MultiplayerRoomClient(graphql);
   const result = await client.createRoom({
-    displayName: "Alice"
+    displayName: "Alice",
+    visibility: "public"
   });
 
   expect(result).toBe(room);
@@ -20,7 +21,8 @@ test("MultiplayerRoomClient creates a room with the expected mutation", async ()
   expect(graphql.requests[0]?.query).toContain("mutation CreateRoom");
   expect(graphql.requests[0]?.variables).toEqual({
     input: {
-      displayName: "Alice"
+      displayName: "Alice",
+      visibility: "public"
     }
   });
 });
@@ -52,7 +54,9 @@ test("MultiplayerRoomClient joins, seats, and starts rooms through AppSync", asy
     }
   };
   const graphql = new MockGraphqlClient({
+    getRoom: room,
     joinRoom: room,
+    listPublicRooms: [room],
     startGame: started,
     takeSeat: room
   });
@@ -71,6 +75,12 @@ test("MultiplayerRoomClient joins, seats, and starts rooms through AppSync", asy
     })
   ).resolves.toBe(room);
   await expect(
+    client.getRoom({
+      roomId: "room-1"
+    })
+  ).resolves.toBe(room);
+  await expect(client.listPublicRooms()).resolves.toEqual([room]);
+  await expect(
     client.startGame({
       roomId: "room-1",
       targetMarks: 5
@@ -80,16 +90,18 @@ test("MultiplayerRoomClient joins, seats, and starts rooms through AppSync", asy
   expect(graphql.requests.map((request) => request.operationName)).toEqual([
     "JoinRoom",
     "TakeSeat",
+    "GetRoom",
+    "ListPublicRooms",
     "StartGame"
   ]);
-  expect(graphql.requests[2]?.variables).toEqual({
+  expect(graphql.requests[4]?.variables).toEqual({
     input: {
       roomId: "room-1",
       targetMarks: 5
     }
   });
-  expect(graphql.requests[2]?.query).toContain("snapshot");
-  expect(graphql.requests[2]?.query).not.toContain("hands");
+  expect(graphql.requests[4]?.query).toContain("snapshot");
+  expect(graphql.requests[4]?.query).not.toContain("hands");
 });
 
 class MockGraphqlClient implements GraphqlClient {
@@ -144,6 +156,7 @@ function createRoomView(): MultiplayerRoomView {
       }
     ],
     status: "waiting",
-    updatedAt: "2026-05-31T00:00:00.000Z"
+    updatedAt: "2026-05-31T00:00:00.000Z",
+    visibility: "public"
   };
 }

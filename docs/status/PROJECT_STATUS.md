@@ -93,7 +93,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 - History screen showing scored hands, marks, winning team for the hand, timestamp, note, and dealer.
 - Local practice start screen for playing a full Texas 42 game against three legal-random bots.
 - Local practice active game screen for bidding, trump selection, trick play, hand summary, game summary, restart, and next-hand flow.
-- Mobile multiplayer lobby screen for Cognito sign-in, create/join by normalized non-sensitive room invite code, room/seat display, taking seats, and host-only start-game handoff.
+- Mobile multiplayer lobby screen for Cognito sign-in, private/public room creation, join by normalized non-sensitive room invite code or public listing, polling-based room refresh, taking seats, and host-only start-game handoff.
 - Mobile multiplayer active-game shell for rendering the public game snapshot, loading the viewer's private hand, showing table/score/turn state, and submitting pass/numeric bid plus declarer trump-call actions through AppSync.
 - Local persistence through AsyncStorage using a versioned scorekeeper snapshot envelope.
 - Legacy migration from the original raw saved-game array format.
@@ -115,7 +115,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 ## Features Partially Implemented
 
 - Game engine: full local Texas 42 play now exists for standard numeric bids and pip-suit trump, but does not implement variants or advanced bot strategy.
-- Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, lobby UI, and active-game bidding/trump UI exist, but there is still no trick-play multiplayer UI, mobile subscription handling, reconnect UX, or production lifecycle/abuse handling.
+- Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, lobby UI with public rooms and room polling, and active-game bidding/trump UI exist, but there is still no trick-play multiplayer UI, mobile subscription handling, reconnect UX, or production lifecycle/abuse handling.
 - Game state model: current scorekeeper shape is serializable, but the app does not yet apply shared actions/events or replay an event log.
 - Persistence: local JSON persistence has schema versioning and legacy migration for scorekeeper games, but local practice games are currently in-memory only.
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.

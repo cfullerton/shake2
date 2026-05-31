@@ -41,6 +41,7 @@ export class MultiplayerInfrastructureStack extends Stack {
       userPoolName: createResourceName(props.config, "users")
     });
     const data = new MultiplayerDataConstruct(this, "Data", {
+      publicRoomsIndexName: props.config.publicRoomsIndexName,
       removalPolicy: props.config.removalPolicy,
       roomCodeIndexName: props.config.roomCodeIndexName,
       roomGameIdIndexName: props.config.roomGameIdIndexName,
