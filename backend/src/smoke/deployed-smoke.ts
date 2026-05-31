@@ -436,6 +436,24 @@ export async function executeGraphqlRequest(
 }
 
 function createSubmitGameActionSmokeRequest(gameId: string): SmokeGraphqlRequest {
+  const action = {
+    action: {
+      payload: {
+        bid: {
+          kind: "pass"
+        },
+        seat: 0
+      },
+      type: "fortyTwo.bid.submit"
+    },
+    actionId: "smoke-invalid-actor",
+    actorId: "client-provided-player-id",
+    actorSeat: 0,
+    clientCreatedAt: "2026-05-30T00:00:00.000Z",
+    gameId,
+    schemaVersion: 1
+  };
+
   return {
     operationName: "SmokeSubmitGameAction",
     query: `
@@ -453,23 +471,7 @@ function createSubmitGameActionSmokeRequest(gameId: string): SmokeGraphqlRequest
     `,
     variables: {
       input: {
-        action: {
-          action: {
-            payload: {
-              bid: {
-                kind: "pass"
-              },
-              seat: 0
-            },
-            type: "fortyTwo.bid.submit"
-          },
-          actionId: "smoke-invalid-actor",
-          actorId: "client-provided-player-id",
-          actorSeat: 0,
-          clientCreatedAt: "2026-05-30T00:00:00.000Z",
-          gameId,
-          schemaVersion: 1
-        },
+        action: JSON.stringify(action),
         gameId
       }
     }

@@ -69,6 +69,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 - `src/appsync/schema.graphql`
   - Defines the AppSync GraphQL boundary used by the CDK API.
   - Defines `submitGameAction`, public snapshot, private hand, reconnect, and game-update subscription operations.
+  - Uses `AWSJSON` for submit-action envelopes; deployed GraphQL clients should send the action as a JSON-encoded string, while local resolver tests may still pass already-parsed objects.
   - Separates public/redacted snapshots from private hand responses.
   - Uses safe event summaries and subscription notifications instead of raw trusted event payloads.
 
