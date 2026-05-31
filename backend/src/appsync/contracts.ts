@@ -120,18 +120,6 @@ export interface AppSyncReconnectView {
   readonly unknownPendingActionIds: readonly string[];
 }
 
-export interface AppSyncGameUpdatedNotification {
-  readonly accepted: boolean;
-  readonly actionIds: readonly string[];
-  readonly actorIds: readonly string[];
-  readonly duplicate: boolean;
-  readonly eventIds: readonly string[];
-  readonly eventTypes: readonly string[];
-  readonly gameId: string;
-  readonly lastEventSequence: number;
-  readonly snapshotVersion: number;
-}
-
 export interface AppSyncReconnectRecords {
   readonly idempotency: readonly MultiplayerActionIdempotencyRecord[];
   readonly privateHand?: MultiplayerPrivateHandRecord;
@@ -291,23 +279,6 @@ export function toSafeGameEventSummary(
     eventId: event.eventId,
     eventType: event.event.type,
     sequence: event.sequence
-  };
-}
-
-export function createGameUpdatedNotification(
-  gameId: string,
-  result: AppSyncSubmitGameActionResult
-): AppSyncGameUpdatedNotification {
-  return {
-    accepted: result.accepted,
-    actionIds: unique(result.events.map((event) => event.actionId)),
-    actorIds: unique(result.events.map((event) => event.actorId)),
-    duplicate: result.duplicate,
-    eventIds: result.events.map((event) => event.eventId),
-    eventTypes: result.events.map((event) => event.eventType),
-    gameId,
-    lastEventSequence: result.snapshot?.lastEventSequence ?? 0,
-    snapshotVersion: result.snapshot?.snapshotVersion ?? 0
   };
 }
 
@@ -471,8 +442,4 @@ function toRecord(value: unknown): Readonly<Record<string, unknown>> {
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function unique(values: readonly string[]): readonly string[] {
-  return [...new Set(values)];
 }

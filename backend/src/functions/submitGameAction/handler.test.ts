@@ -72,6 +72,20 @@ test("accepted action returns accepted response and commits through store", asyn
   assert.equal(store.commits[0]?.transaction.kind, "acceptedAction");
 });
 
+test("accepted action supports AppSync AWSJSON encoded action input", async () => {
+  const context = createTestContext();
+  const previousSession = createStartedSession(context);
+  const store = createMockStore(createMultiplayerStorageRecords(previousSession));
+  const handler = createTestHandler(context, store.store);
+  const action = createBidAction(previousSession, 1, createPassBid(), "bid-json", context);
+  const response = await handler(createEvent(JSON.stringify(action), "player-1"));
+
+  assert.equal(response.accepted, true);
+  assert.equal(response.committed, true);
+  assert.equal(store.loadedGames.length, 1);
+  assert.equal(store.commits.length, 1);
+});
+
 test("rejected action returns typed error response and commits rejection", async () => {
   const context = createTestContext();
   const previousSession = createStartedSession(context);
@@ -159,6 +173,23 @@ test("malformed action input is rejected before persistence", async () => {
 
   if (!response.accepted) {
     assert.equal(response.error.code, "INVALID_ACTION");
+  }
+
+  assert.equal(store.loadedGames.length, 0);
+  assert.equal(store.commits.length, 0);
+});
+
+test("malformed AWSJSON action input is rejected before persistence", async () => {
+  const context = createTestContext();
+  const previousSession = createStartedSession(context);
+  const store = createMockStore(createMultiplayerStorageRecords(previousSession));
+  const handler = createTestHandler(context, store.store);
+  const response = await handler(createEvent("{not-json", "player-1"));
+
+  assert.equal(response.accepted, false);
+
+  if (!response.accepted) {
+    assert.equal(response.error.code, "MALFORMED_REQUEST");
   }
 
   assert.equal(store.loadedGames.length, 0);

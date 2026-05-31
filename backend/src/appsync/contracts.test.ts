@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  createGameUpdatedNotification,
   createSubmitGameActionResolverEvent,
   mapGetMyPrivateHandInputToStoreRequest,
   mapGetReconnectViewInputToClientSyncState,
@@ -164,7 +163,10 @@ test("private hand query maps through an explicit seat ownership boundary", () =
   );
 });
 
-test("subscription payload contains only safe public notification fields", () => {
+test("subscription output matches submit mutation and remains public-safe", () => {
+  const schema = readSchema();
+  const subscriptionType = getTypeBlock(schema, "Subscription");
+  const submitResultType = getTypeBlock(schema, "SubmitGameActionResult");
   const session = createStartedSession(createTestContext());
   const result = mapSubmitGameActionHandlerResponse({
     accepted: true,
@@ -173,21 +175,20 @@ test("subscription payload contains only safe public notification fields", () =>
     events: session.events,
     snapshot: createMultiplayerVisibleSnapshot(session.snapshot, 0)
   });
-  const notification = createGameUpdatedNotification("game-1", result);
-  const serialized = JSON.stringify(notification);
+  const serialized = JSON.stringify(result);
 
-  assert.deepEqual(Object.keys(notification).sort(), [
+  assert.match(
+    subscriptionType,
+    /onGameUpdated\(gameId: ID!\): SubmitGameActionResult!/
+  );
+  assert.deepEqual(Object.keys(result).sort(), [
     "accepted",
-    "actionIds",
-    "actorIds",
+    "committed",
     "duplicate",
-    "eventIds",
-    "eventTypes",
-    "gameId",
-    "lastEventSequence",
-    "snapshotVersion"
+    "events",
+    "snapshot"
   ]);
-  assert.ok(notification.eventTypes.includes("fortyTwo.hand.dealt"));
+  assert.doesNotMatch(submitResultType, /\bGameUpdatedNotification\b/);
   assert.doesNotMatch(serialized, /"payload"/);
   assert.doesNotMatch(serialized, /"hands"/);
   assert.doesNotMatch(serialized, /"viewerHand"/);

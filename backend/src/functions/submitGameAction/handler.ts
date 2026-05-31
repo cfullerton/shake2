@@ -249,9 +249,24 @@ function parseSubmitGameActionRequest(value: unknown): SubmitGameActionRequest {
   }
 
   return {
-    action: record.action,
+    action: parseAwsJsonInput(record.action, "submitGameAction.action"),
     gameId
   };
+}
+
+function parseAwsJsonInput(value: unknown, label: string): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    throw new BackendResolverError(
+      "MALFORMED_REQUEST",
+      `${label} must be valid JSON.`
+    );
+  }
 }
 
 function assertActionMatchesRequest(

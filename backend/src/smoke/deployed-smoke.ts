@@ -9,6 +9,9 @@ import {
   CognitoIdentityProviderClient,
   InitiateAuthCommand
 } from "@aws-sdk/client-cognito-identity-provider";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface DeployedSmokeEnvironment {
   readonly AWS_REGION?: string;
@@ -85,7 +88,7 @@ export class DeployedSmokeError extends Error {
 }
 
 export async function runDeployedSmoke(
-  env: DeployedSmokeEnvironment = process.env
+  env: DeployedSmokeEnvironment = loadDeployedSmokeEnvironment()
 ): Promise<readonly SmokeCheckEvaluation[]> {
   const config = resolveDeployedSmokeConfig(env);
   const cloudFormation = new CloudFormationClient({
@@ -121,13 +124,55 @@ export async function runDeployedSmoke(
 
   if (failed.length > 0) {
     throw new DeployedSmokeError(
-      `Deployed multiplayer smoke failed: ${
-        failed.map((failure) => failure.title).join(", ")
+      `Deployed multiplayer smoke failed:\n${
+        failed.map((failure) =>
+          `- ${failure.title}: ${failure.details}`
+        ).join("\n")
       }`
     );
   }
 
   return evaluations;
+}
+
+export function loadDeployedSmokeEnvironment(
+  baseEnv: DeployedSmokeEnvironment = process.env,
+  cwd = process.cwd()
+): DeployedSmokeEnvironment {
+  return {
+    ...readOptionalDotEnvFile(findDotEnvPath(cwd)),
+    ...baseEnv
+  };
+}
+
+export function parseDotEnvFile(contents: string): DeployedSmokeEnvironment {
+  const parsed: Record<string, string> = {};
+
+  for (const line of contents.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+
+    if (trimmed.length === 0 || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const normalized = trimmed.startsWith("export ")
+      ? trimmed.slice("export ".length).trim()
+      : trimmed;
+    const separatorIndex = normalized.indexOf("=");
+
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = normalized.slice(0, separatorIndex).trim();
+    const value = normalized.slice(separatorIndex + 1).trim();
+
+    if (isSmokeEnvironmentKey(key)) {
+      parsed[key] = unquoteDotEnvValue(value);
+    }
+  }
+
+  return parsed;
 }
 
 export function resolveDeployedSmokeConfig(
@@ -352,7 +397,7 @@ export function evaluateSmokeCheck(
     return {
       details: ok
         ? "Resolver returned INVALID_ACTOR from authenticated Cognito identity."
-        : `Expected INVALID_ACTOR response, got HTTP ${result.httpStatus}.`,
+        : `Expected INVALID_ACTOR response. ${summarizeSmokeHttpResult(result)}`,
       ok,
       title: check.title
     };
@@ -363,7 +408,7 @@ export function evaluateSmokeCheck(
   return {
     details: ok
       ? "Resolver reached Lambda/DynamoDB path and returned a GraphQL error for missing smoke data."
-      : `Expected GraphQL error for missing smoke data, got HTTP ${result.httpStatus}.`,
+      : `Expected GraphQL error for missing smoke data. ${summarizeSmokeHttpResult(result)}`,
     ok,
     title: check.title
   };
@@ -391,6 +436,24 @@ export async function executeGraphqlRequest(
 }
 
 function createSubmitGameActionSmokeRequest(gameId: string): SmokeGraphqlRequest {
+  const action = {
+    action: {
+      payload: {
+        bid: {
+          kind: "pass"
+        },
+        seat: 0
+      },
+      type: "fortyTwo.bid.submit"
+    },
+    actionId: "smoke-invalid-actor",
+    actorId: "client-provided-player-id",
+    actorSeat: 0,
+    clientCreatedAt: "2026-05-30T00:00:00.000Z",
+    gameId,
+    schemaVersion: 1
+  };
+
   return {
     operationName: "SmokeSubmitGameAction",
     query: `
@@ -408,23 +471,7 @@ function createSubmitGameActionSmokeRequest(gameId: string): SmokeGraphqlRequest
     `,
     variables: {
       input: {
-        action: {
-          action: {
-            payload: {
-              bid: {
-                kind: "pass"
-              },
-              seat: 0
-            },
-            type: "fortyTwo.bid.submit"
-          },
-          actionId: "smoke-invalid-actor",
-          actorId: "client-provided-player-id",
-          actorSeat: 0,
-          clientCreatedAt: "2026-05-30T00:00:00.000Z",
-          gameId,
-          schemaVersion: 1
-        },
+        action: JSON.stringify(action),
         gameId
       }
     }
@@ -469,6 +516,10 @@ function hasGraphqlErrors(body: GraphqlResponseBody | null): boolean {
   return Array.isArray(body?.errors) && body.errors.length > 0;
 }
 
+function summarizeSmokeHttpResult(result: SmokeHttpResult): string {
+  return `HTTP ${result.httpStatus}; body ${JSON.stringify(result.body)}`;
+}
+
 function requireStackOutput(outputs: readonly Output[], key: string): string {
   const value = outputs.find((output) => output.OutputKey === key)?.OutputValue;
 
@@ -485,6 +536,51 @@ function requireEnv(value: string | undefined, name: string): string {
 
 function getErrorName(error: unknown): string | undefined {
   return error instanceof Error ? error.name : undefined;
+}
+
+function readOptionalDotEnvFile(path: string | null): DeployedSmokeEnvironment {
+  if (!path) {
+    return {};
+  }
+
+  return parseDotEnvFile(readFileSync(path, "utf8"));
+}
+
+function findDotEnvPath(cwd: string): string | null {
+  for (const candidate of [
+    join(cwd, ".env"),
+    join(cwd, "backend", ".env"),
+    fileURLToPath(new URL("../../../../.env", import.meta.url))
+  ]) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function isSmokeEnvironmentKey(key: string): key is keyof DeployedSmokeEnvironment {
+  return [
+    "AWS_REGION",
+    "SHAKE2_SMOKE_CREATE_USER",
+    "SHAKE2_SMOKE_EMAIL",
+    "SHAKE2_SMOKE_GAME_ID",
+    "SHAKE2_SMOKE_PASSWORD",
+    "SHAKE2_SMOKE_STACK_NAME",
+    "SHAKE2_SMOKE_USERNAME"
+  ].includes(key);
+}
+
+function unquoteDotEnvValue(value: string): string {
+  if (
+    (value.startsWith("\"") && value.endsWith("\"")) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

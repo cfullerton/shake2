@@ -69,6 +69,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 - `src/appsync/schema.graphql`
   - Defines the AppSync GraphQL boundary used by the CDK API.
   - Defines `submitGameAction`, public snapshot, private hand, reconnect, and game-update subscription operations.
+  - Uses `AWSJSON` for submit-action envelopes; deployed GraphQL clients should send the action as a JSON-encoded string, while local resolver tests may still pass already-parsed objects.
   - Separates public/redacted snapshots from private hand responses.
   - Uses safe event summaries and subscription notifications instead of raw trusted event payloads.
 
@@ -105,11 +106,11 @@ type Query {
 }
 
 type Subscription {
-  onGameUpdated(gameId: ID!): GameUpdatedNotification!
+  onGameUpdated(gameId: ID!): SubmitGameActionResult!
 }
 ```
 
-The public snapshot and subscription types intentionally omit full hands and raw event payloads. Private hand data is only represented through `getMyPrivateHand` and the reconnect player's own `privateHand` field after resolver-level ownership checks.
+The subscription output intentionally matches the `submitGameAction` mutation result because AppSync mutation-backed subscriptions require a compatible output type. That result contains only safe event summaries and public/redacted snapshots. Private hand data is only represented through `getMyPrivateHand` and the reconnect player's own `privateHand` field after resolver-level ownership checks.
 
 ## Identity Model
 
@@ -166,6 +167,8 @@ SHAKE2_SMOKE_PASSWORD
 SHAKE2_SMOKE_CREATE_USER
 SHAKE2_SMOKE_GAME_ID
 ```
+
+The deployed smoke runner automatically loads `backend/.env` when present, then lets explicit shell environment variables override those values. Keep real `.env` files local only.
 
 The room game ID index must allow lookup of room metadata by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 

@@ -5,7 +5,9 @@ import {
   DeployedSmokeError,
   createSmokeChecks,
   evaluateSmokeCheck,
+  loadDeployedSmokeEnvironment,
   parseMultiplayerStackOutputs,
+  parseDotEnvFile,
   resolveDeployedSmokeConfig
 } from "./deployed-smoke.ts";
 
@@ -72,6 +74,40 @@ test("resolves deployed smoke config from env without logging secrets", () => {
   });
 });
 
+test("loads deployed smoke config from dotenv-style contents", () => {
+  assert.deepEqual(
+    parseDotEnvFile(`
+      # comments and unrelated values are ignored
+      AWS_REGION=us-east-2
+      export SHAKE2_SMOKE_STACK_NAME=shake2-dev-multiplayer-infra
+      SHAKE2_SMOKE_EMAIL="smoke@example.com"
+      SHAKE2_SMOKE_USERNAME='smoke-user'
+      SHAKE2_SMOKE_PASSWORD='temporary password'
+      SHAKE2_SMOKE_CREATE_USER=true
+      UNRELATED_SECRET=do-not-read
+    `),
+    {
+      AWS_REGION: "us-east-2",
+      SHAKE2_SMOKE_CREATE_USER: "true",
+      SHAKE2_SMOKE_EMAIL: "smoke@example.com",
+      SHAKE2_SMOKE_PASSWORD: "temporary password",
+      SHAKE2_SMOKE_STACK_NAME: "shake2-dev-multiplayer-infra",
+      SHAKE2_SMOKE_USERNAME: "smoke-user"
+    }
+  );
+});
+
+test("explicit environment overrides dotenv values", () => {
+  const loaded = loadDeployedSmokeEnvironment(
+    {
+      SHAKE2_SMOKE_EMAIL: "env@example.com"
+    },
+    "/path/that/does/not/exist"
+  );
+
+  assert.equal(loaded.SHAKE2_SMOKE_EMAIL, "env@example.com");
+});
+
 test("creates smoke checks for all current AppSync resolvers", () => {
   const checks = createSmokeChecks("game-smoke");
 
@@ -88,33 +124,44 @@ test("creates smoke checks for all current AppSync resolvers", () => {
 
 test("submit smoke request proves Cognito sub wins over client actor", () => {
   const submitCheck = createSmokeChecks("game-smoke")[1];
+  const variables = submitCheck?.request.variables.input as {
+    readonly action: string;
+    readonly gameId: string;
+  };
 
   assert.equal(submitCheck?.expectation, "invalidActorResponse");
+  assert.equal(variables.gameId, "game-smoke");
+  assert.equal(typeof variables.action, "string");
   assert.deepEqual(
-    submitCheck?.request.variables,
+    JSON.parse(variables.action) as unknown,
     {
-      input: {
-        action: {
-          action: {
-            payload: {
-              bid: {
-                kind: "pass"
-              },
-              seat: 0
-            },
-            type: "fortyTwo.bid.submit"
+      action: {
+        payload: {
+          bid: {
+            kind: "pass"
           },
-          actionId: "smoke-invalid-actor",
-          actorId: "client-provided-player-id",
-          actorSeat: 0,
-          clientCreatedAt: "2026-05-30T00:00:00.000Z",
-          gameId: "game-smoke",
-          schemaVersion: 1
+          seat: 0
         },
-        gameId: "game-smoke"
-      }
+        type: "fortyTwo.bid.submit"
+      },
+      actionId: "smoke-invalid-actor",
+      actorId: "client-provided-player-id",
+      actorSeat: 0,
+      clientCreatedAt: "2026-05-30T00:00:00.000Z",
+      gameId: "game-smoke",
+      schemaVersion: 1
     }
   );
+});
+
+test("submit smoke request sends action as AWSJSON-compatible string", () => {
+  const submitCheck = createSmokeChecks("game-smoke")[1];
+  const variables = submitCheck?.request.variables.input as {
+    readonly action: string;
+  };
+
+  assert.doesNotThrow(() => JSON.parse(variables.action));
+  assert.match(submitCheck?.request.query ?? "", /SubmitGameActionInput/u);
 });
 
 test("evaluates expected smoke GraphQL results", () => {
@@ -144,6 +191,19 @@ test("evaluates expected smoke GraphQL results", () => {
       httpStatus: 200
     }).ok,
     true
+  );
+  assert.match(
+    evaluateSmokeCheck(invalidActor!, {
+      body: {
+        errors: [
+          {
+            message: "Cannot return null for non-nullable field SubmitGameActionResult.events."
+          }
+        ]
+      },
+      httpStatus: 200
+    }).details,
+    /Expected INVALID_ACTOR response.*SubmitGameActionResult\.events/u
   );
   assert.equal(
     evaluateSmokeCheck(snapshot!, {
