@@ -2,6 +2,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import type {
   CognitoAuthSession,
+  MultiplayerGameUpdate,
   MultiplayerGameUpdateObserver,
   MultiplayerLobbyGameClient
 } from "../../multiplayer";
@@ -299,6 +300,161 @@ test("active game panel applies live game update snapshots", async () => {
   expect(view.getByText("Snapshot 3 · Event 3")).toBeTruthy();
 });
 
+test("active game panel reconnects when live updates skip event sequences", async () => {
+  const hand = createPrivateHand();
+  let observer: MultiplayerGameUpdateObserver | null = null;
+  const client = {
+    getGameSnapshot: jest.fn(async () => createSnapshot()),
+    getMyPrivateHand: jest.fn(async () => hand),
+    getReconnectView: jest.fn(async () => ({
+      acceptedPendingActionIds: [],
+      privateHand: {
+        ...hand,
+        dominoes: [
+          {
+            high: 5,
+            key: "5-0",
+            low: 0
+          }
+        ]
+      },
+      rejectedPendingActions: [],
+      requiresSnapshotRefresh: true,
+      serverLastEventSequence: 5,
+      serverSnapshotVersion: 5,
+      snapshot: createSnapshot({
+        lastEventSequence: 5,
+        phase: "bidding",
+        redactedState: {
+          bidding: {
+            currentSeat: 2
+          },
+          dealer: 0,
+          handNumber: 1,
+          phase: "bidding"
+        },
+        snapshotVersion: 5
+      }),
+      unknownPendingActionIds: []
+    })),
+    submitBid: jest.fn(),
+    submitDomino: jest.fn(),
+    submitTrump: jest.fn(),
+    subscribeToGameUpdates: jest.fn((
+      _input: {
+        readonly gameId: string;
+      },
+      nextObserver: MultiplayerGameUpdateObserver
+    ) => {
+      observer = nextObserver;
+
+      return {
+        unsubscribe: jest.fn()
+      };
+    })
+  } as unknown as MultiplayerLobbyGameClient;
+  const view = render(
+    <MultiplayerActiveGamePanel
+      actorId="actor-sub"
+      client={client}
+      initialRoom={createRoomView()}
+      initialSnapshot={createSnapshot()}
+      session={createSession()}
+    />
+  );
+
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledTimes(1);
+  });
+
+  await act(async () => {
+    observer?.onSnapshot(createSnapshot({
+      lastEventSequence: 4,
+      phase: "bidding",
+      snapshotVersion: 4
+    }));
+  });
+
+  await waitFor(() => {
+    expect(client.getReconnectView).toHaveBeenCalledWith({
+      gameId: "game-1",
+      lastAppliedEventSequence: 2,
+      pendingActionIds: [],
+      snapshotVersion: 2
+    });
+  });
+  expect(view.getByText("Snapshot 5 · Event 5")).toBeTruthy();
+  expect(view.getByLabelText("Domino 5-0")).toBeTruthy();
+});
+
+test("active game panel accepts contiguous multi-event live updates", async () => {
+  const hand = createPrivateHand();
+  let observer: MultiplayerGameUpdateObserver | null = null;
+  const client = {
+    getGameSnapshot: jest.fn(async () => createSnapshot()),
+    getMyPrivateHand: jest.fn(async () => hand),
+    getReconnectView: jest.fn(),
+    submitBid: jest.fn(),
+    submitDomino: jest.fn(),
+    submitTrump: jest.fn(),
+    subscribeToGameUpdates: jest.fn((
+      _input: {
+        readonly gameId: string;
+      },
+      nextObserver: MultiplayerGameUpdateObserver
+    ) => {
+      observer = nextObserver;
+
+      return {
+        unsubscribe: jest.fn()
+      };
+    })
+  } as unknown as MultiplayerLobbyGameClient;
+  const nextSnapshot = createSnapshot({
+    lastEventSequence: 4,
+    phase: "bidding",
+    redactedState: {
+      bidding: {
+        currentSeat: 2
+      },
+      dealer: 0,
+      handNumber: 1,
+      phase: "bidding"
+    },
+    snapshotVersion: 4
+  });
+  const update: MultiplayerGameUpdate = {
+    events: [
+      createSafeEventSummary(3),
+      createSafeEventSummary(4)
+    ],
+    snapshot: nextSnapshot
+  };
+  const view = render(
+    <MultiplayerActiveGamePanel
+      actorId="actor-sub"
+      client={client}
+      initialRoom={createRoomView()}
+      initialSnapshot={createSnapshot()}
+      session={createSession()}
+    />
+  );
+
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledTimes(1);
+  });
+
+  await act(async () => {
+    observer?.onSnapshot(nextSnapshot, update);
+  });
+
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledTimes(2);
+  });
+  expect(client.getReconnectView).not.toHaveBeenCalled();
+  expect(view.getByText("Snapshot 4 · Event 4")).toBeTruthy();
+});
+
 function createSession(): CognitoAuthSession {
   return {
     accessToken: "access-token",
@@ -307,6 +463,17 @@ function createSession(): CognitoAuthSession {
     subject: "actor-sub",
     tokenType: "Bearer",
     username: "smoke-user"
+  };
+}
+
+function createSafeEventSummary(sequence: number) {
+  return {
+    actionId: `action-${sequence}`,
+    actorId: "actor-sub",
+    actorSeat: "SEAT_1" as const,
+    eventId: `event-${sequence}`,
+    eventType: "fortyTwo.domino.played",
+    sequence
   };
 }
 

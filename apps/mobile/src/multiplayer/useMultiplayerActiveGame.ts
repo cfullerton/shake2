@@ -9,6 +9,7 @@ import type {
   AppSyncSeatIndex,
   MultiplayerPrivateHand,
   MultiplayerPublicGameSnapshot,
+  MultiplayerReconnectView,
   MultiplayerRoomView,
   MultiplayerTrumpSuit
 } from "./types";
@@ -17,6 +18,7 @@ import type {
   MultiplayerGameClient
 } from "./game";
 import type {
+  MultiplayerGameUpdate,
   MultiplayerGameUpdateObserver,
   MultiplayerGameUpdateStatus,
   MultiplayerGameUpdateSubscription
@@ -55,7 +57,8 @@ export interface MultiplayerActiveGameController {
 export type MultiplayerActiveGameLiveStatus =
   | MultiplayerGameUpdateStatus
   | "error"
-  | "idle";
+  | "idle"
+  | "reconnecting";
 
 export function useMultiplayerActiveGame({
   actorId,
@@ -119,12 +122,12 @@ export function useMultiplayerActiveGame({
         setLiveError(message);
         setLiveStatus("error");
       },
-      onSnapshot(nextSnapshot) {
+      onSnapshot(nextSnapshot, update) {
         if (cancelled) {
           return;
         }
 
-        void applyLiveSnapshot(nextSnapshot);
+        void applyLiveSnapshot(nextSnapshot, update);
       },
       onStatus(status) {
         if (cancelled) {
@@ -231,9 +234,25 @@ export function useMultiplayerActiveGame({
   }
 
   async function applyLiveSnapshot(
-    nextSnapshot: MultiplayerPublicGameSnapshot
+    nextSnapshot: MultiplayerPublicGameSnapshot,
+    update?: MultiplayerGameUpdate
   ): Promise<void> {
     try {
+      const currentSnapshot = snapshotRef.current;
+
+      if (nextSnapshot.gameId !== currentSnapshot.gameId) {
+        return;
+      }
+
+      if (nextSnapshot.lastEventSequence <= currentSnapshot.lastEventSequence) {
+        return;
+      }
+
+      if (hasLiveEventGap(currentSnapshot, nextSnapshot, update)) {
+        await reconnectFromSnapshotGap(currentSnapshot);
+        return;
+      }
+
       await applySnapshotUpdate(nextSnapshot, {
         allowEqualSequence: false
       });
@@ -241,6 +260,37 @@ export function useMultiplayerActiveGame({
       setLiveError(toGameErrorMessage(caught));
       setLiveStatus("error");
     }
+  }
+
+  async function reconnectFromSnapshotGap(
+    currentSnapshot: MultiplayerPublicGameSnapshot
+  ): Promise<void> {
+    setLiveStatus("reconnecting");
+    setLiveError(null);
+
+    const reconnect = await client.getReconnectView({
+      gameId: currentSnapshot.gameId,
+      lastAppliedEventSequence: currentSnapshot.lastEventSequence,
+      pendingActionIds: [],
+      snapshotVersion: currentSnapshot.snapshotVersion
+    });
+
+    await applyReconnectView(reconnect);
+    setLiveStatus("subscribed");
+  }
+
+  async function applyReconnectView(
+    reconnect: MultiplayerReconnectView
+  ): Promise<void> {
+    snapshotRef.current = reconnect.snapshot;
+    setSnapshot(reconnect.snapshot);
+
+    if (reconnect.privateHand) {
+      setPrivateHand(reconnect.privateHand);
+      return;
+    }
+
+    await loadPrivateHandFor(reconnect.snapshot.gameId, roomViewerSeatRef.current);
   }
 
   async function applySnapshotUpdate(
@@ -345,6 +395,33 @@ export function useMultiplayerActiveGame({
 
 function toGameErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Multiplayer game request failed.";
+}
+
+function hasLiveEventGap(
+  currentSnapshot: MultiplayerPublicGameSnapshot,
+  nextSnapshot: MultiplayerPublicGameSnapshot,
+  update: MultiplayerGameUpdate | undefined
+): boolean {
+  if (nextSnapshot.lastEventSequence <= currentSnapshot.lastEventSequence + 1) {
+    return false;
+  }
+
+  const liveSequences = update?.events
+    .map((event) => event.sequence)
+    .filter((sequence) => sequence > currentSnapshot.lastEventSequence)
+    .sort((left, right) => left - right) ?? [];
+
+  if (liveSequences.length === 0) {
+    return true;
+  }
+
+  const expectedFirstSequence = currentSnapshot.lastEventSequence + 1;
+
+  return liveSequences[0] !== expectedFirstSequence ||
+    liveSequences.at(-1) !== nextSnapshot.lastEventSequence ||
+    liveSequences.some(
+      (sequence, index) => sequence !== expectedFirstSequence + index
+    );
 }
 
 function readGameUpdateSubscriber(

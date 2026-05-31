@@ -2,7 +2,9 @@ import type { AuthSessionProvider } from "./auth";
 import type { MobileMultiplayerConfig } from "./config";
 import { normalizeMultiplayerPublicGameSnapshot } from "./snapshots";
 import type {
+  AppSyncSeatIndex,
   MultiplayerPublicGameSnapshot,
+  MultiplayerSafeGameEventSummary,
   MultiplayerSubmitGameActionResultPayload
 } from "./types";
 
@@ -14,8 +16,16 @@ export type MultiplayerGameUpdateStatus =
 
 export interface MultiplayerGameUpdateObserver {
   onError?(message: string): void;
-  onSnapshot(snapshot: MultiplayerPublicGameSnapshot): void;
+  onSnapshot(
+    snapshot: MultiplayerPublicGameSnapshot,
+    update?: MultiplayerGameUpdate
+  ): void;
   onStatus?(status: MultiplayerGameUpdateStatus): void;
+}
+
+export interface MultiplayerGameUpdate {
+  readonly events: readonly MultiplayerSafeGameEventSummary[];
+  readonly snapshot: MultiplayerPublicGameSnapshot;
 }
 
 export interface MultiplayerGameUpdateSubscription {
@@ -188,10 +198,10 @@ function handleSocketMessage({
       observer.onStatus?.("subscribed");
       return;
     case "data": {
-      const snapshot = readSnapshotFromDataMessage(parsed);
+      const update = readUpdateFromDataMessage(parsed);
 
-      if (snapshot) {
-        observer.onSnapshot(snapshot);
+      if (update) {
+        observer.onSnapshot(update.snapshot, update);
       }
 
       return;
@@ -207,9 +217,9 @@ function handleSocketMessage({
   }
 }
 
-function readSnapshotFromDataMessage(
+function readUpdateFromDataMessage(
   message: RealtimeMessage
-): MultiplayerPublicGameSnapshot | null {
+): MultiplayerGameUpdate | null {
   const payload = readRecord(message.payload);
   const data = readRecord(payload?.data);
   const result = readRecord(data?.onGameUpdated) as
@@ -220,7 +230,12 @@ function readSnapshotFromDataMessage(
     return null;
   }
 
-  return normalizeMultiplayerPublicGameSnapshot(result.snapshot);
+  return {
+    events: Array.isArray(result.events)
+      ? result.events.map(readSafeGameEventSummary)
+      : [],
+    snapshot: normalizeMultiplayerPublicGameSnapshot(result.snapshot)
+  };
 }
 
 type RealtimeMessage = Readonly<{
@@ -276,6 +291,34 @@ function readRecord(
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Readonly<Record<string, unknown>>
     : undefined;
+}
+
+function readSafeGameEventSummary(value: unknown): MultiplayerSafeGameEventSummary {
+  const event = readRecord(value);
+
+  return {
+    actionId: readString(event?.actionId),
+    actorId: readString(event?.actorId),
+    ...(isSeatIndex(event?.actorSeat) ? { actorSeat: event.actorSeat } : {}),
+    eventId: readString(event?.eventId),
+    eventType: readString(event?.eventType),
+    sequence: readNumber(event?.sequence)
+  };
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function readNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : -1;
+}
+
+function isSeatIndex(value: unknown): value is AppSyncSeatIndex {
+  return value === "SEAT_0" ||
+    value === "SEAT_1" ||
+    value === "SEAT_2" ||
+    value === "SEAT_3";
 }
 
 function createSubscriptionId(): string {

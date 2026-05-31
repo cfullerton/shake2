@@ -94,7 +94,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 - Local practice start screen for playing a full Texas 42 game against three legal-random bots.
 - Local practice active game screen for bidding, trump selection, trick play, hand summary, game summary, restart, and next-hand flow.
 - Mobile multiplayer lobby screen for Cognito sign-in, private/public room creation, join by normalized non-sensitive room invite code or public listing, polling-based room refresh, taking seats, and host-only start-game handoff.
-- Mobile multiplayer active-game shell for rendering the public game snapshot, loading the viewer's private hand, subscribing to live game updates, showing table/score/turn/current-trick state, and submitting pass/numeric bid, declarer trump-call, and domino-play actions through AppSync.
+- Mobile multiplayer active-game shell for rendering the public game snapshot, loading the viewer's private hand, subscribing to live game updates, reconnecting after detected live event gaps, showing table/score/turn/current-trick state, and submitting pass/numeric bid, declarer trump-call, and domino-play actions through AppSync.
 - Local persistence through AsyncStorage using a versioned scorekeeper snapshot envelope.
 - Legacy migration from the original raw saved-game array format.
 - Hardened scorekeeper validation for target marks, mark awards, timestamps, IDs, names, and notes.
@@ -115,7 +115,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 ## Features Partially Implemented
 
 - Game engine: full local Texas 42 play now exists for standard numeric bids and pip-suit trump, but does not implement variants or advanced bot strategy.
-- Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, lobby UI with public rooms and room polling, active-game bidding/trump/trick-play UI, and baseline mobile game-update subscriptions exist, but there is still no subscription gap detection, reconnect UX, post-hand/next-hand controls, or production lifecycle/abuse handling.
+- Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, lobby UI with public rooms and room polling, active-game bidding/trump/trick-play UI, baseline mobile game-update subscriptions, and gap-triggered reconnect refresh exist, but there is still no pending-action retry queue, reconnect UX, post-hand/next-hand controls, or production lifecycle/abuse handling.
 - Game state model: current scorekeeper shape is serializable, but the app does not yet apply shared actions/events or replay an event log.
 - Persistence: local JSON persistence has schema versioning and legacy migration for scorekeeper games, but local practice games are currently in-memory only.
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.
@@ -156,7 +156,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 5. Expand contract tests around duplicate actions, stale sequences, reconnect snapshots, and unsupported schemas.
 6. Build the physical AWS backend adapter around the backend-neutral session/storage/write-plan modules.
 7. Add schema migration/version-compatibility coverage for physical adapter payloads.
-8. Expand mobile multiplayer active-game support with post-hand/next-hand controls, subscription gap detection, and reconnect UX.
+8. Expand mobile multiplayer active-game support with post-hand/next-hand controls, pending-action retry, and reconnect UX.
 
 ## Architecture Decisions That Differ From Original Docs
 

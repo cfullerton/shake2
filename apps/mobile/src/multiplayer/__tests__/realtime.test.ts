@@ -107,7 +107,16 @@ test("AppSyncRealtimeClient normalizes snapshots from game update messages", asy
           accepted: true,
           committed: true,
           duplicate: false,
-          events: [],
+          events: [
+            {
+              actionId: "action-8",
+              actorId: "actor-sub",
+              actorSeat: "SEAT_1",
+              eventId: "event-8",
+              eventType: "fortyTwo.domino.played",
+              sequence: 8
+            }
+          ],
           gameId: "game-1",
           snapshot: {
             gameId: "game-1",
@@ -127,7 +136,7 @@ test("AppSyncRealtimeClient normalizes snapshots from game update messages", asy
     type: "data"
   });
 
-  expect(onSnapshot).toHaveBeenCalledWith({
+  expect(onSnapshot.mock.calls[0]?.[0]).toEqual({
     gameId: "game-1",
     generatedAt: "2026-05-31T00:00:00.000Z",
     lastEventSequence: 8,
@@ -138,6 +147,19 @@ test("AppSyncRealtimeClient normalizes snapshots from game update messages", asy
     },
     schemaVersion: 1,
     snapshotVersion: 8
+  });
+  expect(onSnapshot.mock.calls[0]?.[1]).toMatchObject({
+    events: [
+      {
+        actionId: "action-8",
+        actorSeat: "SEAT_1",
+        eventType: "fortyTwo.domino.played",
+        sequence: 8
+      }
+    ],
+    snapshot: {
+      lastEventSequence: 8
+    }
   });
 });
 

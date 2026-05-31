@@ -276,6 +276,8 @@ function formatLiveStatus(status: string, error: string | null): string {
       return "Connecting";
     case "connected":
       return "Connected";
+    case "reconnecting":
+      return "Reconnecting";
     case "subscribed":
       return "Live";
     case "closed":

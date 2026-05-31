@@ -11,6 +11,8 @@ import type {
   MultiplayerPrivateHand,
   MultiplayerPublicGameSnapshotPayload,
   MultiplayerPublicGameSnapshot,
+  MultiplayerReconnectView,
+  MultiplayerReconnectViewPayload,
   MultiplayerSubmitGameActionResultPayload,
   MultiplayerSubmitGameActionResult,
   MultiplayerTrumpSuit
@@ -28,6 +30,13 @@ export type MultiplayerBid =
 export interface GetMyPrivateHandInput {
   readonly gameId: string;
   readonly seatIndex: AppSyncSeatIndex;
+}
+
+export interface GetReconnectViewInput {
+  readonly gameId: string;
+  readonly lastAppliedEventSequence: number;
+  readonly pendingActionIds?: readonly string[];
+  readonly snapshotVersion: number;
 }
 
 export interface SubmitMultiplayerBidInput {
@@ -110,6 +119,59 @@ export class MultiplayerGameClient {
     });
 
     return data.getMyPrivateHand;
+  }
+
+  async getReconnectView(
+    input: GetReconnectViewInput
+  ): Promise<MultiplayerReconnectView> {
+    const data = await this.graphql.execute<{
+      readonly getReconnectView: MultiplayerReconnectViewPayload;
+    }>({
+      operationName: "GetReconnectView",
+      query: `
+        query GetReconnectView($input: GetReconnectViewInput!) {
+          getReconnectView(input: $input) {
+            acceptedPendingActionIds
+            privateHand {
+              gameId
+              handNumber
+              seatIndex
+              updatedAt
+              dominoes {
+                high
+                key
+                low
+              }
+            }
+            rejectedPendingActions {
+              actionId
+              errorCode
+            }
+            requiresSnapshotRefresh
+            serverLastEventSequence
+            serverSnapshotVersion
+            snapshot {
+              ${PUBLIC_SNAPSHOT_SELECTION}
+            }
+            unknownPendingActionIds
+          }
+        }
+      `,
+      variables: {
+        input: {
+          gameId: input.gameId,
+          lastAppliedEventSequence: input.lastAppliedEventSequence,
+          pendingActionIds: input.pendingActionIds ?? [],
+          snapshotVersion: input.snapshotVersion
+        }
+      }
+    });
+    const { snapshot, ...reconnect } = data.getReconnectView;
+
+    return {
+      ...reconnect,
+      snapshot: normalizeMultiplayerPublicGameSnapshot(snapshot)
+    };
   }
 
   async submitBid(

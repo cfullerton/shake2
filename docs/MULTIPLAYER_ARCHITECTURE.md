@@ -70,7 +70,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh, active-game bidding/trump/trick-play UI, mobile AppSync realtime subscription handling for game updates, and an optional deployed smoke path for live AppSync subscription validation. Subscription gap detection, reconnect UX, and post-hand/next-hand multiplayer controls are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh, active-game bidding/trump/trick-play UI, mobile AppSync realtime subscription handling for game updates, mobile gap-triggered reconnect refresh, and an optional deployed smoke path for live AppSync subscription validation. Reconnect UX, pending-action retry, and post-hand/next-hand multiplayer controls are still missing.
 
 ## Durable Record Shape
 
@@ -186,10 +186,12 @@ The current reconnect helper returns:
 - unknown pending action IDs
 - the latest redacted player view
 
+The mobile active-game hook now detects missing live event sequences from `onGameUpdated` summaries and calls `getReconnectView` before applying authoritative state. Pending-action retry and a full offline/resume UX are still future work.
+
 ## Still Missing
 
 - Schema migration/version-compatibility tooling for future payload changes.
 - Deployed smoke coverage for organic create/join/take-seat/start room flows.
-- Subscription gap detection.
+- Pending-action retry and fuller reconnect UX.
 - Leave/rejoin/replacement behavior.
 - Mobile post-hand and next-hand multiplayer controls.

@@ -68,6 +68,75 @@ test("MultiplayerGameClient reads the actor private hand", async () => {
   expect(graphql.requests[0]?.operationName).toBe("GetMyPrivateHand");
 });
 
+test("MultiplayerGameClient reads reconnect views and parses AWSJSON snapshots", async () => {
+  const hand: MultiplayerPrivateHand = {
+    dominoes: [
+      {
+        high: 5,
+        key: "5-0",
+        low: 0
+      }
+    ],
+    gameId: "game-1",
+    handNumber: 1,
+    seatIndex: "SEAT_1",
+    updatedAt: "2026-05-31T00:00:00.000Z"
+  };
+  const graphql = new MockGraphqlClient({
+    getReconnectView: {
+      acceptedPendingActionIds: ["action-1"],
+      privateHand: hand,
+      rejectedPendingActions: [],
+      requiresSnapshotRefresh: true,
+      serverLastEventSequence: 8,
+      serverSnapshotVersion: 8,
+      snapshot: {
+        gameId: "game-1",
+        generatedAt: "2026-05-31T00:00:00.000Z",
+        lastEventSequence: 8,
+        phase: "trickPlay",
+        redactedState: JSON.stringify({
+          dealer: 0,
+          phase: "trickPlay"
+        }),
+        schemaVersion: 1,
+        snapshotVersion: 8
+      },
+      unknownPendingActionIds: ["action-2"]
+    }
+  });
+  const client = new MultiplayerGameClient(graphql);
+
+  await expect(
+    client.getReconnectView({
+      gameId: "game-1",
+      lastAppliedEventSequence: 6,
+      pendingActionIds: ["action-1", "action-2"],
+      snapshotVersion: 6
+    })
+  ).resolves.toMatchObject({
+    acceptedPendingActionIds: ["action-1"],
+    privateHand: hand,
+    snapshot: {
+      lastEventSequence: 8,
+      redactedState: {
+        dealer: 0,
+        phase: "trickPlay"
+      }
+    },
+    unknownPendingActionIds: ["action-2"]
+  });
+  expect(graphql.requests[0]?.operationName).toBe("GetReconnectView");
+  expect(graphql.requests[0]?.variables).toEqual({
+    input: {
+      gameId: "game-1",
+      lastAppliedEventSequence: 6,
+      pendingActionIds: ["action-1", "action-2"],
+      snapshotVersion: 6
+    }
+  });
+});
+
 test("MultiplayerGameClient submits bids as AppSync AWSJSON actions", async () => {
   const result: MultiplayerSubmitGameActionResult = {
     accepted: true,

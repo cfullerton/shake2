@@ -96,6 +96,27 @@ export interface MultiplayerBackendError {
   readonly message: string;
 }
 
+export interface MultiplayerPendingActionRejection {
+  readonly actionId: string;
+  readonly errorCode: string;
+}
+
+export interface MultiplayerReconnectView {
+  readonly acceptedPendingActionIds: readonly string[];
+  readonly privateHand?: MultiplayerPrivateHand | null;
+  readonly rejectedPendingActions: readonly MultiplayerPendingActionRejection[];
+  readonly requiresSnapshotRefresh: boolean;
+  readonly serverLastEventSequence: number;
+  readonly serverSnapshotVersion: number;
+  readonly snapshot: MultiplayerPublicGameSnapshot;
+  readonly unknownPendingActionIds: readonly string[];
+}
+
+export type MultiplayerReconnectViewPayload =
+  Omit<MultiplayerReconnectView, "snapshot"> & {
+    readonly snapshot: MultiplayerPublicGameSnapshotPayload;
+  };
+
 export interface MultiplayerSafeGameEventSummary {
   readonly actionId: string;
   readonly actorId: string;
