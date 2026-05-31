@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createMultiplayerActiveGameView,
@@ -16,6 +16,11 @@ import type {
   MultiplayerBid,
   MultiplayerGameClient
 } from "./game";
+import type {
+  MultiplayerGameUpdateObserver,
+  MultiplayerGameUpdateStatus,
+  MultiplayerGameUpdateSubscription
+} from "./realtime";
 
 export type MultiplayerActiveGameAction =
   | "loadPrivateHand"
@@ -34,6 +39,8 @@ export interface UseMultiplayerActiveGameInput {
 export interface MultiplayerActiveGameController {
   readonly busyAction: MultiplayerActiveGameAction | null;
   readonly error: string | null;
+  readonly liveError: string | null;
+  readonly liveStatus: MultiplayerActiveGameLiveStatus;
   readonly privateHand: MultiplayerPrivateHand | null;
   readonly room: MultiplayerRoomView;
   readonly snapshot: MultiplayerPublicGameSnapshot;
@@ -45,6 +52,11 @@ export interface MultiplayerActiveGameController {
   submitTrump(trumpSuit: MultiplayerTrumpSuit): Promise<void>;
 }
 
+export type MultiplayerActiveGameLiveStatus =
+  | MultiplayerGameUpdateStatus
+  | "error"
+  | "idle";
+
 export function useMultiplayerActiveGame({
   actorId,
   client,
@@ -54,10 +66,25 @@ export function useMultiplayerActiveGame({
   const [busyAction, setBusyAction] =
     useState<MultiplayerActiveGameAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveStatus, setLiveStatus] =
+    useState<MultiplayerActiveGameLiveStatus>("idle");
   const [privateHand, setPrivateHand] = useState<MultiplayerPrivateHand | null>(null);
   const [room] = useState(initialRoom);
   const [snapshot, setSnapshot] =
     useState<MultiplayerPublicGameSnapshot>(initialSnapshot);
+  const roomViewerSeatRef = useRef<AppSyncSeatIndex | null>(
+    initialRoom.viewerSeat ?? null
+  );
+  const snapshotRef = useRef<MultiplayerPublicGameSnapshot>(initialSnapshot);
+
+  useEffect(() => {
+    roomViewerSeatRef.current = room.viewerSeat ?? null;
+  }, [room.viewerSeat]);
+
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
 
   const view = useMemo(
     () =>
@@ -73,12 +100,60 @@ export function useMultiplayerActiveGame({
     void loadPrivateHand();
   }, [snapshot.gameId, room.viewerSeat]);
 
+  useEffect(() => {
+    const subscriber = readGameUpdateSubscriber(client);
+
+    if (!subscriber) {
+      setLiveStatus("idle");
+      setLiveError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const observer: MultiplayerGameUpdateObserver = {
+      onError(message) {
+        if (cancelled) {
+          return;
+        }
+
+        setLiveError(message);
+        setLiveStatus("error");
+      },
+      onSnapshot(nextSnapshot) {
+        if (cancelled) {
+          return;
+        }
+
+        void applyLiveSnapshot(nextSnapshot);
+      },
+      onStatus(status) {
+        if (cancelled) {
+          return;
+        }
+
+        setLiveStatus(status);
+        if (status !== "closed") {
+          setLiveError(null);
+        }
+      }
+    };
+    const subscription = subscriber.call(client, {
+      gameId: snapshot.gameId
+    }, observer);
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [client, snapshot.gameId]);
+
   async function refresh(): Promise<void> {
     await runAction("refresh", async () => {
       const nextSnapshot = await client.getGameSnapshot(snapshot.gameId);
 
-      setSnapshot(nextSnapshot);
-      await loadPrivateHandFor(nextSnapshot.gameId, room.viewerSeat ?? null);
+      await applySnapshotUpdate(nextSnapshot, {
+        allowEqualSequence: true
+      });
     });
   }
 
@@ -99,8 +174,10 @@ export function useMultiplayerActiveGame({
         throw new Error(result.error?.message ?? "The server rejected that action.");
       }
 
-      setSnapshot(result.snapshot);
-      await loadPrivateHandFor(result.snapshot.gameId, identity.actorSeat);
+      await applySnapshotUpdate(result.snapshot, {
+        allowEqualSequence: true,
+        viewerSeat: identity.actorSeat
+      });
     });
   }
 
@@ -121,8 +198,10 @@ export function useMultiplayerActiveGame({
         throw new Error(result.error?.message ?? "The server rejected that action.");
       }
 
-      setSnapshot(result.snapshot);
-      await loadPrivateHandFor(result.snapshot.gameId, identity.actorSeat);
+      await applySnapshotUpdate(result.snapshot, {
+        allowEqualSequence: true,
+        viewerSeat: identity.actorSeat
+      });
     });
   }
 
@@ -144,9 +223,52 @@ export function useMultiplayerActiveGame({
         throw new Error(result.error?.message ?? "The server rejected that action.");
       }
 
-      setSnapshot(result.snapshot);
-      await loadPrivateHandFor(result.snapshot.gameId, identity.actorSeat);
+      await applySnapshotUpdate(result.snapshot, {
+        allowEqualSequence: true,
+        viewerSeat: identity.actorSeat
+      });
     });
+  }
+
+  async function applyLiveSnapshot(
+    nextSnapshot: MultiplayerPublicGameSnapshot
+  ): Promise<void> {
+    try {
+      await applySnapshotUpdate(nextSnapshot, {
+        allowEqualSequence: false
+      });
+    } catch (caught) {
+      setLiveError(toGameErrorMessage(caught));
+      setLiveStatus("error");
+    }
+  }
+
+  async function applySnapshotUpdate(
+    nextSnapshot: MultiplayerPublicGameSnapshot,
+    options: {
+      readonly allowEqualSequence: boolean;
+      readonly viewerSeat?: AppSyncSeatIndex;
+    }
+  ): Promise<void> {
+    const currentSnapshot = snapshotRef.current;
+
+    if (nextSnapshot.gameId !== currentSnapshot.gameId) {
+      return;
+    }
+
+    if (
+      !options.allowEqualSequence &&
+      nextSnapshot.lastEventSequence <= currentSnapshot.lastEventSequence
+    ) {
+      return;
+    }
+
+    snapshotRef.current = nextSnapshot;
+    setSnapshot(nextSnapshot);
+    await loadPrivateHandFor(
+      nextSnapshot.gameId,
+      options.viewerSeat ?? roomViewerSeatRef.current
+    );
   }
 
   async function loadPrivateHand(): Promise<void> {
@@ -208,6 +330,8 @@ export function useMultiplayerActiveGame({
     busyAction,
     clearError: () => setError(null),
     error,
+    liveError,
+    liveStatus,
     privateHand,
     refresh,
     room,
@@ -221,4 +345,23 @@ export function useMultiplayerActiveGame({
 
 function toGameErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Multiplayer game request failed.";
+}
+
+function readGameUpdateSubscriber(
+  client: MultiplayerGameClient
+): ((input: {
+  readonly gameId: string;
+}, observer: MultiplayerGameUpdateObserver) => MultiplayerGameUpdateSubscription) | null {
+  const candidate = client as unknown as {
+    readonly subscribeToGameUpdates?: (
+      input: {
+        readonly gameId: string;
+      },
+      observer: MultiplayerGameUpdateObserver
+    ) => MultiplayerGameUpdateSubscription;
+  };
+
+  return typeof candidate.subscribeToGameUpdates === "function"
+    ? candidate.subscribeToGameUpdates
+    : null;
 }

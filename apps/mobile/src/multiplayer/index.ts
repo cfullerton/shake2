@@ -3,6 +3,7 @@ export * from "./auth";
 export * from "./config";
 export * from "./graphql";
 export * from "./game";
+export * from "./realtime";
 export * from "./rooms";
 export * from "./snapshots";
 export * from "./types";

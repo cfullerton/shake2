@@ -16,6 +16,7 @@ import {
 } from "./config";
 import { AppSyncGraphqlClient } from "./graphql";
 import { MultiplayerGameClient } from "./game";
+import { AppSyncRealtimeClient } from "./realtime";
 import {
   type CreateRoomInput,
   type GetRoomInput,
@@ -462,8 +463,11 @@ function createDefaultGameClient(
   config: MobileMultiplayerConfig,
   session: CognitoAuthSession
 ): MultiplayerLobbyGameClient {
+  const auth = new StaticAuthSessionProvider(session);
+
   return new MultiplayerGameClient(
-    new AppSyncGraphqlClient(config, new StaticAuthSessionProvider(session))
+    new AppSyncGraphqlClient(config, auth),
+    new AppSyncRealtimeClient(config, auth)
   );
 }
 

@@ -72,6 +72,10 @@ export function MultiplayerActiveGamePanel({
         <InfoTile label="Bid" value={view.currentBidLabel} />
         <InfoTile label="Trump" value={view.currentTrumpLabel} />
         <InfoTile label="State" value={view.snapshotVersionLabel} />
+        <InfoTile
+          label="Live"
+          value={formatLiveStatus(game.liveStatus, game.liveError)}
+        />
       </View>
 
       <View style={styles.tablePanel}>
@@ -260,6 +264,25 @@ function InfoTile({
       <Text style={styles.infoValue}>{value}</Text>
     </View>
   );
+}
+
+function formatLiveStatus(status: string, error: string | null): string {
+  if (error) {
+    return "Realtime issue";
+  }
+
+  switch (status) {
+    case "connecting":
+      return "Connecting";
+    case "connected":
+      return "Connected";
+    case "subscribed":
+      return "Live";
+    case "closed":
+      return "Closed";
+    default:
+      return "Polling ready";
+  }
 }
 
 function MultiplayerDominoTile({

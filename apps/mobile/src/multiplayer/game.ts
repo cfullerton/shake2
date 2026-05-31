@@ -1,4 +1,9 @@
 import type { GraphqlClient } from "./graphql";
+import type {
+  MultiplayerGameRealtimeClient,
+  MultiplayerGameUpdateObserver,
+  MultiplayerGameUpdateSubscription
+} from "./realtime";
 import { normalizeMultiplayerPublicGameSnapshot } from "./snapshots";
 import type {
   AppSyncSeatIndex,
@@ -54,7 +59,10 @@ export interface SubmitMultiplayerDominoInput {
 }
 
 export class MultiplayerGameClient {
-  constructor(private readonly graphql: GraphqlClient) {}
+  constructor(
+    private readonly graphql: GraphqlClient,
+    private readonly realtime: MultiplayerGameRealtimeClient | null = null
+  ) {}
 
   async getGameSnapshot(gameId: string): Promise<MultiplayerPublicGameSnapshot> {
     const data = await this.graphql.execute<{
@@ -162,6 +170,23 @@ export class MultiplayerGameClient {
       knownLastEventSequence: input.knownLastEventSequence,
       knownSnapshotVersion: input.knownSnapshotVersion
     });
+  }
+
+  subscribeToGameUpdates(
+    input: {
+      readonly gameId: string;
+    },
+    observer: MultiplayerGameUpdateObserver
+  ): MultiplayerGameUpdateSubscription {
+    if (!this.realtime) {
+      observer.onStatus?.("closed");
+
+      return {
+        unsubscribe() {}
+      };
+    }
+
+    return this.realtime.subscribeToGameUpdates(input, observer);
   }
 
   private async submitPlayerAction(input: {

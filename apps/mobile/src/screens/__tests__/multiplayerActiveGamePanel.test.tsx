@@ -1,7 +1,8 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import type {
   CognitoAuthSession,
+  MultiplayerGameUpdateObserver,
   MultiplayerLobbyGameClient
 } from "../../multiplayer";
 import type {
@@ -234,6 +235,68 @@ test("active game panel submits legal domino plays", async () => {
       ledSuit: "sixes"
     });
   });
+});
+
+test("active game panel applies live game update snapshots", async () => {
+  const hand = createPrivateHand();
+  let observer: MultiplayerGameUpdateObserver | null = null;
+  const unsubscribe = jest.fn();
+  const client = {
+    getGameSnapshot: jest.fn(async () => createSnapshot()),
+    getMyPrivateHand: jest.fn(async () => hand),
+    submitBid: jest.fn(),
+    submitDomino: jest.fn(),
+    submitTrump: jest.fn(),
+    subscribeToGameUpdates: jest.fn((
+      _input: {
+        readonly gameId: string;
+      },
+      nextObserver: MultiplayerGameUpdateObserver
+    ) => {
+      observer = nextObserver;
+
+      return {
+        unsubscribe
+      };
+    })
+  } as unknown as MultiplayerLobbyGameClient;
+  const view = render(
+    <MultiplayerActiveGamePanel
+      actorId="actor-sub"
+      client={client}
+      initialRoom={createRoomView()}
+      initialSnapshot={createSnapshot()}
+      session={createSession()}
+    />
+  );
+
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledTimes(1);
+  });
+  expect(client.subscribeToGameUpdates).toHaveBeenCalledWith({
+    gameId: "game-1"
+  }, expect.any(Object));
+
+  await act(async () => {
+    observer?.onSnapshot(createSnapshot({
+      lastEventSequence: 3,
+      phase: "bidding",
+      redactedState: {
+        bidding: {
+          currentSeat: 2
+        },
+        dealer: 0,
+        handNumber: 1,
+        phase: "bidding"
+      },
+      snapshotVersion: 3
+    }));
+  });
+
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledTimes(2);
+  });
+  expect(view.getByText("Snapshot 3 · Event 3")).toBeTruthy();
 });
 
 function createSession(): CognitoAuthSession {
