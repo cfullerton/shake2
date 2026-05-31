@@ -291,6 +291,9 @@ test("active game panel lets the host deal the next multiplayer hand", async () 
   );
 
   expect(view.getByText("Deal Next Hand")).toBeTruthy();
+  expect(view.getByText("Last Hand")).toBeTruthy();
+  expect(view.getByText("Set on 32")).toBeTruthy();
+  expect(view.getByText("East/West +1 mark")).toBeTruthy();
   expect(client.getMyPrivateHand).not.toHaveBeenCalled();
 
   fireEvent.press(view.getByText("Deal Next Hand"));
@@ -662,6 +665,7 @@ function createTrickPlaySnapshot(
 function createPostHandSetupSnapshot(): MultiplayerPublicGameSnapshot {
   return createSnapshot({
     handCounts: null,
+    lastCompletedHand: createCompletedHandSummary(),
     lastEventSequence: 31,
     phase: "setup",
     redactedState: {
@@ -671,6 +675,34 @@ function createPostHandSetupSnapshot(): MultiplayerPublicGameSnapshot {
     },
     snapshotVersion: 31
   });
+}
+
+function createCompletedHandSummary(): NonNullable<
+  MultiplayerPublicGameSnapshot["lastCompletedHand"]
+> {
+  return {
+    awardedTeamId: "teamB",
+    bidAmount: 32,
+    biddingTeamId: "teamA",
+    biddingTeamPoints: 29,
+    completedAt: "2026-05-31T00:00:00.000Z",
+    declarer: "SEAT_0",
+    handNumber: 1,
+    markAwards: {
+      teamA: 0,
+      teamB: 1
+    },
+    outcome: "set",
+    teamPoints: {
+      teamA: 29,
+      teamB: 13
+    },
+    teamTrickCounts: {
+      teamA: 3,
+      teamB: 4
+    },
+    totalPoints: 42
+  };
 }
 
 function createRoomView(): MultiplayerRoomView {

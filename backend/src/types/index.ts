@@ -1,6 +1,7 @@
 import {
   type EngineErrorCode,
   type FortyTwoEventEnvelope,
+  type MultiplayerCompletedHandSummary,
   type MultiplayerDynamoDbTransactionWritePlan,
   type MultiplayerVisibleSnapshotEnvelope
 } from "../game-engine.ts";
@@ -63,6 +64,7 @@ export type SubmitGameActionResponse =
       readonly committed: boolean;
       readonly duplicate: boolean;
       readonly events: readonly FortyTwoEventEnvelope[];
+      readonly lastCompletedHand?: MultiplayerCompletedHandSummary;
       readonly snapshot: MultiplayerVisibleSnapshotEnvelope;
       readonly transaction?: MultiplayerDynamoDbTransactionWritePlan;
     }

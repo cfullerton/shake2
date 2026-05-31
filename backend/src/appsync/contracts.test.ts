@@ -127,6 +127,54 @@ test("public snapshot type and adapter do not expose full hands", () => {
   });
 });
 
+test("public snapshot adapter maps compact completed-hand summaries", () => {
+  const schema = readSchema();
+  const publicSnapshotType = getTypeBlock(schema, "PublicGameSnapshot");
+  const completedHandType = getTypeBlock(schema, "CompletedHandSummary");
+  const teamTotalsType = getTypeBlock(schema, "TeamTotals");
+  const session = createStartedSession(createTestContext());
+  const publicSnapshot = toPublicGameSnapshot(
+    createMultiplayerVisibleSnapshot(session.snapshot, 0),
+    {
+      awardedTeamId: "teamB",
+      bidAmount: 32,
+      biddingTeamId: "teamA",
+      biddingTeamPoints: 29,
+      completedAt: "2026-05-31T00:00:00.000Z",
+      declarer: 0,
+      handNumber: 1,
+      markAwards: {
+        teamA: 0,
+        teamB: 1
+      },
+      outcome: "set",
+      teamPoints: {
+        teamA: 29,
+        teamB: 13
+      },
+      teamTrickCounts: {
+        teamA: 3,
+        teamB: 4
+      },
+      totalPoints: 42
+    }
+  );
+  const serialized = JSON.stringify(publicSnapshot.lastCompletedHand);
+
+  assert.match(publicSnapshotType, /\blastCompletedHand: CompletedHandSummary\b/);
+  assert.match(completedHandType, /\bdeclarer: SeatIndex!/);
+  assert.match(teamTotalsType, /\bteamA: Int!/);
+  assert.equal(publicSnapshot.lastCompletedHand?.declarer, "SEAT_0");
+  assert.equal(publicSnapshot.lastCompletedHand?.outcome, "set");
+  assert.deepEqual(publicSnapshot.lastCompletedHand?.teamPoints, {
+    teamA: 29,
+    teamB: 13
+  });
+  assert.doesNotMatch(serialized, /completedTricks/u);
+  assert.doesNotMatch(serialized, /trickScores/u);
+  assert.doesNotMatch(serialized, /domino/iu);
+});
+
 test("room view adapter hides raw player IDs and marks the viewer", () => {
   const context = createTestContext();
   let room = createMultiplayerRoom(

@@ -34,7 +34,7 @@ export function createGetGameSnapshotHandler(
       gameId
     });
 
-    return toPublicGameSnapshot(snapshot.payload);
+    return toPublicGameSnapshot(snapshot.payload, snapshot.lastCompletedHand);
   };
 }
 

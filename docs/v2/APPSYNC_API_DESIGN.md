@@ -54,6 +54,8 @@ type SubmitGameActionResult = {
   accepted: boolean;
   errorCode?: string;
   events?: GameEventEnvelope[];
-  snapshot?: GameSnapshotEnvelope;
+  snapshot?: PublicGameSnapshot;
 };
 ```
+
+`PublicGameSnapshot.lastCompletedHand` is optional public metadata populated after a hand completes. It includes bid amount, declarer, bidding team, team point totals, trick counts, mark awards, and outcome, but not completed tricks, played dominoes, raw hands, or viewer hands. This keeps post-hand and game-over UI renderable from AppSync reads/subscriptions without exposing hidden information.

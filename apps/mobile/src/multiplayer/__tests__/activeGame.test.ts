@@ -368,6 +368,68 @@ test("active game view exposes host next-hand control during setup", () => {
   expect(guestView.waitingMessage).toBe("Waiting for host to deal the next hand.");
 });
 
+test("active game view formats completed-hand and game-over recap labels", () => {
+  const postHandView = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView({
+      viewerSeat: "SEAT_0"
+    }),
+    snapshot: createSnapshot({
+      handCounts: null,
+      lastCompletedHand: createCompletedHandSummary(),
+      phase: "setup",
+      redactedState: {
+        dealer: 1,
+        handNumber: 2,
+        phase: "setup",
+        teams: {
+          teamA: {
+            name: "North/South"
+          },
+          teamB: {
+            name: "East/West"
+          }
+        }
+      }
+    })
+  });
+  const gameOverView = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView({
+      status: "completed",
+      viewerSeat: "SEAT_0"
+    }),
+    snapshot: createSnapshot({
+      handCounts: null,
+      lastCompletedHand: createCompletedHandSummary({
+        outcome: "made"
+      }),
+      phase: "gameComplete",
+      redactedState: {
+        dealer: 1,
+        handNumber: 2,
+        phase: "gameComplete",
+        winningTeamId: "teamA"
+      }
+    })
+  });
+
+  expect(postHandView.lastCompletedHand).toMatchObject({
+    biddingTeamLabel: "North/South",
+    biddingTeamPointsLabel: "29 / 32 points",
+    declarerLabel: "North (You)",
+    handNumber: 1,
+    marksAwardLabel: "East/West +1 mark",
+    outcomeLabel: "Set on 32",
+    teamPointsLabel: "North/South 29 · East/West 13",
+    tricksLabel: "North/South 3 · East/West 4 tricks"
+  });
+  expect(postHandView.gameOverMessage).toBeNull();
+  expect(gameOverView.gameOverMessage).toBe("North/South wins the game.");
+  expect(gameOverView.lastCompletedHand?.outcomeLabel).toBe("Made 32");
+  expect(gameOverView.waitingMessage).toBe("Game complete.");
+});
+
 function declarerViewSnapshot(): MultiplayerPublicGameSnapshot {
   return createSnapshot({
     phase: "trump",
@@ -443,6 +505,37 @@ function createPrivateHand(): MultiplayerPrivateHand {
     handNumber: 1,
     seatIndex: "SEAT_1",
     updatedAt: "2026-05-31T00:00:00.000Z"
+  };
+}
+
+function createCompletedHandSummary(
+  overrides: Partial<
+    NonNullable<MultiplayerPublicGameSnapshot["lastCompletedHand"]>
+  > = {}
+): NonNullable<MultiplayerPublicGameSnapshot["lastCompletedHand"]> {
+  return {
+    awardedTeamId: "teamB",
+    bidAmount: 32,
+    biddingTeamId: "teamA",
+    biddingTeamPoints: 29,
+    completedAt: "2026-05-31T00:00:00.000Z",
+    declarer: "SEAT_0",
+    handNumber: 1,
+    markAwards: {
+      teamA: 0,
+      teamB: 1
+    },
+    outcome: "set",
+    teamPoints: {
+      teamA: 29,
+      teamB: 13
+    },
+    teamTrickCounts: {
+      teamA: 3,
+      teamB: 4
+    },
+    totalPoints: 42,
+    ...overrides
   };
 }
 

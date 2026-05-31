@@ -9,6 +9,7 @@ import {
 } from "../../errors/errors.ts";
 import {
   createMultiplayerAcceptedActionWritePlan,
+  createMultiplayerCompletedHandSummary,
   createMultiplayerDynamoDbTransactionWritePlan,
   createMultiplayerRejectedActionWritePlan,
   createMultiplayerVisibleSnapshot,
@@ -113,11 +114,17 @@ async function handleAcceptedResult(
   playerId: string
 ): Promise<SubmitGameActionResponse> {
   if (result.duplicate) {
+    const lastCompletedHand = createMultiplayerCompletedHandSummary(
+      result.snapshot,
+      result.session.events
+    );
+
     return {
       accepted: true,
       committed: false,
       duplicate: true,
       events: result.events,
+      ...(lastCompletedHand ? { lastCompletedHand } : {}),
       snapshot: createMultiplayerVisibleSnapshot(
         result.snapshot,
         getMultiplayerSeatForPlayer(result.session.room, playerId)
@@ -142,11 +149,17 @@ async function handleAcceptedResult(
     writePlan
   });
 
+  const lastCompletedHand = createMultiplayerCompletedHandSummary(
+    result.snapshot,
+    result.session.events
+  );
+
   return {
     accepted: true,
     committed: true,
     duplicate: false,
     events: result.events,
+    ...(lastCompletedHand ? { lastCompletedHand } : {}),
     snapshot: createMultiplayerVisibleSnapshot(
       result.snapshot,
       getMultiplayerSeatForPlayer(result.session.room, playerId)

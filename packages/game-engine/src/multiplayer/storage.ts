@@ -9,6 +9,8 @@ import {
 } from "../forty-two/events.ts";
 import {
   SEAT_INDICES,
+  FORTY_TWO_TEAM_IDS,
+  type FortyTwoTeamId,
   type SeatIndex
 } from "../forty-two/seats.ts";
 import {
@@ -77,6 +79,7 @@ export interface MultiplayerGameEventRecord<
 
 export interface MultiplayerSnapshotRecord {
   readonly gameId: string;
+  readonly lastCompletedHand?: MultiplayerCompletedHandSummary;
   readonly lastEventSequence: number;
   readonly payload: MultiplayerPublicSnapshotEnvelope;
   readonly pk: `GAME#${string}`;
@@ -86,6 +89,26 @@ export interface MultiplayerSnapshotRecord {
 }
 
 export type MultiplayerPublicSnapshotEnvelope = MultiplayerVisibleSnapshotEnvelope;
+
+export interface MultiplayerTeamTotals {
+  readonly teamA: number;
+  readonly teamB: number;
+}
+
+export interface MultiplayerCompletedHandSummary {
+  readonly awardedTeamId?: FortyTwoTeamId;
+  readonly bidAmount: number;
+  readonly biddingTeamId: FortyTwoTeamId;
+  readonly biddingTeamPoints: number;
+  readonly completedAt: string;
+  readonly declarer: SeatIndex;
+  readonly handNumber: number;
+  readonly markAwards: MultiplayerTeamTotals;
+  readonly outcome: "made" | "set";
+  readonly teamPoints: MultiplayerTeamTotals;
+  readonly teamTrickCounts: MultiplayerTeamTotals;
+  readonly totalPoints: number;
+}
 
 export interface MultiplayerPrivateHandRecord {
   readonly gameId: string;
@@ -172,7 +195,7 @@ export function createMultiplayerStorageRecords(
     idempotency: createMultiplayerActionIdempotencyRecords(session, options),
     privateHands: createMultiplayerPrivateHandRecords(session),
     room: createMultiplayerRoomRecord(session.room),
-    snapshot: createMultiplayerSnapshotRecord(session.snapshot)
+    snapshot: createMultiplayerSnapshotRecord(session.snapshot, session.events)
   };
 }
 
@@ -282,10 +305,17 @@ export function createMultiplayerGameEventRecord(
 }
 
 export function createMultiplayerSnapshotRecord(
-  snapshot: FortyTwoSnapshotEnvelope
+  snapshot: FortyTwoSnapshotEnvelope,
+  events: readonly FortyTwoEventEnvelope[] = []
 ): MultiplayerSnapshotRecord {
+  const lastCompletedHand = createMultiplayerCompletedHandSummary(
+    snapshot,
+    events
+  );
+
   return {
     gameId: snapshot.gameId,
+    ...(lastCompletedHand ? { lastCompletedHand } : {}),
     lastEventSequence: snapshot.lastEventSequence,
     payload: createPublicSnapshot(snapshot),
     pk: `GAME#${snapshot.gameId}`,
@@ -295,10 +325,80 @@ export function createMultiplayerSnapshotRecord(
   };
 }
 
+export function createMultiplayerCompletedHandSummary(
+  snapshot: FortyTwoSnapshotEnvelope,
+  events: readonly FortyTwoEventEnvelope[]
+): MultiplayerCompletedHandSummary | undefined {
+  if (!canExposeCompletedHandSummary(snapshot.snapshot.phase)) {
+    return undefined;
+  }
+
+  const completedHandEvent = findLastCompletedHandEvent(events);
+
+  if (!completedHandEvent) {
+    return undefined;
+  }
+
+  const handScore = completedHandEvent.event.payload.handScore;
+  const awardedTeamId = FORTY_TWO_TEAM_IDS.find(
+    (teamId) => handScore.markAwards[teamId] > 0
+  );
+
+  return {
+    ...(awardedTeamId ? { awardedTeamId } : {}),
+    bidAmount: handScore.bidAmount,
+    biddingTeamId: handScore.biddingTeamId,
+    biddingTeamPoints: handScore.biddingTeamPoints,
+    completedAt: completedHandEvent.serverCreatedAt,
+    declarer: handScore.declarer,
+    handNumber: snapshot.snapshot.phase === "setup"
+      ? snapshot.snapshot.handNumber - 1
+      : snapshot.snapshot.handNumber,
+    markAwards: toMultiplayerTeamTotals(handScore.markAwards),
+    outcome: handScore.outcome,
+    teamPoints: toMultiplayerTeamTotals(handScore.teamPoints),
+    teamTrickCounts: toMultiplayerTeamTotals(handScore.teamTrickCounts),
+    totalPoints: handScore.totalPoints
+  };
+}
+
 function createPublicSnapshot(
   snapshot: FortyTwoSnapshotEnvelope
 ): MultiplayerPublicSnapshotEnvelope {
   return createMultiplayerVisibleSnapshot(snapshot, null);
+}
+
+function canExposeCompletedHandSummary(phase: FortyTwoState["phase"]): boolean {
+  return phase === "setup" || phase === "handComplete" || phase === "gameComplete";
+}
+
+function findLastCompletedHandEvent(
+  events: readonly FortyTwoEventEnvelope[]
+): FortyTwoEventEnvelope<Extract<
+  FortyTwoEvent,
+  { readonly type: "fortyTwo.hand.completed" }
+>> | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+
+    if (event?.event.type === "fortyTwo.hand.completed") {
+      return event as FortyTwoEventEnvelope<Extract<
+        FortyTwoEvent,
+        { readonly type: "fortyTwo.hand.completed" }
+      >>;
+    }
+  }
+
+  return undefined;
+}
+
+function toMultiplayerTeamTotals(
+  totals: Readonly<Record<FortyTwoTeamId, number>>
+): MultiplayerTeamTotals {
+  return {
+    teamA: totals.teamA,
+    teamB: totals.teamB
+  };
 }
 
 export function createMultiplayerPrivateHandRecords(

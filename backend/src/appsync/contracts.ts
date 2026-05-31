@@ -6,8 +6,10 @@ import {
   SEAT_INDICES,
   type Domino,
   type FortyTwoEventEnvelope,
+  type FortyTwoTeamId,
   type MultiplayerActionIdempotencyRecord,
   type MultiplayerClientSyncState,
+  type MultiplayerCompletedHandSummary,
   type MultiplayerPrivateHandRecord,
   type MultiplayerReconnectView,
   type MultiplayerRoom,
@@ -86,6 +88,26 @@ export interface AppSyncSeatHandCounts {
   readonly seat3: number;
 }
 
+export interface AppSyncTeamTotals {
+  readonly teamA: number;
+  readonly teamB: number;
+}
+
+export interface AppSyncCompletedHandSummary {
+  readonly awardedTeamId?: FortyTwoTeamId;
+  readonly bidAmount: number;
+  readonly biddingTeamId: FortyTwoTeamId;
+  readonly biddingTeamPoints: number;
+  readonly completedAt: string;
+  readonly declarer: AppSyncSeatIndex;
+  readonly handNumber: number;
+  readonly markAwards: AppSyncTeamTotals;
+  readonly outcome: string;
+  readonly teamPoints: AppSyncTeamTotals;
+  readonly teamTrickCounts: AppSyncTeamTotals;
+  readonly totalPoints: number;
+}
+
 export interface AppSyncDomino {
   readonly high: Domino["high"];
   readonly key: string;
@@ -96,6 +118,7 @@ export interface AppSyncPublicGameSnapshot {
   readonly gameId: string;
   readonly generatedAt: string;
   readonly handCounts?: AppSyncSeatHandCounts;
+  readonly lastCompletedHand?: AppSyncCompletedHandSummary;
   readonly lastEventSequence: number;
   readonly phase: string;
   readonly redactedState: Readonly<Record<string, unknown>>;
@@ -220,7 +243,10 @@ export function mapSubmitGameActionHandlerResponse(
       duplicate: response.duplicate,
       events: response.events.map(toSafeGameEventSummary),
       gameId: response.snapshot.gameId,
-      snapshot: toPublicGameSnapshot(response.snapshot)
+      snapshot: toPublicGameSnapshot(
+        response.snapshot,
+        response.lastCompletedHand
+      )
     };
   }
 
@@ -288,7 +314,10 @@ export function mapReconnectRecordsToAppSyncResponse(
       clientState.snapshotVersion !== records.snapshot.snapshotVersion,
     serverLastEventSequence: records.snapshot.lastEventSequence,
     serverSnapshotVersion: records.snapshot.snapshotVersion,
-    snapshot: toPublicGameSnapshot(records.snapshot.payload)
+    snapshot: toPublicGameSnapshot(
+      records.snapshot.payload,
+      records.snapshot.lastCompletedHand
+    )
   };
 }
 
@@ -367,7 +396,8 @@ export function toAppSyncRoomView(
 }
 
 export function toPublicGameSnapshot(
-  snapshot: MultiplayerVisibleSnapshotEnvelope
+  snapshot: MultiplayerVisibleSnapshotEnvelope,
+  lastCompletedHand?: MultiplayerCompletedHandSummary
 ): AppSyncPublicGameSnapshot {
   const redactedState = redactPublicState(snapshot.snapshot);
   const handCounts = readHandCounts(redactedState);
@@ -376,11 +406,42 @@ export function toPublicGameSnapshot(
     gameId: snapshot.gameId,
     generatedAt: snapshot.generatedAt,
     ...(handCounts ? { handCounts } : {}),
+    ...(lastCompletedHand
+      ? { lastCompletedHand: toAppSyncCompletedHandSummary(lastCompletedHand) }
+      : {}),
     lastEventSequence: snapshot.lastEventSequence,
     phase: readStringField(redactedState, "phase"),
     redactedState,
     schemaVersion: snapshot.schemaVersion,
     snapshotVersion: snapshot.snapshotVersion
+  };
+}
+
+function toAppSyncCompletedHandSummary(
+  summary: MultiplayerCompletedHandSummary
+): AppSyncCompletedHandSummary {
+  return {
+    ...(summary.awardedTeamId ? { awardedTeamId: summary.awardedTeamId } : {}),
+    bidAmount: summary.bidAmount,
+    biddingTeamId: summary.biddingTeamId,
+    biddingTeamPoints: summary.biddingTeamPoints,
+    completedAt: summary.completedAt,
+    declarer: toAppSyncSeatIndex(summary.declarer),
+    handNumber: summary.handNumber,
+    markAwards: toAppSyncTeamTotals(summary.markAwards),
+    outcome: summary.outcome,
+    teamPoints: toAppSyncTeamTotals(summary.teamPoints),
+    teamTrickCounts: toAppSyncTeamTotals(summary.teamTrickCounts),
+    totalPoints: summary.totalPoints
+  };
+}
+
+function toAppSyncTeamTotals(
+  totals: MultiplayerCompletedHandSummary["teamPoints"]
+): AppSyncTeamTotals {
+  return {
+    teamA: totals.teamA,
+    teamB: totals.teamB
   };
 }
 

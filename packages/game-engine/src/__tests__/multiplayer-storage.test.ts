@@ -7,6 +7,7 @@ import {
   createMultiplayerStorageRecords,
   createNumericBid,
   createPassBid,
+  chooseLegalRandomBotDecision,
   getMultiplayerReconnectView,
   joinMultiplayerRoom,
   replayFortyTwoEvents,
@@ -15,6 +16,7 @@ import {
   submitMultiplayerGameAction,
   takeMultiplayerSeat,
   type EngineContext,
+  type LegalRandomBotDecision,
   type MultiplayerGameSession,
   type MultiplayerResult,
   type MultiplayerRoom,
@@ -77,6 +79,38 @@ test("multiplayer storage restores a full authoritative session", () => {
     replayFortyTwoEvents(restored.initialSnapshot, restored.events),
     restored.snapshot
   );
+});
+
+test("multiplayer snapshot records expose a compact last-hand summary", () => {
+  const context = createTestContext();
+  const session = playOneHandToSetup(
+    createStartedSession(context, {
+      targetMarks: 250
+    }),
+    context
+  );
+  const records = createMultiplayerStorageRecords(session);
+  const summary = records.snapshot.lastCompletedHand;
+
+  assert.ok(summary);
+  assert.equal(summary.handNumber, 1);
+  assert.equal(summary.totalPoints, 42);
+  assert.equal(summary.teamTrickCounts.teamA + summary.teamTrickCounts.teamB, 7);
+  assert.equal(summary.markAwards.teamA + summary.markAwards.teamB, 1);
+  assert.equal(summary.completedAt.length > 0, true);
+
+  const serialized = JSON.stringify(summary);
+
+  assert.doesNotMatch(serialized, /completedTricks/u);
+  assert.doesNotMatch(serialized, /trickScores/u);
+  assert.doesNotMatch(serialized, /capturedDominoes/u);
+  assert.doesNotMatch(serialized, /hands/u);
+  assert.doesNotMatch(serialized, /viewerHand/u);
+  assert.doesNotMatch(serialized, /domino/iu);
+
+  const restored = unwrapResult(restoreMultiplayerSessionFromRecords(records));
+
+  assert.deepEqual(restored.snapshot, session.snapshot);
 });
 
 test("multiplayer reconnect view returns latest redacted snapshot and accepted pending actions", () => {
@@ -252,14 +286,22 @@ test("multiplayer storage restore rejects forged trusted event records", () => {
   }
 });
 
-function createStartedSession(context: EngineContext): MultiplayerGameSession {
+function createStartedSession(
+  context: EngineContext,
+  options: {
+    readonly targetMarks?: number;
+  } = {}
+): MultiplayerGameSession {
   return unwrapResult(
     startMultiplayerGame(
       createReadyRoom(context),
       {
         actorId: "player-0",
         dealer: 0,
-        gameId: "game-1"
+        gameId: "game-1",
+        ...(options.targetMarks !== undefined
+          ? { targetMarks: options.targetMarks }
+          : {})
       },
       context
     )
@@ -332,6 +374,107 @@ function submitSeatBid(
   return unwrapSubmit(
     submitMultiplayerGameAction(session, action, context)
   ).session;
+}
+
+function playOneHandToSetup(
+  session: MultiplayerGameSession,
+  context: EngineContext
+): MultiplayerGameSession {
+  let nextSession = session;
+  let remainingActions = 80;
+
+  while (nextSession.snapshot.snapshot.phase !== "setup" && remainingActions > 0) {
+    const seat = getCurrentTurnSeat(nextSession);
+    const decision = chooseLegalRandomBotDecision({
+      context,
+      seat,
+      snapshot: nextSession.snapshot
+    });
+
+    nextSession = submitBotDecision(nextSession, decision, context);
+    remainingActions -= 1;
+
+    if (nextSession.snapshot.snapshot.phase === "gameComplete") {
+      throw new Error("Expected test hand not to complete the game.");
+    }
+  }
+
+  if (nextSession.snapshot.snapshot.phase !== "setup") {
+    throw new Error("Expected test session to reach next-hand setup.");
+  }
+
+  return nextSession;
+}
+
+function getCurrentTurnSeat(session: MultiplayerGameSession): SeatIndex {
+  const state = session.snapshot.snapshot;
+
+  if (state.phase === "dealt") {
+    return ((state.dealer + 1) % 4) as SeatIndex;
+  }
+
+  if (state.phase === "bidding" && state.bidding.currentSeat !== null) {
+    return state.bidding.currentSeat;
+  }
+
+  if (state.phase === "trump" && state.trump.declarer !== null) {
+    return state.trump.declarer;
+  }
+
+  if (state.phase === "trickPlay") {
+    return ((state.currentTrick.leader +
+      state.currentTrick.playedDominoes.length) % 4) as SeatIndex;
+  }
+
+  throw new Error(`No current turn seat for phase ${state.phase}.`);
+}
+
+function submitBotDecision(
+  session: MultiplayerGameSession,
+  decision: LegalRandomBotDecision,
+  context: EngineContext
+): MultiplayerGameSession {
+  const action = createMultiplayerActionEnvelope(
+    session,
+    {
+      action: createBotAction(decision),
+      actorId: playerIdForSeat(decision.seat)
+    },
+    context
+  );
+
+  return unwrapSubmit(
+    submitMultiplayerGameAction(session, action, context)
+  ).session;
+}
+
+function createBotAction(decision: LegalRandomBotDecision) {
+  switch (decision.kind) {
+    case "bid":
+      return {
+        payload: {
+          bid: decision.bid,
+          seat: decision.seat
+        },
+        type: "fortyTwo.bid.submit" as const
+      };
+    case "callTrump":
+      return {
+        payload: {
+          trumpSuit: decision.trumpSuit
+        },
+        type: "fortyTwo.trump.call" as const
+      };
+    case "playDomino":
+      return {
+        payload: {
+          domino: decision.play.domino,
+          ...(decision.play.ledSuit ? { ledSuit: decision.play.ledSuit } : {}),
+          seat: decision.seat
+        },
+        type: "fortyTwo.domino.play" as const
+      };
+  }
 }
 
 function playerIdForSeat(seat: SeatIndex): string {

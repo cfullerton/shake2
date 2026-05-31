@@ -115,7 +115,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 ## Features Partially Implemented
 
 - Game engine: full local Texas 42 play now exists for standard numeric bids and pip-suit trump, but does not implement variants or advanced bot strategy.
-- Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, lobby UI with public rooms and room polling, active-game bidding/trump/trick-play/next-hand UI, baseline mobile game-update subscriptions, and gap-triggered reconnect refresh exist, but there is still no pending-action retry queue, reconnect UX, rich post-hand/game-over UX, or production lifecycle/abuse handling.
+- Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, lobby UI with public rooms and room polling, active-game bidding/trump/trick-play/next-hand UI, compact post-hand/game-over recap, baseline mobile game-update subscriptions, and gap-triggered reconnect refresh exist, but there is still no pending-action retry queue, reconnect UX, full hand-history review, or production lifecycle/abuse handling.
 - Game state model: current scorekeeper shape is serializable, but the app does not yet apply shared actions/events or replay an event log.
 - Persistence: local JSON persistence has schema versioning and legacy migration for scorekeeper games, but local practice games are currently in-memory only.
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.
@@ -156,7 +156,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 5. Expand contract tests around duplicate actions, stale sequences, reconnect snapshots, and unsupported schemas.
 6. Build the physical AWS backend adapter around the backend-neutral session/storage/write-plan modules.
 7. Add schema migration/version-compatibility coverage for physical adapter payloads.
-8. Expand mobile multiplayer active-game support with post-hand scoring recap, game-over UX, pending-action retry, and reconnect UX.
+8. Expand mobile multiplayer active-game support with full hand-history review, pending-action retry, and reconnect UX.
 
 ## Architecture Decisions That Differ From Original Docs
 

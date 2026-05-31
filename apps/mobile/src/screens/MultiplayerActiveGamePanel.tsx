@@ -78,6 +78,47 @@ export function MultiplayerActiveGamePanel({
         />
       </View>
 
+      {view.lastCompletedHand ? (
+        <View style={styles.tablePanel}>
+          <View style={styles.tableHeader}>
+            <Text style={styles.panelTitle}>
+              {view.gameOverMessage ? "Game Complete" : "Last Hand"}
+            </Text>
+            <Text style={styles.meta}>Hand {view.lastCompletedHand.handNumber}</Text>
+          </View>
+          {view.gameOverMessage ? (
+            <Text style={styles.resultBanner}>{view.gameOverMessage}</Text>
+          ) : null}
+          <View style={styles.statusGrid}>
+            <InfoTile
+              label="Result"
+              value={view.lastCompletedHand.outcomeLabel}
+            />
+            <InfoTile
+              label="Bid Team"
+              value={view.lastCompletedHand.biddingTeamLabel}
+            />
+            <InfoTile
+              label="Declarer"
+              value={view.lastCompletedHand.declarerLabel}
+            />
+            <InfoTile
+              label="Bid Points"
+              value={view.lastCompletedHand.biddingTeamPointsLabel}
+            />
+            <InfoTile
+              label="Hand Points"
+              value={view.lastCompletedHand.teamPointsLabel}
+            />
+            <InfoTile
+              label="Tricks"
+              value={view.lastCompletedHand.tricksLabel}
+            />
+          </View>
+          <Text style={styles.copy}>{view.lastCompletedHand.marksAwardLabel}</Text>
+        </View>
+      ) : null}
+
       <View style={styles.tablePanel}>
         <View style={styles.tableHeader}>
           <Text style={styles.panelTitle}>Table</Text>
@@ -654,6 +695,11 @@ const styles = StyleSheet.create({
   },
   pressedTile: {
     opacity: 0.78
+  },
+  resultBanner: {
+    color: palette.crimson,
+    fontSize: 18,
+    fontWeight: "900"
   },
   trickPlayList: {
     gap: spacing.sm

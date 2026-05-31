@@ -53,6 +53,7 @@ import {
 } from "../forty-two/validation.ts";
 import {
   type MultiplayerClientSyncState,
+  type MultiplayerCompletedHandSummary,
   type MultiplayerGameEventRecord,
   type MultiplayerPrivateHandRecord,
   type MultiplayerPublicSnapshotEnvelope,
@@ -97,6 +98,11 @@ const MULTIPLAYER_SYNC_CONNECTION_STATUSES = [
   "reconnecting",
   "offline"
 ] as const satisfies readonly MultiplayerSyncConnectionStatus[];
+
+const MULTIPLAYER_HAND_OUTCOMES = [
+  "made",
+  "set"
+] as const satisfies readonly MultiplayerCompletedHandSummary["outcome"][];
 
 const FORTY_TWO_GAME_MODES = [
   "localPractice",
@@ -349,6 +355,9 @@ export function parseMultiplayerSnapshotRecord(
   const updatedAt = parseTimestamp(record.updatedAt, "snapshotRecord.updatedAt");
   const pk = parseNonEmptyString(record.pk, "snapshotRecord.pk");
   const sk = parseNonEmptyString(record.sk, "snapshotRecord.sk");
+  const lastCompletedHand = record.lastCompletedHand === undefined
+    ? undefined
+    : parseMultiplayerCompletedHandSummary(record.lastCompletedHand);
 
   if (
     pk !== `GAME#${gameId}` ||
@@ -366,12 +375,75 @@ export function parseMultiplayerSnapshotRecord(
 
   return {
     gameId,
+    ...(lastCompletedHand ? { lastCompletedHand } : {}),
     lastEventSequence,
     payload,
     pk: `GAME#${gameId}`,
     sk: "SNAPSHOT#LATEST",
     snapshotVersion,
     updatedAt
+  };
+}
+
+function parseMultiplayerCompletedHandSummary(
+  value: unknown
+): MultiplayerCompletedHandSummary {
+  const summary = parseRecord(value, "snapshotRecord.lastCompletedHand");
+  const awardedTeamId = summary.awardedTeamId === undefined
+    ? undefined
+    : parseTeamId(
+        summary.awardedTeamId,
+        "snapshotRecord.lastCompletedHand.awardedTeamId"
+      );
+
+  return {
+    ...(awardedTeamId ? { awardedTeamId } : {}),
+    bidAmount: parsePositiveInteger(
+      summary.bidAmount,
+      "snapshotRecord.lastCompletedHand.bidAmount"
+    ),
+    biddingTeamId: parseTeamId(
+      summary.biddingTeamId,
+      "snapshotRecord.lastCompletedHand.biddingTeamId"
+    ),
+    biddingTeamPoints: parseNonNegativeInteger(
+      summary.biddingTeamPoints,
+      "snapshotRecord.lastCompletedHand.biddingTeamPoints"
+    ),
+    completedAt: parseTimestamp(
+      summary.completedAt,
+      "snapshotRecord.lastCompletedHand.completedAt"
+    ),
+    declarer: parseSeatIndex(
+      summary.declarer,
+      "snapshotRecord.lastCompletedHand.declarer"
+    ),
+    handNumber: parsePositiveInteger(
+      summary.handNumber,
+      "snapshotRecord.lastCompletedHand.handNumber"
+    ),
+    markAwards: parseTeamTotals(
+      summary.markAwards,
+      "snapshotRecord.lastCompletedHand.markAwards"
+    ),
+    outcome: parseEnum(
+      summary.outcome,
+      MULTIPLAYER_HAND_OUTCOMES,
+      "snapshotRecord.lastCompletedHand.outcome",
+      "INVALID_ACTION"
+    ),
+    teamPoints: parseTeamTotals(
+      summary.teamPoints,
+      "snapshotRecord.lastCompletedHand.teamPoints"
+    ),
+    teamTrickCounts: parseTeamTotals(
+      summary.teamTrickCounts,
+      "snapshotRecord.lastCompletedHand.teamTrickCounts"
+    ),
+    totalPoints: parseNonNegativeInteger(
+      summary.totalPoints,
+      "snapshotRecord.lastCompletedHand.totalPoints"
+    )
   };
 }
 
@@ -1101,6 +1173,13 @@ function parseSeatPair(
 }
 
 function parseMarks(
+  value: unknown,
+  label: string
+): Record<FortyTwoTeamId, number> {
+  return parseTeamTotals(value, label);
+}
+
+function parseTeamTotals(
   value: unknown,
   label: string
 ): Record<FortyTwoTeamId, number> {

@@ -8,7 +8,7 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, next-hand, room lookup, and public-room listing flows, with non-sensitive generated invite codes and normalized code lookup. The mobile app now has a multiplayer network/auth foundation, lobby UI for Cognito sign-in, private/public create/join/seat/start, polling-based lobby refresh, and an active-game UI slice for public snapshots, private hands, bidding, declarer trump selection, trick-play domino submission, host next-hand dealing, AppSync realtime game-update sync, and gap-triggered reconnect refresh. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client pending-action/reconnect UX, abuse handling, and richer post-hand/game-over UX.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, next-hand, room lookup, and public-room listing flows, with non-sensitive generated invite codes and normalized code lookup. The mobile app now has a multiplayer network/auth foundation, lobby UI for Cognito sign-in, private/public create/join/seat/start, polling-based lobby refresh, and an active-game UI slice for public snapshots, private hands, bidding, declarer trump selection, trick-play domino submission, host next-hand dealing, compact post-hand/game-over recap, AppSync realtime game-update sync, and gap-triggered reconnect refresh. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client pending-action/reconnect UX, abuse handling, and fuller hand-history review UX.
 
 ## Current Multiplayer Architecture
 
@@ -108,8 +108,8 @@ Production multiplayer blockers:
 
 5. Mobile multiplayer UI
    - Room creation/join/start lobby screen now exists and uses the mobile multiplayer client foundation.
-   - First active-game screen now exists for snapshot rendering, private hand loading, live update sync, gap-triggered reconnect refresh, manual refresh, bidding actions, declarer trump calls, current-trick display, legal domino plays, and host next-hand dealing.
-   - No rich post-hand scoring recap or game-over multiplayer UX yet.
+   - First active-game screen now exists for snapshot rendering, private hand loading, live update sync, gap-triggered reconnect refresh, manual refresh, bidding actions, declarer trump calls, current-trick display, legal domino plays, host next-hand dealing, compact post-hand recap, and game-over banner.
+   - No full hand-history review or detailed trick recap UX yet.
    - No reconnect/offline/pending-action UX.
 
 6. Lifecycle and abuse handling
@@ -360,9 +360,9 @@ Production-quality casual multiplayer:
 4. Reconnect client model
    - Add pending action queue and retry behavior, using subscriptions as hints and reconnect queries as truth.
 
-5. Post-hand summary and game-over multiplayer UX
-   - Surface the completed hand score before or alongside the host next-hand control.
-   - Keep action derivation in `apps/mobile/src/multiplayer`, not in screen components.
+5. Hand history and game-over polish
+   - Extend the compact latest-hand recap into a full hand/trick review.
+   - Keep recap derivation in `apps/mobile/src/multiplayer`, not in screen components.
 
 6. Security test matrix
    - Actor not in room.

@@ -1,6 +1,7 @@
 import { multiplayerTrumpSuits } from "./types";
 import type {
   AppSyncSeatIndex,
+  MultiplayerCompletedHandSummary,
   MultiplayerDomino,
   MultiplayerPrivateHand,
   MultiplayerPublicGameSnapshot,
@@ -39,6 +40,17 @@ export interface MultiplayerActiveTrickPlay {
   readonly seatLabel: string;
 }
 
+export interface MultiplayerActiveCompletedHandSummary {
+  readonly biddingTeamLabel: string;
+  readonly biddingTeamPointsLabel: string;
+  readonly declarerLabel: string;
+  readonly handNumber: number;
+  readonly marksAwardLabel: string;
+  readonly outcomeLabel: string;
+  readonly teamPointsLabel: string;
+  readonly tricksLabel: string;
+}
+
 export interface MultiplayerActiveGameView {
   readonly canCallTrump: boolean;
   readonly canPass: boolean;
@@ -51,7 +63,9 @@ export interface MultiplayerActiveGameView {
   readonly currentTrumpLabel: string;
   readonly currentTurnLabel: string;
   readonly dealerLabel: string;
+  readonly gameOverMessage: string | null;
   readonly handNumber: number;
+  readonly lastCompletedHand: MultiplayerActiveCompletedHandSummary | null;
   readonly legalDominoPlays: readonly MultiplayerActiveDominoPlay[];
   readonly legalBidAmounts: readonly number[];
   readonly legalTrumpSuits: readonly MultiplayerTrumpSuit[];
@@ -100,6 +114,18 @@ export function createMultiplayerActiveGameView(input: {
     readWinningBidAmount(trump?.winningBid);
   const currentTrick = readRecord(state.currentTrick);
   const currentTrickPlays = readCurrentTrickPlays(currentTrick, viewerSeat);
+  const teams: [MultiplayerActiveTeamSummary, MultiplayerActiveTeamSummary] = [
+    {
+      id: "teamA",
+      marks: readTeamMarks(state, "teamA"),
+      name: readTeamName(state, "teamA", "North/South")
+    },
+    {
+      id: "teamB",
+      marks: readTeamMarks(state, "teamB"),
+      name: readTeamName(state, "teamB", "East/West")
+    }
+  ];
   const canCallTrump = viewerSeat !== null &&
     currentTurnSeat === toSeatNumber(viewerSeat) &&
     input.snapshot.phase === "trump";
@@ -139,7 +165,13 @@ export function createMultiplayerActiveGameView(input: {
       ? "Waiting"
       : formatSeatLabel(toSeatIndex(currentTurnSeat), viewerSeat),
     dealerLabel: formatSeatLabel(toSeatIndex(dealer), viewerSeat),
+    gameOverMessage: createGameOverMessage(input.snapshot.phase, state, teams),
     handNumber: readNumber(state.handNumber, 1),
+    lastCompletedHand: createCompletedHandSummary(
+      input.snapshot.lastCompletedHand ?? null,
+      viewerSeat,
+      teams
+    ),
     legalDominoPlays,
     legalBidAmounts,
     legalTrumpSuits: canCallTrump ? multiplayerTrumpSuits : [],
@@ -151,18 +183,7 @@ export function createMultiplayerActiveGameView(input: {
       createSeatSummary(seat, viewerSeat, dealer, currentTurnSeat, handCounts)
     ),
     snapshotVersionLabel: `Snapshot ${input.snapshot.snapshotVersion} · Event ${input.snapshot.lastEventSequence}`,
-    teams: [
-      {
-        id: "teamA",
-        marks: readTeamMarks(state, "teamA"),
-        name: readTeamName(state, "teamA", "North/South")
-      },
-      {
-        id: "teamB",
-        marks: readTeamMarks(state, "teamB"),
-        name: readTeamName(state, "teamB", "East/West")
-      }
-    ],
+    teams,
     viewerSeat,
     viewerSeatLabel: viewerSeat ? multiplayerSeatLabels[viewerSeat] : "Spectator",
     waitingMessage: createWaitingMessage(input.snapshot.phase, currentTurnSeat, viewerSeat)
@@ -438,6 +459,71 @@ function createCurrentTrickLeadLabel(
     : "Suit not set";
 }
 
+function createCompletedHandSummary(
+  summary: MultiplayerCompletedHandSummary | null,
+  viewerSeat: AppSyncSeatIndex | null,
+  teams: readonly [MultiplayerActiveTeamSummary, MultiplayerActiveTeamSummary]
+): MultiplayerActiveCompletedHandSummary | null {
+  if (!summary) {
+    return null;
+  }
+
+  const biddingTeam = findTeamSummary(teams, summary.biddingTeamId);
+  const awardedTeam = summary.awardedTeamId
+    ? findTeamSummary(teams, summary.awardedTeamId)
+    : null;
+  const awardedMarks = summary.awardedTeamId === "teamA" ||
+    summary.awardedTeamId === "teamB"
+      ? summary.markAwards[summary.awardedTeamId]
+      : 0;
+
+  return {
+    biddingTeamLabel: biddingTeam?.name ?? summary.biddingTeamId,
+    biddingTeamPointsLabel:
+      `${summary.biddingTeamPoints} / ${summary.bidAmount} points`,
+    declarerLabel: formatSeatLabel(summary.declarer, viewerSeat),
+    handNumber: summary.handNumber,
+    marksAwardLabel: awardedTeam && awardedMarks > 0
+      ? `${awardedTeam.name} +${awardedMarks} ${formatMarkNoun(awardedMarks)}`
+      : "No marks awarded",
+    outcomeLabel: summary.outcome === "made"
+      ? `Made ${summary.bidAmount}`
+      : `Set on ${summary.bidAmount}`,
+    teamPointsLabel:
+      `${teams[0].name} ${summary.teamPoints.teamA} · ${teams[1].name} ${summary.teamPoints.teamB}`,
+    tricksLabel:
+      `${teams[0].name} ${summary.teamTrickCounts.teamA} · ${teams[1].name} ${summary.teamTrickCounts.teamB} tricks`
+  };
+}
+
+function createGameOverMessage(
+  phase: string,
+  state: Readonly<Record<string, unknown>>,
+  teams: readonly [MultiplayerActiveTeamSummary, MultiplayerActiveTeamSummary]
+): string | null {
+  if (phase !== "gameComplete") {
+    return null;
+  }
+
+  const winningTeamId = readTeamId(state.winningTeamId);
+  const winningTeam = winningTeamId ? findTeamSummary(teams, winningTeamId) : null;
+
+  return winningTeam
+    ? `${winningTeam.name} wins the game.`
+    : "Game complete.";
+}
+
+function findTeamSummary(
+  teams: readonly [MultiplayerActiveTeamSummary, MultiplayerActiveTeamSummary],
+  teamId: string
+): MultiplayerActiveTeamSummary | null {
+  return teams.find((team) => team.id === teamId) ?? null;
+}
+
+function formatMarkNoun(value: number): string {
+  return value === 1 ? "mark" : "marks";
+}
+
 function readTeamMarks(
   state: Readonly<Record<string, unknown>>,
   teamId: TeamId
@@ -463,6 +549,10 @@ function createWaitingMessage(
   currentTurnSeat: SeatNumber | null,
   viewerSeat: AppSyncSeatIndex | null
 ): string {
+  if (phase === "gameComplete") {
+    return "Game complete.";
+  }
+
   if (phase === "setup") {
     return "Waiting for host to deal the next hand.";
   }
@@ -545,6 +635,10 @@ function readTrumpSuit(value: unknown): MultiplayerTrumpSuit | null {
   return multiplayerTrumpSuits.includes(value as MultiplayerTrumpSuit)
     ? value as MultiplayerTrumpSuit
     : null;
+}
+
+function readTeamId(value: unknown): TeamId | null {
+  return value === "teamA" || value === "teamB" ? value : null;
 }
 
 function readDomino(value: unknown): MultiplayerDomino | null {

@@ -209,5 +209,28 @@ const PUBLIC_SNAPSHOT_SELECTION = `
     seat2
     seat3
   }
+  lastCompletedHand {
+    awardedTeamId
+    bidAmount
+    biddingTeamId
+    biddingTeamPoints
+    completedAt
+    declarer
+    handNumber
+    markAwards {
+      teamA
+      teamB
+    }
+    outcome
+    teamPoints {
+      teamA
+      teamB
+    }
+    teamTrickCounts {
+      teamA
+      teamB
+    }
+    totalPoints
+  }
   redactedState
 `;

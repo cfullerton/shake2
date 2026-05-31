@@ -100,6 +100,7 @@ type PublicGameSnapshot {
   snapshotVersion: Int!
   phase: String!
   handCounts: SeatHandCounts
+  lastCompletedHand: CompletedHandSummary
   redactedState: AWSJSON!
 }
 
@@ -108,6 +109,26 @@ type SeatHandCounts {
   seat1: Int!
   seat2: Int!
   seat3: Int!
+}
+
+type CompletedHandSummary {
+  handNumber: Int!
+  completedAt: AWSDateTime!
+  bidAmount: Int!
+  biddingTeamId: String!
+  declarer: SeatIndex!
+  biddingTeamPoints: Int!
+  outcome: String!
+  teamPoints: TeamTotals!
+  teamTrickCounts: TeamTotals!
+  markAwards: TeamTotals!
+  awardedTeamId: String
+  totalPoints: Int!
+}
+
+type TeamTotals {
+  teamA: Int!
+  teamB: Int!
 }
 
 type RoomView {

@@ -100,7 +100,10 @@ export function createMultiplayerGameStartWritePlan(
 
   const roomRecord = createMultiplayerRoomRecord(session.room);
   const eventOperations = session.events.map(createEventWriteOperation);
-  const snapshotRecord = createMultiplayerSnapshotRecord(session.snapshot);
+  const snapshotRecord = createMultiplayerSnapshotRecord(
+    session.snapshot,
+    session.events
+  );
   const privateHandOperations = createMultiplayerPrivateHandRecords(session)
     .map((record) => createPutOperation(
       "putPrivateHand",
@@ -146,7 +149,10 @@ export function createMultiplayerNextHandWritePlan(
   }
 
   const snapshotCondition = createSnapshotMatchesCondition(previousSession.snapshot);
-  const snapshotRecord = createMultiplayerSnapshotRecord(result.session.snapshot);
+  const snapshotRecord = createMultiplayerSnapshotRecord(
+    result.session.snapshot,
+    result.session.events
+  );
 
   return {
     gameId: result.session.snapshot.gameId,
@@ -185,7 +191,10 @@ export function createMultiplayerAcceptedActionWritePlan(
     true
   );
   const snapshotCondition = createSnapshotMatchesCondition(previousSession.snapshot);
-  const snapshotRecord = createMultiplayerSnapshotRecord(result.session.snapshot);
+  const snapshotRecord = createMultiplayerSnapshotRecord(
+    result.session.snapshot,
+    result.session.events
+  );
 
   return {
     gameId: result.session.snapshot.gameId,

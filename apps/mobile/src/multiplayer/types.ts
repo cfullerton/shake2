@@ -44,6 +44,26 @@ export interface MultiplayerSeatHandCounts {
   readonly seat3: number;
 }
 
+export interface MultiplayerTeamTotals {
+  readonly teamA: number;
+  readonly teamB: number;
+}
+
+export interface MultiplayerCompletedHandSummary {
+  readonly awardedTeamId?: string | null;
+  readonly bidAmount: number;
+  readonly biddingTeamId: string;
+  readonly biddingTeamPoints: number;
+  readonly completedAt: string;
+  readonly declarer: AppSyncSeatIndex;
+  readonly handNumber: number;
+  readonly markAwards: MultiplayerTeamTotals;
+  readonly outcome: string;
+  readonly teamPoints: MultiplayerTeamTotals;
+  readonly teamTrickCounts: MultiplayerTeamTotals;
+  readonly totalPoints: number;
+}
+
 export interface MultiplayerDomino {
   readonly high: number;
   readonly key: string;
@@ -66,6 +86,7 @@ export interface MultiplayerPublicGameSnapshot {
   readonly gameId: string;
   readonly generatedAt: string;
   readonly handCounts?: MultiplayerSeatHandCounts | null;
+  readonly lastCompletedHand?: MultiplayerCompletedHandSummary | null;
   readonly lastEventSequence: number;
   readonly phase: string;
   readonly redactedState: Readonly<Record<string, unknown>>;

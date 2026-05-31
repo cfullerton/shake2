@@ -51,9 +51,25 @@ type GameSnapshotRecord = {
   snapshotVersion: number;
   lastEventSequence: number;
   payload: unknown;
+  lastCompletedHand?: {
+    handNumber: number;
+    completedAt: string;
+    bidAmount: number;
+    biddingTeamId: "teamA" | "teamB";
+    declarer: 0 | 1 | 2 | 3;
+    biddingTeamPoints: number;
+    outcome: "made" | "set";
+    teamPoints: { teamA: number; teamB: number };
+    teamTrickCounts: { teamA: number; teamB: number };
+    markAwards: { teamA: number; teamB: number };
+    awardedTeamId?: "teamA" | "teamB";
+    totalPoints: number;
+  };
   updatedAt: string;
 };
 ```
+
+`lastCompletedHand` is public, compact recap metadata. It intentionally lives outside `payload` so authoritative replay can continue comparing the canonical snapshot payload exactly.
 
 ## Private Hands
 

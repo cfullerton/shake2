@@ -185,7 +185,7 @@ export function createStartGameHandler(
 
       return {
         room: toAppSyncRoomView(previousRoom.room, actor),
-        snapshot: toPublicGameSnapshot(snapshot.payload)
+        snapshot: toPublicGameSnapshot(snapshot.payload, snapshot.lastCompletedHand)
       };
     }
 

@@ -15,6 +15,7 @@ test("MultiplayerGameClient reads snapshots and parses AWSJSON state", async () 
   const snapshot: MultiplayerPublicGameSnapshotPayload = {
     gameId: "game-1",
     generatedAt: "2026-05-31T00:00:00.000Z",
+    lastCompletedHand: createCompletedHandSummary(),
     lastEventSequence: 2,
     phase: "dealt",
     redactedState: JSON.stringify({
@@ -30,6 +31,10 @@ test("MultiplayerGameClient reads snapshots and parses AWSJSON state", async () 
   const client = new MultiplayerGameClient(graphql);
 
   await expect(client.getGameSnapshot("game-1")).resolves.toMatchObject({
+    lastCompletedHand: {
+      declarer: "SEAT_0",
+      outcome: "set"
+    },
     redactedState: {
       dealer: 0,
       phase: "dealt"
@@ -39,6 +44,8 @@ test("MultiplayerGameClient reads snapshots and parses AWSJSON state", async () 
   expect(graphql.requests[0]?.variables).toEqual({
     gameId: "game-1"
   });
+  expect(graphql.requests[0]?.query).toContain("lastCompletedHand");
+  expect(graphql.requests[0]?.query).toContain("teamTrickCounts");
 });
 
 test("MultiplayerGameClient reads the actor private hand", async () => {
@@ -485,5 +492,33 @@ function createSnapshot(
     schemaVersion: 1,
     snapshotVersion: 3,
     ...overrides
+  };
+}
+
+function createCompletedHandSummary(): NonNullable<
+  MultiplayerPublicGameSnapshot["lastCompletedHand"]
+> {
+  return {
+    awardedTeamId: "teamB",
+    bidAmount: 32,
+    biddingTeamId: "teamA",
+    biddingTeamPoints: 29,
+    completedAt: "2026-05-31T00:00:00.000Z",
+    declarer: "SEAT_0",
+    handNumber: 1,
+    markAwards: {
+      teamA: 0,
+      teamB: 1
+    },
+    outcome: "set",
+    teamPoints: {
+      teamA: 29,
+      teamB: 13
+    },
+    teamTrickCounts: {
+      teamA: 3,
+      teamB: 4
+    },
+    totalPoints: 42
   };
 }
