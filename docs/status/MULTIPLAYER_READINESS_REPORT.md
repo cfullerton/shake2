@@ -8,7 +8,7 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, room lookup, and public-room listing flows, with non-sensitive generated invite codes and normalized code lookup. The mobile app now has a multiplayer network/auth foundation, lobby UI for Cognito sign-in, private/public create/join/seat/start, polling-based lobby refresh, and an active-game UI slice for public snapshots, private hands, bidding, and declarer trump selection. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client reconnect behavior, abuse handling, and completing the active multiplayer game UI beyond trump selection.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, room lookup, and public-room listing flows, with non-sensitive generated invite codes and normalized code lookup. The mobile app now has a multiplayer network/auth foundation, lobby UI for Cognito sign-in, private/public create/join/seat/start, polling-based lobby refresh, and an active-game UI slice for public snapshots, private hands, bidding, declarer trump selection, and trick-play domino submission. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client reconnect behavior, abuse handling, and post-hand/next-hand multiplayer controls.
 
 ## Current Multiplayer Architecture
 
@@ -42,13 +42,13 @@ Mobile multiplayer foundation now lives under `apps/mobile/src/multiplayer`.
 - `rooms.ts`: wraps create/join/list-public/take-seat/start room GraphQL operations behind typed helpers.
 - `game.ts`: wraps public snapshot, private hand, and submit-action GraphQL operations behind typed helpers.
 - `activeGame.ts`: projects normalized public snapshots plus the viewer private hand into table, score, turn, bidding, and trump-selection UI state outside React components.
-- `useMultiplayerActiveGame.ts`: owns active-game snapshot/private-hand loading, manual refresh, pass/numeric bid submission, and declarer trump-call state.
+- `useMultiplayerActiveGame.ts`: owns active-game snapshot/private-hand loading, manual refresh, pass/numeric bid submission, declarer trump-call state, and domino-play submission.
 - `useMultiplayerLobby.ts`: owns mobile lobby auth/client/session state, polling-based room/public-list refresh, and room lifecycle operations outside screen components.
 
 The first mobile multiplayer screens now live under `apps/mobile/src/screens`.
 
 - `MultiplayerLobbyScreen.tsx`: gates missing config, signs in through Cognito, creates private or public rooms, joins by code or public listing, renders room code/participants/seats, lets players take seats, and lets the host start a ready room before handing off to the active-game panel.
-- `MultiplayerActiveGamePanel.tsx`: renders a started multiplayer game with public table state, scores, turn/dealer/bid/trump status, the viewer private hand, refresh, pass/numeric bidding controls, and declarer trump controls.
+- `MultiplayerActiveGamePanel.tsx`: renders a started multiplayer game with public table state, scores, turn/dealer/bid/trump status, the current trick, the viewer private hand, refresh, pass/numeric bidding controls, declarer trump controls, and legal domino-play controls.
 
 Infrastructure code now lives under `infra`.
 
@@ -106,8 +106,8 @@ Production multiplayer blockers:
 
 5. Mobile multiplayer UI
    - Room creation/join/start lobby screen now exists and uses the mobile multiplayer client foundation.
-   - First active-game screen now exists for snapshot rendering, private hand loading, refresh, bidding actions, and declarer trump calls.
-   - No multiplayer trick-play controls yet.
+   - First active-game screen now exists for snapshot rendering, private hand loading, refresh, bidding actions, declarer trump calls, current-trick display, and legal domino plays.
+   - No post-hand/next-hand multiplayer controls yet.
    - No reconnect/offline/pending-action UX.
 
 6. Lifecycle and abuse handling

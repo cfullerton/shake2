@@ -39,6 +39,9 @@ export function MultiplayerActiveGamePanel({
   });
   const view = game.view;
   const canSubmitActions = actorId !== null;
+  const legalPlayByDominoKey = new Map(
+    view.legalDominoPlays.map((play) => [play.domino.key, play])
+  );
 
   return (
     <View style={styles.shell}>
@@ -105,6 +108,28 @@ export function MultiplayerActiveGamePanel({
 
       <View style={styles.tablePanel}>
         <View style={styles.tableHeader}>
+          <Text style={styles.panelTitle}>Current Trick</Text>
+          <Text style={styles.meta}>{view.currentTrickLeadLabel}</Text>
+        </View>
+        {view.currentTrickPlays.length > 0 ? (
+          <View style={styles.trickPlayList}>
+            {view.currentTrickPlays.map((play) => (
+              <View
+                key={`${play.seatIndex}-${play.domino.key}`}
+                style={styles.trickPlayRow}
+              >
+                <Text style={styles.trickPlaySeat}>{play.seatLabel}</Text>
+                <MultiplayerDominoTile domino={play.domino} />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.copy}>No dominoes played yet.</Text>
+        )}
+      </View>
+
+      <View style={styles.tablePanel}>
+        <View style={styles.tableHeader}>
           <Text style={styles.panelTitle}>Your Hand</Text>
           <Text style={styles.meta}>
             {game.busyAction === "loadPrivateHand"
@@ -114,12 +139,27 @@ export function MultiplayerActiveGamePanel({
         </View>
         {view.privateHand.length > 0 ? (
           <View style={styles.dominoGrid}>
-            {view.privateHand.map((domino) => (
-              <MultiplayerDominoTile
-                domino={domino}
-                key={domino.key}
-              />
-            ))}
+            {view.privateHand.map((domino) => {
+              const legalPlay = legalPlayByDominoKey.get(domino.key);
+              const playDisabled = view.canPlayDomino &&
+                (!legalPlay ||
+                  !canSubmitActions ||
+                  game.busyAction === "submitDomino");
+
+              return (
+                <MultiplayerDominoTile
+                  disabled={playDisabled}
+                  domino={domino}
+                  key={domino.key}
+                  onPress={
+                    legalPlay
+                      ? () => game.submitDomino(legalPlay)
+                      : undefined
+                  }
+                  playable={view.canPlayDomino && Boolean(legalPlay)}
+                />
+              );
+            })}
           </View>
         ) : (
           <Text style={styles.copy}>Your private hand will appear here.</Text>
@@ -138,7 +178,12 @@ export function MultiplayerActiveGamePanel({
             Refresh
           </Button>
         </View>
-        {view.canCallTrump ? (
+        {view.canPlayDomino ? (
+          <>
+            <Text style={styles.copy}>Choose a domino from your hand.</Text>
+            <Text style={styles.meta}>{view.currentTrickLeadLabel}</Text>
+          </>
+        ) : view.canCallTrump ? (
           <>
             <Text style={styles.copy}>Call trump for this hand.</Text>
             <View style={styles.trumpGrid}>
@@ -218,19 +263,53 @@ function InfoTile({
 }
 
 function MultiplayerDominoTile({
-  domino
+  disabled = false,
+  domino,
+  onPress,
+  playable = false
 }: {
+  readonly disabled?: boolean;
   readonly domino: MultiplayerDomino;
+  readonly onPress?: () => void;
+  readonly playable?: boolean;
 }) {
+  const tileStyle = [
+    styles.dominoTile,
+    playable ? styles.playableDominoTile : null,
+    disabled ? styles.disabledTile : null
+  ];
+  const content = (
+    <>
+      <DominoHalf pip={domino.high} />
+      <View style={styles.dominoDivider} />
+      <DominoHalf pip={domino.low} />
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        accessibilityLabel={`Play domino ${domino.key}`}
+        accessibilityRole="button"
+        disabled={disabled}
+        onPress={onPress}
+        style={({ pressed }) => [
+          ...tileStyle,
+          pressed && !disabled ? styles.pressedTile : null
+        ]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
   return (
     <View
       accessibilityLabel={`Domino ${domino.key}`}
       accessibilityRole="image"
-      style={styles.dominoTile}
+      style={tileStyle}
     >
-      <DominoHalf pip={domino.high} />
-      <View style={styles.dominoDivider} />
-      <DominoHalf pip={domino.low} />
+      {content}
     </View>
   );
 }
@@ -436,6 +515,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900"
   },
+  playableDominoTile: {
+    borderColor: palette.felt,
+    borderWidth: 2
+  },
   phasePill: {
     backgroundColor: palette.felt,
     borderRadius: radius.sm,
@@ -534,6 +617,20 @@ const styles = StyleSheet.create({
   },
   pressedTile: {
     opacity: 0.78
+  },
+  trickPlayList: {
+    gap: spacing.sm
+  },
+  trickPlayRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm
+  },
+  trickPlaySeat: {
+    color: palette.ink,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "900"
   },
   trumpGrid: {
     flexDirection: "row",

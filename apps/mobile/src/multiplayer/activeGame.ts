@@ -12,6 +12,11 @@ import type {
 type SeatNumber = 0 | 1 | 2 | 3;
 type TeamId = "teamA" | "teamB";
 
+export interface MultiplayerActiveDominoPlay {
+  readonly domino: MultiplayerDomino;
+  readonly ledSuit?: MultiplayerTrumpSuit;
+}
+
 export interface MultiplayerActiveSeatSummary {
   readonly displayName: string;
   readonly handCount: number | null;
@@ -28,15 +33,25 @@ export interface MultiplayerActiveTeamSummary {
   readonly name: string;
 }
 
+export interface MultiplayerActiveTrickPlay {
+  readonly domino: MultiplayerDomino;
+  readonly seatIndex: AppSyncSeatIndex;
+  readonly seatLabel: string;
+}
+
 export interface MultiplayerActiveGameView {
   readonly canCallTrump: boolean;
   readonly canPass: boolean;
+  readonly canPlayDomino: boolean;
   readonly canSubmitBid: boolean;
   readonly currentBidLabel: string;
+  readonly currentTrickLeadLabel: string;
+  readonly currentTrickPlays: readonly MultiplayerActiveTrickPlay[];
   readonly currentTrumpLabel: string;
   readonly currentTurnLabel: string;
   readonly dealerLabel: string;
   readonly handNumber: number;
+  readonly legalDominoPlays: readonly MultiplayerActiveDominoPlay[];
   readonly legalBidAmounts: readonly number[];
   readonly legalTrumpSuits: readonly MultiplayerTrumpSuit[];
   readonly phase: string;
@@ -82,6 +97,8 @@ export function createMultiplayerActiveGameView(input: {
   const trump = readRecord(state.trump);
   const currentBidAmount = readHighestBidAmount(bidding) ??
     readWinningBidAmount(trump?.winningBid);
+  const currentTrick = readRecord(state.currentTrick);
+  const currentTrickPlays = readCurrentTrickPlays(currentTrick, viewerSeat);
   const canCallTrump = viewerSeat !== null &&
     currentTurnSeat === toSeatNumber(viewerSeat) &&
     input.snapshot.phase === "trump";
@@ -90,20 +107,36 @@ export function createMultiplayerActiveGameView(input: {
     isBiddingPhase(input.snapshot.phase)
       ? createLegalBidAmounts(state, currentBidAmount)
       : [];
+  const legalDominoPlays = createLegalDominoPlays({
+    currentTrick,
+    currentTurnSeat,
+    phase: input.snapshot.phase,
+    privateHand: input.privateHand?.dominoes ?? [],
+    state,
+    viewerSeat
+  });
 
   return {
     canCallTrump,
     canPass: viewerSeat !== null &&
       currentTurnSeat === toSeatNumber(viewerSeat) &&
       isBiddingPhase(input.snapshot.phase),
+    canPlayDomino: legalDominoPlays.length > 0,
     canSubmitBid: legalBidAmounts.length > 0,
     currentBidLabel: currentBidAmount === null ? "No bid yet" : String(currentBidAmount),
+    currentTrickLeadLabel: createCurrentTrickLeadLabel(
+      currentTrick,
+      currentTrickPlays,
+      viewerSeat
+    ),
+    currentTrickPlays,
     currentTrumpLabel: readTrumpLabel(state),
     currentTurnLabel: currentTurnSeat === null
       ? "Waiting"
       : formatSeatLabel(toSeatIndex(currentTurnSeat), viewerSeat),
     dealerLabel: formatSeatLabel(toSeatIndex(dealer), viewerSeat),
     handNumber: readNumber(state.handNumber, 1),
+    legalDominoPlays,
     legalBidAmounts,
     legalTrumpSuits: canCallTrump ? multiplayerTrumpSuits : [],
     phase: input.snapshot.phase,
@@ -130,6 +163,67 @@ export function createMultiplayerActiveGameView(input: {
     viewerSeatLabel: viewerSeat ? multiplayerSeatLabels[viewerSeat] : "Spectator",
     waitingMessage: createWaitingMessage(input.snapshot.phase, currentTurnSeat, viewerSeat)
   };
+}
+
+function createLegalDominoPlays({
+  currentTrick,
+  currentTurnSeat,
+  phase,
+  privateHand,
+  state,
+  viewerSeat
+}: {
+  readonly currentTrick: Readonly<Record<string | number, unknown>> | undefined;
+  readonly currentTurnSeat: SeatNumber | null;
+  readonly phase: string;
+  readonly privateHand: readonly MultiplayerDomino[];
+  readonly state: Readonly<Record<string, unknown>>;
+  readonly viewerSeat: AppSyncSeatIndex | null;
+}): readonly MultiplayerActiveDominoPlay[] {
+  if (
+    phase !== "trickPlay" ||
+    viewerSeat === null ||
+    currentTurnSeat !== toSeatNumber(viewerSeat)
+  ) {
+    return [];
+  }
+
+  const trumpSuit = readContractTrumpSuit(state);
+
+  if (!trumpSuit) {
+    return [];
+  }
+
+  const playedDominoes = Array.isArray(currentTrick?.playedDominoes)
+    ? currentTrick.playedDominoes
+    : [];
+
+  if (playedDominoes.length === 0) {
+    return privateHand.map((domino) => ({
+      domino,
+      ledSuit: getLegalLedSuit(domino, trumpSuit)
+    }));
+  }
+
+  const ledSuit = readTrumpSuit(currentTrick?.ledSuit);
+
+  if (!ledSuit) {
+    return [];
+  }
+
+  const canFollowLedSuit = privateHand.some((domino) =>
+    doesDominoFollowSuit(domino, ledSuit, trumpSuit)
+  );
+
+  return privateHand
+    .filter((domino) =>
+      canFollowLedSuit
+        ? doesDominoFollowSuit(domino, ledSuit, trumpSuit)
+        : true
+    )
+    .map((domino) => ({
+      domino
+    }));
 }
 
 export function toSeatNumber(seat: AppSyncSeatIndex): SeatNumber {
@@ -275,13 +369,69 @@ function readWinningBidAmount(value: unknown): number | null {
 }
 
 function readTrumpLabel(state: Readonly<Record<string, unknown>>): string {
+  const suit = readContractTrumpSuit(state);
+
+  return suit ? multiplayerTrumpSuitLabels[suit] : "Not called";
+}
+
+function readContractTrumpSuit(
+  state: Readonly<Record<string, unknown>>
+): MultiplayerTrumpSuit | null {
   const contract = readRecord(state.contract) ??
     readRecord(readRecord(state.trump)?.contract);
   const selection = readRecord(contract?.trump);
-  const suit = readTrumpSuit(selection?.suit) ??
-    readTrumpSuit(contract?.trumpSuit);
 
-  return suit ? multiplayerTrumpSuitLabels[suit] : "Not called";
+  return readTrumpSuit(selection?.suit) ??
+    readTrumpSuit(contract?.trumpSuit);
+}
+
+function readCurrentTrickPlays(
+  currentTrick: Readonly<Record<string | number, unknown>> | undefined,
+  viewerSeat: AppSyncSeatIndex | null
+): readonly MultiplayerActiveTrickPlay[] {
+  const playedDominoes = Array.isArray(currentTrick?.playedDominoes)
+    ? currentTrick.playedDominoes
+    : [];
+
+  return playedDominoes.flatMap((value) => {
+    const play = readRecord(value);
+    const seat = readNullableSeatNumber(play?.seat);
+    const domino = readDomino(play?.domino);
+
+    if (seat === null || !domino) {
+      return [];
+    }
+
+    const seatIndex = toSeatIndex(seat);
+
+    return [
+      {
+        domino,
+        seatIndex,
+        seatLabel: formatSeatLabel(seatIndex, viewerSeat)
+      }
+    ];
+  });
+}
+
+function createCurrentTrickLeadLabel(
+  currentTrick: Readonly<Record<string | number, unknown>> | undefined,
+  plays: readonly MultiplayerActiveTrickPlay[],
+  viewerSeat: AppSyncSeatIndex | null
+): string {
+  if (plays.length === 0) {
+    const leader = readNullableSeatNumber(currentTrick?.leader);
+
+    return leader === null
+      ? "No domino led"
+      : `${formatSeatLabel(toSeatIndex(leader), viewerSeat)} leads`;
+  }
+
+  const ledSuit = readTrumpSuit(currentTrick?.ledSuit);
+
+  return ledSuit
+    ? `${multiplayerTrumpSuitLabels[ledSuit]} led`
+    : "Suit not set";
 }
 
 function readTeamMarks(
@@ -389,6 +539,67 @@ function readTrumpSuit(value: unknown): MultiplayerTrumpSuit | null {
     : null;
 }
 
+function readDomino(value: unknown): MultiplayerDomino | null {
+  const domino = readRecord(value);
+  const high = domino?.high;
+  const low = domino?.low;
+
+  if (!isPip(high) || !isPip(low)) {
+    return null;
+  }
+
+  const normalizedHigh = Math.max(high, low);
+  const normalizedLow = Math.min(high, low);
+
+  return {
+    high: normalizedHigh,
+    key: `${normalizedHigh}-${normalizedLow}`,
+    low: normalizedLow
+  };
+}
+
+function getLegalLedSuit(
+  domino: MultiplayerDomino,
+  trumpSuit: MultiplayerTrumpSuit
+): MultiplayerTrumpSuit {
+  if (isDominoTrump(domino, trumpSuit)) {
+    return trumpSuit;
+  }
+
+  return dominoSuitByPip[domino.high] ?? "blanks";
+}
+
+function doesDominoFollowSuit(
+  domino: MultiplayerDomino,
+  ledSuit: MultiplayerTrumpSuit,
+  trumpSuit: MultiplayerTrumpSuit
+): boolean {
+  if (ledSuit === trumpSuit) {
+    return isDominoTrump(domino, trumpSuit);
+  }
+
+  return !isDominoTrump(domino, trumpSuit) &&
+    dominoContainsPip(domino, trumpSuitPipBySuit[ledSuit]);
+}
+
+function isDominoTrump(
+  domino: MultiplayerDomino,
+  trumpSuit: MultiplayerTrumpSuit
+): boolean {
+  return dominoContainsPip(domino, trumpSuitPipBySuit[trumpSuit]);
+}
+
+function dominoContainsPip(domino: MultiplayerDomino, pip: number): boolean {
+  return domino.high === pip || domino.low === pip;
+}
+
+function isPip(value: unknown): value is number {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 6;
+}
+
 function readRecord(value: unknown): Readonly<Record<string | number, unknown>> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Readonly<Record<string | number, unknown>>
@@ -410,3 +621,23 @@ function readNumber(value: unknown, fallback: number): number {
 function readNullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
+
+const dominoSuitByPip: Readonly<Record<number, MultiplayerTrumpSuit>> = {
+  0: "blanks",
+  1: "ones",
+  2: "twos",
+  3: "threes",
+  4: "fours",
+  5: "fives",
+  6: "sixes"
+};
+
+const trumpSuitPipBySuit: Readonly<Record<MultiplayerTrumpSuit, number>> = {
+  blanks: 0,
+  fives: 5,
+  fours: 4,
+  ones: 1,
+  sixes: 6,
+  threes: 3,
+  twos: 2
+};

@@ -219,6 +219,113 @@ test("MultiplayerGameClient submits trump calls as AppSync AWSJSON actions", asy
   });
 });
 
+test("MultiplayerGameClient submits domino plays as AppSync AWSJSON actions", async () => {
+  const graphql = new MockGraphqlClient({
+    submitGameAction: {
+      accepted: true,
+      committed: true,
+      duplicate: false,
+      events: [],
+      gameId: "game-1",
+      snapshot: createSnapshot({
+        phase: "trickPlay",
+        redactedState: {
+          contract: {
+            declarer: 1,
+            kind: "standardNumeric",
+            trump: {
+              kind: "pip",
+              suit: "sixes"
+            }
+          },
+          currentTrick: {
+            ledDomino: {
+              high: 6,
+              low: 6
+            },
+            ledSuit: "sixes",
+            leader: 1,
+            playedDominoes: [
+              {
+                domino: {
+                  high: 6,
+                  low: 6
+                },
+                seat: 1
+              }
+            ]
+          },
+          dealer: 0,
+          phase: "trickPlay"
+        }
+      })
+    } satisfies MultiplayerSubmitGameActionResult
+  });
+  const client = new MultiplayerGameClient(graphql);
+
+  await expect(
+    client.submitDomino({
+      actorId: "actor-sub",
+      actorSeat: "SEAT_1",
+      domino: {
+        high: 6,
+        key: "6-6",
+        low: 6
+      },
+      gameId: "game-1",
+      knownLastEventSequence: 7,
+      knownSnapshotVersion: 7,
+      ledSuit: "sixes"
+    })
+  ).resolves.toMatchObject({
+    accepted: true,
+    snapshot: {
+      phase: "trickPlay"
+    }
+  });
+
+  const variables = graphql.requests[0]?.variables as {
+    readonly input?: {
+      readonly action?: string;
+      readonly gameId?: string;
+    };
+  };
+  const action = JSON.parse(variables.input?.action ?? "{}") as {
+    readonly action?: {
+      readonly payload?: {
+        readonly domino?: {
+          readonly high?: number;
+          readonly low?: number;
+        };
+        readonly ledSuit?: string;
+        readonly seat?: number;
+      };
+      readonly type?: string;
+    };
+    readonly actorId?: string;
+    readonly actorSeat?: number;
+    readonly gameId?: string;
+  };
+
+  expect(graphql.requests[0]?.operationName).toBe("SubmitGameAction");
+  expect(action).toMatchObject({
+    action: {
+      payload: {
+        domino: {
+          high: 6,
+          low: 6
+        },
+        ledSuit: "sixes",
+        seat: 1
+      },
+      type: "fortyTwo.domino.play"
+    },
+    actorId: "actor-sub",
+    actorSeat: 1,
+    gameId: "game-1"
+  });
+});
+
 class MockGraphqlClient implements GraphqlClient {
   readonly requests: GraphqlRequest[] = [];
 

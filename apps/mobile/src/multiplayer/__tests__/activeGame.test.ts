@@ -206,6 +206,130 @@ test("active game view reads called trump from trick-play contracts", () => {
   expect(view.currentTrumpLabel).toBe("Fives");
 });
 
+test("active game view exposes legal domino plays for the trick leader", () => {
+  const view = createMultiplayerActiveGameView({
+    privateHand: createPrivateHand(),
+    room: createRoomView({
+      viewerSeat: "SEAT_1"
+    }),
+    snapshot: createSnapshot({
+      phase: "trickPlay",
+      redactedState: {
+        contract: {
+          declarer: 1,
+          kind: "standardNumeric",
+          trump: {
+            kind: "pip",
+            suit: "sixes"
+          }
+        },
+        currentTrick: {
+          leader: 1,
+          playedDominoes: []
+        },
+        dealer: 0,
+        phase: "trickPlay"
+      }
+    })
+  });
+
+  expect(view.canPlayDomino).toBe(true);
+  expect(view.currentTrickLeadLabel).toBe("East (You) leads");
+  expect(view.legalDominoPlays).toEqual([
+    {
+      domino: {
+        high: 6,
+        key: "6-6",
+        low: 6
+      },
+      ledSuit: "sixes"
+    },
+    {
+      domino: {
+        high: 5,
+        key: "5-4",
+        low: 4
+      },
+      ledSuit: "fives"
+    }
+  ]);
+});
+
+test("active game view filters domino plays when the viewer must follow suit", () => {
+  const view = createMultiplayerActiveGameView({
+    privateHand: {
+      ...createPrivateHand(),
+      dominoes: [
+        {
+          high: 6,
+          key: "6-5",
+          low: 5
+        },
+        {
+          high: 5,
+          key: "5-4",
+          low: 4
+        }
+      ],
+      seatIndex: "SEAT_2"
+    },
+    room: createRoomView({
+      viewerSeat: "SEAT_2"
+    }),
+    snapshot: createSnapshot({
+      phase: "trickPlay",
+      redactedState: {
+        contract: {
+          declarer: 1,
+          kind: "standardNumeric",
+          trump: {
+            kind: "pip",
+            suit: "sixes"
+          }
+        },
+        currentTrick: {
+          ledSuit: "sixes",
+          leader: 1,
+          playedDominoes: [
+            {
+              domino: {
+                high: 6,
+                low: 6
+              },
+              seat: 1
+            }
+          ]
+        },
+        dealer: 0,
+        phase: "trickPlay"
+      }
+    })
+  });
+
+  expect(view.canPlayDomino).toBe(true);
+  expect(view.currentTrickLeadLabel).toBe("Sixes led");
+  expect(view.currentTrickPlays).toEqual([
+    {
+      domino: {
+        high: 6,
+        key: "6-6",
+        low: 6
+      },
+      seatIndex: "SEAT_1",
+      seatLabel: "East"
+    }
+  ]);
+  expect(view.legalDominoPlays).toEqual([
+    {
+      domino: {
+        high: 6,
+        key: "6-5",
+        low: 5
+      }
+    }
+  ]);
+});
+
 function declarerViewSnapshot(): MultiplayerPublicGameSnapshot {
   return createSnapshot({
     phase: "trump",

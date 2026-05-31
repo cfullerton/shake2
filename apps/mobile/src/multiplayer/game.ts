@@ -2,6 +2,7 @@ import type { GraphqlClient } from "./graphql";
 import { normalizeMultiplayerPublicGameSnapshot } from "./snapshots";
 import type {
   AppSyncSeatIndex,
+  MultiplayerDomino,
   MultiplayerPrivateHand,
   MultiplayerPublicGameSnapshotPayload,
   MultiplayerPublicGameSnapshot,
@@ -40,6 +41,16 @@ export interface SubmitMultiplayerTrumpInput {
   readonly knownLastEventSequence: number;
   readonly knownSnapshotVersion: number;
   readonly trumpSuit: MultiplayerTrumpSuit;
+}
+
+export interface SubmitMultiplayerDominoInput {
+  readonly actorId: string;
+  readonly actorSeat: AppSyncSeatIndex;
+  readonly domino: MultiplayerDomino;
+  readonly gameId: string;
+  readonly knownLastEventSequence: number;
+  readonly knownSnapshotVersion: number;
+  readonly ledSuit?: MultiplayerTrumpSuit;
 }
 
 export class MultiplayerGameClient {
@@ -121,6 +132,29 @@ export class MultiplayerGameClient {
           trumpSuit: input.trumpSuit
         },
         type: "fortyTwo.trump.call"
+      },
+      actorId: input.actorId,
+      actorSeat: input.actorSeat,
+      gameId: input.gameId,
+      knownLastEventSequence: input.knownLastEventSequence,
+      knownSnapshotVersion: input.knownSnapshotVersion
+    });
+  }
+
+  async submitDomino(
+    input: SubmitMultiplayerDominoInput
+  ): Promise<MultiplayerSubmitGameActionResult> {
+    return this.submitPlayerAction({
+      action: {
+        payload: {
+          domino: {
+            high: input.domino.high,
+            low: input.domino.low
+          },
+          ...(input.ledSuit ? { ledSuit: input.ledSuit } : {}),
+          seat: toSeatNumber(input.actorSeat)
+        },
+        type: "fortyTwo.domino.play"
       },
       actorId: input.actorId,
       actorSeat: input.actorSeat,

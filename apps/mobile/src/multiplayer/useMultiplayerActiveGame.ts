@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   createMultiplayerActiveGameView,
+  type MultiplayerActiveDominoPlay,
   type MultiplayerActiveGameView
 } from "./activeGame";
 import type {
@@ -20,6 +21,7 @@ export type MultiplayerActiveGameAction =
   | "loadPrivateHand"
   | "refresh"
   | "submitBid"
+  | "submitDomino"
   | "submitTrump";
 
 export interface UseMultiplayerActiveGameInput {
@@ -39,6 +41,7 @@ export interface MultiplayerActiveGameController {
   clearError(): void;
   refresh(): Promise<void>;
   submitBid(bid: MultiplayerBid): Promise<void>;
+  submitDomino(play: MultiplayerActiveDominoPlay): Promise<void>;
   submitTrump(trumpSuit: MultiplayerTrumpSuit): Promise<void>;
 }
 
@@ -123,6 +126,29 @@ export function useMultiplayerActiveGame({
     });
   }
 
+  async function submitDomino(play: MultiplayerActiveDominoPlay): Promise<void> {
+    await runAction("submitDomino", async () => {
+      const identity = requireActionIdentity();
+
+      const result = await client.submitDomino({
+        actorId: identity.actorId,
+        actorSeat: identity.actorSeat,
+        domino: play.domino,
+        gameId: snapshot.gameId,
+        knownLastEventSequence: snapshot.lastEventSequence,
+        knownSnapshotVersion: snapshot.snapshotVersion,
+        ...(play.ledSuit ? { ledSuit: play.ledSuit } : {})
+      });
+
+      if (!result.accepted || !result.snapshot) {
+        throw new Error(result.error?.message ?? "The server rejected that action.");
+      }
+
+      setSnapshot(result.snapshot);
+      await loadPrivateHandFor(result.snapshot.gameId, identity.actorSeat);
+    });
+  }
+
   async function loadPrivateHand(): Promise<void> {
     await runAction("loadPrivateHand", async () => {
       await loadPrivateHandFor(snapshot.gameId, room.viewerSeat ?? null);
@@ -187,6 +213,7 @@ export function useMultiplayerActiveGame({
     room,
     snapshot,
     submitBid,
+    submitDomino,
     submitTrump,
     view
   };

@@ -44,6 +44,7 @@ test("active game panel loads the viewer hand and submits bids", async () => {
     getGameSnapshot: jest.fn(async () => createSnapshot()),
     getMyPrivateHand: jest.fn(async () => hand),
     submitBid: jest.fn(async () => accepted),
+    submitDomino: jest.fn(),
     submitTrump: jest.fn()
   } as unknown as MultiplayerLobbyGameClient;
   const view = render(
@@ -115,6 +116,7 @@ test("active game panel submits declarer trump calls", async () => {
     getGameSnapshot: jest.fn(async () => createTrumpSnapshot()),
     getMyPrivateHand: jest.fn(async () => hand),
     submitBid: jest.fn(),
+    submitDomino: jest.fn(),
     submitTrump: jest.fn(async () => accepted)
   } as unknown as MultiplayerLobbyGameClient;
   const view = render(
@@ -144,6 +146,92 @@ test("active game panel submits declarer trump calls", async () => {
       knownLastEventSequence: 6,
       knownSnapshotVersion: 6,
       trumpSuit: "sixes"
+    });
+  });
+});
+
+test("active game panel submits legal domino plays", async () => {
+  const hand = createPrivateHand();
+  const accepted: MultiplayerSubmitGameActionResult = {
+    accepted: true,
+    committed: true,
+    duplicate: false,
+    events: [],
+    gameId: "game-1",
+    snapshot: createTrickPlaySnapshot({
+      lastEventSequence: 8,
+      redactedState: {
+        contract: {
+          declarer: 1,
+          kind: "standardNumeric",
+          trump: {
+            kind: "pip",
+            suit: "sixes"
+          }
+        },
+        currentTrick: {
+          ledDomino: {
+            high: 6,
+            low: 6
+          },
+          ledSuit: "sixes",
+          leader: 1,
+          playedDominoes: [
+            {
+              domino: {
+                high: 6,
+                low: 6
+              },
+              seat: 1
+            }
+          ]
+        },
+        dealer: 0,
+        handNumber: 1,
+        phase: "trickPlay"
+      },
+      snapshotVersion: 8
+    })
+  };
+  const client = {
+    getGameSnapshot: jest.fn(async () => createTrickPlaySnapshot()),
+    getMyPrivateHand: jest.fn(async () => hand),
+    submitBid: jest.fn(),
+    submitDomino: jest.fn(async () => accepted),
+    submitTrump: jest.fn()
+  } as unknown as MultiplayerLobbyGameClient;
+  const view = render(
+    <MultiplayerActiveGamePanel
+      actorId="actor-sub"
+      client={client}
+      initialRoom={createRoomView()}
+      initialSnapshot={createTrickPlaySnapshot()}
+      session={createSession()}
+    />
+  );
+
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledWith({
+      gameId: "game-1",
+      seatIndex: "SEAT_1"
+    });
+  });
+
+  fireEvent.press(view.getByLabelText("Play domino 6-6"));
+
+  await waitFor(() => {
+    expect(client.submitDomino).toHaveBeenCalledWith({
+      actorId: "actor-sub",
+      actorSeat: "SEAT_1",
+      domino: {
+        high: 6,
+        key: "6-6",
+        low: 6
+      },
+      gameId: "game-1",
+      knownLastEventSequence: 7,
+      knownSnapshotVersion: 7,
+      ledSuit: "sixes"
     });
   });
 });
@@ -239,6 +327,34 @@ function createTrumpSnapshot(): MultiplayerPublicGameSnapshot {
       }
     },
     snapshotVersion: 6
+  });
+}
+
+function createTrickPlaySnapshot(
+  overrides: Partial<MultiplayerPublicGameSnapshot> = {}
+): MultiplayerPublicGameSnapshot {
+  return createSnapshot({
+    lastEventSequence: 7,
+    phase: "trickPlay",
+    redactedState: {
+      contract: {
+        declarer: 1,
+        kind: "standardNumeric",
+        trump: {
+          kind: "pip",
+          suit: "sixes"
+        }
+      },
+      currentTrick: {
+        leader: 1,
+        playedDominoes: []
+      },
+      dealer: 0,
+      handNumber: 1,
+      phase: "trickPlay"
+    },
+    snapshotVersion: 7,
+    ...overrides
   });
 }
 
