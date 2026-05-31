@@ -5,6 +5,7 @@ import { HomeScreen } from "../screens/HomeScreen";
 import { LearnGameScreen } from "../screens/LearnGameScreen";
 import { LocalGameScreen } from "../screens/LocalGameScreen";
 import { LocalGameStartScreen } from "../screens/LocalGameStartScreen";
+import { MultiplayerLobbyScreen } from "../screens/MultiplayerLobbyScreen";
 import { NewGameScreen } from "../screens/NewGameScreen";
 import { ScorekeeperScreen } from "../screens/ScorekeeperScreen";
 import { TeamSetupScreen } from "../screens/TeamSetupScreen";
@@ -41,6 +42,11 @@ export function AppNavigator() {
         component={LocalGameStartScreen}
         name="LocalGameStart"
         options={{ title: "Local Game" }}
+      />
+      <Stack.Screen
+        component={MultiplayerLobbyScreen}
+        name="MultiplayerLobby"
+        options={{ title: "Online Lobby" }}
       />
       <Stack.Screen
         component={LearnGameScreen}

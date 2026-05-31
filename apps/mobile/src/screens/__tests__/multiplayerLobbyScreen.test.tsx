@@ -1,0 +1,185 @@
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
+
+import type { MultiplayerLobbyController } from "../../multiplayer";
+import type { CognitoAuthSession } from "../../multiplayer/auth";
+import type {
+  MultiplayerRoomView,
+  MultiplayerStartGameResult
+} from "../../multiplayer/types";
+import { MultiplayerLobbyContent } from "../MultiplayerLobbyScreen";
+
+test("lobby screen gates missing multiplayer configuration", () => {
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        configured: false,
+        configError: "EXPO_PUBLIC_SHAKE2_APPSYNC_GRAPHQL_URL is required."
+      })}
+    />
+  );
+
+  expect(view.getByText("Multiplayer config missing")).toBeTruthy();
+  expect(
+    view.getByText("EXPO_PUBLIC_SHAKE2_APPSYNC_GRAPHQL_URL is required.")
+  ).toBeTruthy();
+  expect(view.queryByText("Sign In")).toBeNull();
+});
+
+test("lobby screen signs in without exposing the password", async () => {
+  const signIn = jest.fn(async () => undefined);
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        session: null,
+        signIn
+      })}
+    />
+  );
+
+  fireEvent.changeText(view.getByLabelText("Username"), "smoke-user");
+  fireEvent.changeText(view.getByLabelText("Password"), "temporary-password");
+  fireEvent.press(view.getByText("Sign In"));
+
+  await waitFor(() => {
+    expect(signIn).toHaveBeenCalledWith({
+      password: "temporary-password",
+      username: "smoke-user"
+    });
+  });
+  expect(view.queryByText("temporary-password")).toBeNull();
+});
+
+test("lobby screen renders seats and starts ready host rooms", async () => {
+  const room = createRoomView({
+    status: "ready"
+  });
+  const startedGame: MultiplayerStartGameResult = {
+    room: {
+      ...room,
+      gameId: "game-1",
+      status: "inGame"
+    },
+    snapshot: {
+      gameId: "game-1",
+      generatedAt: "2026-05-31T00:00:00.000Z",
+      lastEventSequence: 2,
+      phase: "dealt",
+      redactedState: {},
+      schemaVersion: 1,
+      snapshotVersion: 2
+    }
+  };
+  const startGame = jest.fn(async () => undefined);
+  const takeSeat = jest.fn(async () => undefined);
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        room,
+        startedGame,
+        startGame,
+        takeSeat
+      })}
+    />
+  );
+
+  expect(view.getByText("ROOM42")).toBeTruthy();
+  expect(view.getAllByText("Alice").length).toBeGreaterThan(0);
+
+  fireEvent.press(view.getByLabelText("East seat empty"));
+  await waitFor(() => {
+    expect(takeSeat).toHaveBeenCalledWith({
+      roomId: "room-1",
+      seatIndex: "SEAT_1"
+    });
+  });
+
+  fireEvent.press(view.getByText("Start Game"));
+  await waitFor(() => {
+    expect(startGame).toHaveBeenCalledWith({
+      roomId: "room-1",
+      targetMarks: 7
+    });
+  });
+  expect(view.getByText("Game starting")).toBeTruthy();
+});
+
+function createLobbyController(
+  overrides: Partial<MultiplayerLobbyController> = {}
+): MultiplayerLobbyController {
+  return {
+    busyAction: null,
+    clearError: jest.fn(),
+    configError: null,
+    configured: true,
+    createRoom: jest.fn(async () => undefined),
+    error: null,
+    joinRoom: jest.fn(async () => undefined),
+    room: null,
+    session: createSession(),
+    signIn: jest.fn(async () => undefined),
+    startGame: jest.fn(async () => undefined),
+    startedGame: null,
+    takeSeat: jest.fn(async () => undefined),
+    ...overrides
+  };
+}
+
+function createSession(): CognitoAuthSession {
+  return {
+    accessToken: "access-token",
+    expiresAt: Date.now() + 60_000,
+    idToken: "id-token",
+    tokenType: "Bearer",
+    username: "smoke-user"
+  };
+}
+
+function createRoomView(
+  overrides: Partial<MultiplayerRoomView> = {}
+): MultiplayerRoomView {
+  return {
+    createdAt: "2026-05-31T00:00:00.000Z",
+    gameId: null,
+    isHost: true,
+    participantCount: 4,
+    participants: [
+      {
+        connectionStatus: "online",
+        displayName: "Alice",
+        isViewer: true,
+        joinedAt: "2026-05-31T00:00:00.000Z"
+      }
+    ],
+    roomCode: "ROOM42",
+    roomId: "room-1",
+    seats: [
+      {
+        displayName: "North",
+        isViewer: false,
+        occupied: true,
+        seatIndex: "SEAT_0"
+      },
+      {
+        isViewer: false,
+        occupied: false,
+        seatIndex: "SEAT_1"
+      },
+      {
+        displayName: "Alice",
+        isViewer: true,
+        occupied: true,
+        seatIndex: "SEAT_2"
+      },
+      {
+        displayName: "West",
+        isViewer: false,
+        occupied: true,
+        seatIndex: "SEAT_3"
+      }
+    ],
+    status: "waiting",
+    updatedAt: "2026-05-31T00:00:00.000Z",
+    viewerSeat: "SEAT_2",
+    ...overrides
+  };
+}

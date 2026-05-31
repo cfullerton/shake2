@@ -1,12 +1,12 @@
 # Project Status
 
-Last reviewed: 2026-05-30
+Last reviewed: 2026-05-31
 
 ## Current Architecture
 
-Shake 2 is currently a local-first Expo React Native TypeScript app in an npm workspace monorepo.
+Shake 2 is currently an Expo React Native TypeScript app in an npm workspace monorepo with local-first scorekeeper/practice modes and early deployed multiplayer infrastructure.
 
-- `apps/mobile` contains the Expo app, React Navigation stack, screens, local state provider, AsyncStorage persistence, shared UI components, and theme tokens.
+- `apps/mobile` contains the Expo app, React Navigation stack, screens, local state provider, AsyncStorage persistence, shared UI components, theme tokens, and the first multiplayer lobby UI/client slice.
 - `packages/game-engine` contains pure TypeScript scorekeeper domain logic, validation, selectors, persistence codecs, and Node test coverage.
 - `packages/game-engine` also contains the full Texas 42 local rules engine, legal-action selectors, legal-random bots, and an in-memory local practice session layer.
 - `packages/game-engine` now contains the first backend-neutral multiplayer session layer for rooms, seat ownership, server-authoritative action submission, idempotency, and redacted player views.
@@ -18,7 +18,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - `.github/workflows/ci.yml` runs install, typecheck, tests, and audit reporting on pull requests and pushes to `main`.
 - `.github/workflows/deploy-web.yml` builds the Expo web bundle and deploys static assets to AWS S3/CloudFront with GitHub OIDC.
 - `infra/aws/web-hosting.yml` provisions static web hosting resources, optional custom-domain ACM/Route 53 wiring, and a least-privilege GitHub Actions deploy role.
-- There is no `backend` workspace yet, despite the original architecture docs naming AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB.
+- `backend` contains testable AppSync/Lambda resolver shells, DynamoDB store adapters, and deployed smoke harnesses for the multiplayer development stack.
 - App state is client-owned today. The mobile app loads/saves games from AsyncStorage and applies game-engine functions locally.
 - The game engine is serializable and UI-independent, with scorekeeper, local full-rules, bot-practice, and early multiplayer authority modules.
 
@@ -37,11 +37,20 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 |       |-- tsconfig.json
 |       `-- src/
 |           |-- components/
+|           |-- multiplayer/
 |           |-- navigation/
 |           |-- screens/
 |           |-- state/
 |           |-- storage/
 |           `-- theme.ts
+|-- backend/
+|   |-- package.json
+|   |-- tsconfig.json
+|   `-- src/
+|       |-- appsync/
+|       |-- dynamodb/
+|       |-- functions/
+|       `-- smoke/
 |-- packages/
 |   |-- game-engine/
 |   |   |-- package.json
@@ -84,6 +93,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 - History screen showing scored hands, marks, winning team for the hand, timestamp, note, and dealer.
 - Local practice start screen for playing a full Texas 42 game against three legal-random bots.
 - Local practice active game screen for bidding, trump selection, trick play, hand summary, game summary, restart, and next-hand flow.
+- Mobile multiplayer lobby screen for Cognito sign-in, create/join by room code, room/seat display, taking seats, and host-only start-game handoff.
 - Local persistence through AsyncStorage using a versioned scorekeeper snapshot envelope.
 - Legacy migration from the original raw saved-game array format.
 - Hardened scorekeeper validation for target marks, mark awards, timestamps, IDs, names, and notes.
@@ -104,7 +114,7 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 ## Features Partially Implemented
 
 - Game engine: full local Texas 42 play now exists for standard numeric bids and pip-suit trump, but does not implement variants or advanced bot strategy.
-- Multiplayer: engine-level authority, durable record primitives, runtime schemas, and write plans exist, but there is still no auth, physical backend persistence, realtime transport, deployed reconnect endpoint, or mobile multiplayer UI.
+- Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, and a lobby UI exist, but there is still no active-game multiplayer UI, mobile subscription handling, reconnect UX, or production lifecycle/abuse handling.
 - Game state model: current scorekeeper shape is serializable, but the app does not yet apply shared actions/events or replay an event log.
 - Persistence: local JSON persistence has schema versioning and legacy migration for scorekeeper games, but local practice games are currently in-memory only.
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.
@@ -145,12 +155,12 @@ Shake 2 is currently a local-first Expo React Native TypeScript app in an npm wo
 5. Expand contract tests around duplicate actions, stale sequences, reconnect snapshots, and unsupported schemas.
 6. Build the physical AWS backend adapter around the backend-neutral session/storage/write-plan modules.
 7. Add schema migration/version-compatibility coverage for physical adapter payloads.
-8. Introduce mobile multiplayer room UI after deployed auth and persistence exist.
+8. Expand mobile multiplayer beyond the lobby with active-game rendering, subscription handling, and reconnect UX.
 
 ## Architecture Decisions That Differ From Original Docs
 
-- Original docs include `/backend`; the current repo has no backend workspace.
-- Original stack includes AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB; the mobile app runtime is still local-only with AsyncStorage.
+- Original docs expected a future `/backend`; the repo now has a backend workspace with CDK-wired AppSync/Lambda/DynamoDB development infrastructure.
+- Original stack includes AWS Amplify Gen 2, Cognito, AppSync, and DynamoDB; the repo currently uses CDK for the multiplayer development stack, while scorekeeper and local practice remain local-first with AsyncStorage.
 - The repo now includes a narrow AWS static web hosting path using S3, CloudFront, and GitHub OIDC before any Amplify/AppSync backend exists.
 - The repo now includes a backend-neutral multiplayer authority module before any AWS multiplayer infrastructure exists.
 - Multiplayer durable records intentionally split public snapshots from private hand records before introducing AppSync subscriptions.

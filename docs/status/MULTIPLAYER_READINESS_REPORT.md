@@ -8,7 +8,7 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows. The mobile app now has a small multiplayer network/auth foundation for public Expo config, Cognito ID-token sign-in, authenticated AppSync GraphQL calls, and typed room/start operations. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring and the optional seeded gameplay/read/reconnect path, and the smoke harness can now validate live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, a recorded live subscription smoke run, client reconnect behavior, abuse handling, and mobile multiplayer UI.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows. The mobile app now has a multiplayer network/auth foundation and the first lobby UI slice for Cognito sign-in, create/join, seat taking, and host start. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client reconnect behavior, abuse handling, and the active multiplayer game UI.
 
 ## Current Multiplayer Architecture
 
@@ -40,6 +40,11 @@ Mobile multiplayer foundation now lives under `apps/mobile/src/multiplayer`.
 - `auth.ts`: signs in to Cognito through the public app client and exposes an ID-token provider boundary.
 - `graphql.ts`: sends authenticated AppSync GraphQL requests without leaking token handling into UI code.
 - `rooms.ts`: wraps create/join/take-seat/start room GraphQL operations behind typed helpers.
+- `useMultiplayerLobby.ts`: owns mobile lobby auth/client/session state and room lifecycle operations outside screen components.
+
+The first mobile lobby screen now lives under `apps/mobile/src/screens`.
+
+- `MultiplayerLobbyScreen.tsx`: gates missing config, signs in through Cognito, creates or joins rooms, renders room code/participants/seats, lets players take seats, and lets the host start a ready room before handing off to a placeholder game-starting state.
 
 Infrastructure code now lives under `infra`.
 
@@ -96,7 +101,7 @@ Production multiplayer blockers:
    - Public subscriptions must never publish raw hand-dealt events.
 
 5. Mobile multiplayer UI
-   - No room creation/join/start screens, though backend room lifecycle fields and mobile network helpers now exist.
+   - Room creation/join/start lobby screen now exists and uses the mobile multiplayer client foundation.
    - No multiplayer active-game screen.
    - No reconnect/offline/pending-action UX.
 
@@ -315,7 +320,6 @@ Rough effort for multiplayer v1, assuming one experienced engineer with this cod
 | Room authorization and lifecycle resolver hardening | 3-5 days |
 | Mobile subscription handling and reconnect gap behavior | 3-6 days |
 | Reconnect endpoint and client sync queue | 4-6 days |
-| Mobile multiplayer room/start/join UI | 4-7 days |
 | Mobile active-game multiplayer UX | 5-8 days |
 | Hidden-information security tests and redaction tests | 2-4 days |
 | Load/contention/idempotency tests | 2-4 days |

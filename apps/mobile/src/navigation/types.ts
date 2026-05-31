@@ -7,6 +7,7 @@ export type RootStackParamList = {
   };
   LocalGameStart: undefined;
   LearnGame: undefined;
+  MultiplayerLobby: undefined;
   NewGame: undefined;
   TeamSetup: {
     dealer: PlayerSeat;
