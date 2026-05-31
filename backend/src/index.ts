@@ -4,6 +4,7 @@ export * from "./dynamodb/store.ts";
 export * from "./errors/errors.ts";
 export * from "./functions/getGameSnapshot/handler.ts";
 export * from "./functions/getMyPrivateHand/handler.ts";
+export * from "./functions/rooms/handler.ts";
 export * from "./functions/getReconnectView/handler.ts";
 export * from "./functions/submitGameAction/handler.ts";
 export * from "./types/index.ts";

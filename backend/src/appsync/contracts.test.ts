@@ -9,6 +9,7 @@ import {
   mapPrivateHandRecordToAppSyncResponse,
   mapReconnectViewToAppSyncResponse,
   mapSubmitGameActionHandlerResponse,
+  toAppSyncRoomView,
   toAppSyncSeatIndex,
   toPublicGameSnapshot
 } from "./contracts.ts";
@@ -33,7 +34,12 @@ import {
 test("schema file exists and includes required operations", () => {
   const schema = readSchema();
 
+  assertTypeField(schema, "Mutation", "createRoom");
+  assertTypeField(schema, "Mutation", "joinRoom");
+  assertTypeField(schema, "Mutation", "takeSeat");
   assertTypeField(schema, "Mutation", "submitGameAction");
+  assertTypeField(schema, "Query", "getRoom");
+  assertTypeField(schema, "Query", "getRoomByCode");
   assertTypeField(schema, "Query", "getGameSnapshot");
   assertTypeField(schema, "Query", "getMyPrivateHand");
   assertTypeField(schema, "Query", "getReconnectView");
@@ -114,6 +120,56 @@ test("public snapshot type and adapter do not expose full hands", () => {
     seat2: 7,
     seat3: 7
   });
+});
+
+test("room view adapter hides raw player IDs and marks the viewer", () => {
+  const context = createTestContext();
+  let room = createMultiplayerRoom(
+    {
+      hostDisplayName: "Alice",
+      hostPlayerId: "player-0",
+      roomCode: "ROOM42",
+      roomId: "room-1"
+    },
+    context
+  );
+
+  room = unwrapResult(
+    joinMultiplayerRoom(
+      room,
+      {
+        displayName: "Bob",
+        playerId: "player-1"
+      },
+      context
+    )
+  );
+  room = unwrapResult(
+    takeMultiplayerSeat(
+      room,
+      {
+        playerId: "player-1",
+        seat: 1
+      },
+      context
+    )
+  );
+
+  const view = toAppSyncRoomView(room, {
+    identitySource: "mock",
+    playerId: "player-1"
+  });
+  const serialized = JSON.stringify(view);
+
+  assert.equal(view.roomId, "room-1");
+  assert.equal(view.roomCode, "ROOM42");
+  assert.equal(view.participantCount, 2);
+  assert.equal(view.isHost, false);
+  assert.equal(view.viewerSeat, "SEAT_1");
+  assert.equal(view.participants.find((participant) => participant.isViewer)?.displayName, "Bob");
+  assert.equal(view.seats.find((seat) => seat.seatIndex === "SEAT_1")?.isViewer, true);
+  assert.doesNotMatch(serialized, /player-0/);
+  assert.doesNotMatch(serialized, /player-1/);
 });
 
 test("private hand query maps through an explicit seat ownership boundary", () => {

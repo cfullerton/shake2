@@ -8,7 +8,7 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring and the optional seeded gameplay/read/reconnect path. The largest remaining gaps are subscription delivery, client reconnect behavior, broader room lifecycle/abuse handling, and mobile multiplayer UI.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, and room lookup flows. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring and the optional seeded gameplay/read/reconnect path. The largest remaining gaps are start-game orchestration from client-created rooms, subscription delivery, client reconnect behavior, abuse handling, and mobile multiplayer UI.
 
 ## Current Multiplayer Architecture
 
@@ -23,6 +23,7 @@ Current multiplayer code is backend-neutral and lives under `packages/game-engin
 Backend shell code now lives under `backend`.
 
 - `src/functions/submitGameAction/handler.ts`: AppSync-like Lambda resolver shell for submit-game-action requests.
+- `src/functions/rooms/handler.ts`: AppSync-like room lifecycle resolver shells for creating rooms, joining by room code, taking seats, and reading safe room views.
 - `src/functions/getGameSnapshot/handler.ts`: AppSync-like query resolver shell that returns only public/redacted game snapshots after room membership authorization.
 - `src/functions/getMyPrivateHand/handler.ts`: AppSync-like query resolver shell that enforces private-hand seat ownership before returning dominoes.
 - `src/functions/getReconnectView/handler.ts`: AppSync-like query resolver shell that returns latest public state, actor private hand when seated, and accepted/rejected/unknown pending action status.
@@ -74,6 +75,7 @@ Production multiplayer blockers:
 
 3. AppSync or realtime transport
    - A GraphQL schema, local contract tests, and CDK AppSync/Lambda resolver wiring now exist.
+   - Room lifecycle fields now exist for create/join/take-seat and room lookups.
    - A deployed smoke script is available for the mutation and query resolvers, including a seeded happy-path action/read/reconnect check.
    - Live subscription delivery has not been validated.
    - No subscription gap detection is wired into the app.
@@ -86,7 +88,7 @@ Production multiplayer blockers:
    - Public subscriptions must never publish raw hand-dealt events.
 
 5. Mobile multiplayer UI
-   - No room creation/join screens.
+   - No room creation/join screens, though backend room lifecycle fields now exist.
    - No multiplayer active-game screen.
    - No reconnect/offline/pending-action UX.
 
@@ -246,6 +248,7 @@ Current backend contract tests cover:
 - Subscription output matches the subscribed mutation result and includes only safe event summaries plus public snapshots.
 - Reconnect response can represent accepted, rejected, and unknown pending actions.
 - Query resolver shell tests enforce public/private separation, public snapshot room membership, and private-hand ownership.
+- Room lifecycle resolver tests enforce safe room views, room-code lookup, conditional persistence, and seat assignment behavior.
 - Infrastructure tests assert AppSync uses Cognito authorization, Lambda resolvers, and native-app Cognito client settings.
 - Submit-action tests assert rejected actions persist idempotency results without writing public snapshots, trusted events, or private hand records.
 - Smoke harness tests assert the deployed smoke checks cover all current AppSync resolvers without requiring seeded private hand data, and cover secondary-user non-member denial when seeded data is available.
@@ -320,19 +323,24 @@ Production-quality casual multiplayer:
 
 ## Recommended Next Slices
 
-1. DynamoDB local integration test harness
+1. Start-game room lifecycle mutation
+   - Add a backend mutation that turns a ready room into persisted game records.
+   - Reuse existing game-start write plans and DynamoDB transaction commit path.
+   - Add deployed smoke coverage for a full create/join/take-seat/start flow.
+
+2. DynamoDB local integration test harness
    - Add DynamoDB Local or equivalent integration tests for conditional failures.
    - Keep AWS SDK dependencies isolated inside `backend`.
 
-2. Read-side authorization hardening
+3. Read-side authorization hardening
    - Keep room membership enforcement on `getGameSnapshot`.
    - Keep seat ownership enforcement on `getMyPrivateHand`.
    - Add abuse/rate-limit behavior for reconnect and snapshot reads.
 
-3. Reconnect client model
+4. Reconnect client model
    - Add pending action queue and gap detection in the app without real network transport.
 
-4. Security test matrix
+5. Security test matrix
    - Actor not in room.
    - Actor claiming wrong seat.
    - Private hand access by wrong player.

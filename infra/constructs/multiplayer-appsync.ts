@@ -41,6 +41,26 @@ export class MultiplayerAppSyncConstruct extends Construct {
       xrayEnabled: true
     });
 
+    const createRoomDataSource = this.api.addLambdaDataSource(
+      "CreateRoomDataSource",
+      props.functions.createRoom
+    );
+    const joinRoomDataSource = this.api.addLambdaDataSource(
+      "JoinRoomDataSource",
+      props.functions.joinRoom
+    );
+    const takeSeatDataSource = this.api.addLambdaDataSource(
+      "TakeSeatDataSource",
+      props.functions.takeSeat
+    );
+    const getRoomDataSource = this.api.addLambdaDataSource(
+      "GetRoomDataSource",
+      props.functions.getRoom
+    );
+    const getRoomByCodeDataSource = this.api.addLambdaDataSource(
+      "GetRoomByCodeDataSource",
+      props.functions.getRoomByCode
+    );
     const submitGameActionDataSource = this.api.addLambdaDataSource(
       "SubmitGameActionDataSource",
       props.functions.submitGameAction
@@ -58,9 +78,29 @@ export class MultiplayerAppSyncConstruct extends Construct {
       props.functions.getReconnectView
     );
 
+    createRoomDataSource.createResolver("CreateRoomResolver", {
+      fieldName: "createRoom",
+      typeName: "Mutation"
+    });
+    joinRoomDataSource.createResolver("JoinRoomResolver", {
+      fieldName: "joinRoom",
+      typeName: "Mutation"
+    });
+    takeSeatDataSource.createResolver("TakeSeatResolver", {
+      fieldName: "takeSeat",
+      typeName: "Mutation"
+    });
     submitGameActionDataSource.createResolver("SubmitGameActionResolver", {
       fieldName: "submitGameAction",
       typeName: "Mutation"
+    });
+    getRoomDataSource.createResolver("GetRoomResolver", {
+      fieldName: "getRoom",
+      typeName: "Query"
+    });
+    getRoomByCodeDataSource.createResolver("GetRoomByCodeResolver", {
+      fieldName: "getRoomByCode",
+      typeName: "Query"
     });
     getGameSnapshotDataSource.createResolver("GetGameSnapshotResolver", {
       fieldName: "getGameSnapshot",

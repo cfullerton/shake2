@@ -178,7 +178,7 @@ test("explicit environment overrides dotenv values", () => {
   assert.equal(loaded.SHAKE2_SMOKE_EMAIL, "env@example.com");
 });
 
-test("creates smoke checks for all current AppSync resolvers", () => {
+test("creates smoke checks for current gameplay AppSync resolvers", () => {
   const checks = createSmokeChecks("game-smoke");
 
   assert.deepEqual(checks.map((check) => check.title), [

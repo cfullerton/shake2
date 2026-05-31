@@ -42,6 +42,7 @@ export class MultiplayerInfrastructureStack extends Stack {
     });
     const data = new MultiplayerDataConstruct(this, "Data", {
       removalPolicy: props.config.removalPolicy,
+      roomCodeIndexName: props.config.roomCodeIndexName,
       roomGameIdIndexName: props.config.roomGameIdIndexName,
       tableName: createResourceName(props.config, "multiplayer")
     });

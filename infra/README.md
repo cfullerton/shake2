@@ -6,7 +6,12 @@ This workspace contains the CDK v2 development infrastructure for multiplayer Te
 
 - Cognito User Pool and public app client.
 - DynamoDB multiplayer table with `pk`/`sk`, TTL, point-in-time recovery, and GSIs for current/near-term access patterns.
-- Four Lambda functions:
+- Nine Lambda functions:
+  - `createRoom`
+  - `joinRoom`
+  - `takeSeat`
+  - `getRoom`
+  - `getRoomByCode`
   - `submitGameAction`
   - `getGameSnapshot`
   - `getMyPrivateHand`
@@ -47,6 +52,7 @@ Lambda environment variables are injected by the stack:
 
 ```text
 SHAKE2_MULTIPLAYER_TABLE_NAME
+SHAKE2_ROOM_CODE_INDEX_NAME
 SHAKE2_ROOM_GAME_ID_INDEX_NAME
 AWS_REGION
 ```

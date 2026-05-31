@@ -14,12 +14,17 @@ scalar AWSDateTime
 scalar AWSJSON
 
 type Query {
+  getRoom(roomId: ID!): RoomView!
+  getRoomByCode(roomCode: String!): RoomView!
   getGameSnapshot(gameId: ID!): PublicGameSnapshot!
   getMyPrivateHand(input: GetMyPrivateHandInput!): PrivateHandResponse!
   getReconnectView(input: GetReconnectViewInput!): ReconnectView!
 }
 
 type Mutation {
+  createRoom(input: CreateRoomInput!): RoomView!
+  joinRoom(input: JoinRoomInput!): RoomView!
+  takeSeat(input: TakeSeatInput!): RoomView!
   submitGameAction(input: SubmitGameActionInput!): SubmitGameActionResult!
 }
 
@@ -31,6 +36,20 @@ type Subscription {
 input SubmitGameActionInput {
   gameId: ID!
   action: AWSJSON!
+}
+
+input CreateRoomInput {
+  displayName: String!
+}
+
+input JoinRoomInput {
+  roomCode: String!
+  displayName: String!
+}
+
+input TakeSeatInput {
+  roomId: ID!
+  seatIndex: SeatIndex!
 }
 
 input GetMyPrivateHandInput {
@@ -75,6 +94,34 @@ type SeatHandCounts {
   seat1: Int!
   seat2: Int!
   seat3: Int!
+}
+
+type RoomView {
+  roomId: ID!
+  roomCode: String!
+  status: String!
+  gameId: ID
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  participantCount: Int!
+  isHost: Boolean!
+  viewerSeat: SeatIndex
+  participants: [RoomParticipant!]!
+  seats: [RoomSeat!]!
+}
+
+type RoomParticipant {
+  displayName: String!
+  connectionStatus: String!
+  joinedAt: AWSDateTime!
+  isViewer: Boolean!
+}
+
+type RoomSeat {
+  seatIndex: SeatIndex!
+  occupied: Boolean!
+  displayName: String
+  isViewer: Boolean!
 }
 
 type PrivateHandResponse {

@@ -2,12 +2,15 @@ import { extractBackendActor } from "../auth/identity.ts";
 import { BackendResolverError } from "../errors/errors.ts";
 import {
   getDominoKey,
+  getMultiplayerSeatForPlayer,
+  SEAT_INDICES,
   type Domino,
   type FortyTwoEventEnvelope,
   type MultiplayerActionIdempotencyRecord,
   type MultiplayerClientSyncState,
   type MultiplayerPrivateHandRecord,
   type MultiplayerReconnectView,
+  type MultiplayerRoom,
   type MultiplayerSnapshotRecord,
   type MultiplayerVisibleSnapshotEnvelope,
   type SeatIndex
@@ -36,6 +39,20 @@ export interface AppSyncGetReconnectViewInput {
   readonly lastAppliedEventSequence: number;
   readonly pendingActionIds?: readonly string[];
   readonly snapshotVersion: number;
+}
+
+export interface AppSyncCreateRoomInput {
+  readonly displayName: string;
+}
+
+export interface AppSyncJoinRoomInput {
+  readonly displayName: string;
+  readonly roomCode: string;
+}
+
+export interface AppSyncTakeSeatInput {
+  readonly roomId: string;
+  readonly seatIndex: SeatIndex;
 }
 
 export type AppSyncSeatIndex =
@@ -95,6 +112,34 @@ export interface AppSyncSafeGameEventSummary {
 export interface AppSyncPendingActionRejection {
   readonly actionId: string;
   readonly errorCode: string;
+}
+
+export interface AppSyncRoomParticipant {
+  readonly connectionStatus: string;
+  readonly displayName: string;
+  readonly isViewer: boolean;
+  readonly joinedAt: string;
+}
+
+export interface AppSyncRoomSeat {
+  readonly displayName?: string;
+  readonly isViewer: boolean;
+  readonly occupied: boolean;
+  readonly seatIndex: AppSyncSeatIndex;
+}
+
+export interface AppSyncRoomView {
+  readonly createdAt: string;
+  readonly gameId?: string;
+  readonly isHost: boolean;
+  readonly participantCount: number;
+  readonly participants: readonly AppSyncRoomParticipant[];
+  readonly roomCode: string;
+  readonly roomId: string;
+  readonly seats: readonly AppSyncRoomSeat[];
+  readonly status: string;
+  readonly updatedAt: string;
+  readonly viewerSeat?: AppSyncSeatIndex;
 }
 
 export type AppSyncSubmitGameActionResult =
@@ -254,6 +299,49 @@ export function mapPrivateHandRecordToAppSyncResponse(
     handNumber: record.handNumber,
     seatIndex: toAppSyncSeatIndex(record.seatIndex),
     updatedAt: record.updatedAt
+  };
+}
+
+export function toAppSyncRoomView(
+  room: MultiplayerRoom,
+  actor: BackendActor
+): AppSyncRoomView {
+  const viewerSeat = getMultiplayerSeatForPlayer(room, actor.playerId);
+  const participants = Object.values(room.participants)
+    .filter((participant): participant is NonNullable<typeof participant> =>
+      participant !== undefined
+    )
+    .sort((left, right) => left.joinedAt.localeCompare(right.joinedAt))
+    .map((participant) => ({
+      connectionStatus: participant.connectionStatus,
+      displayName: participant.displayName,
+      isViewer: participant.playerId === actor.playerId,
+      joinedAt: participant.joinedAt
+    }));
+
+  return {
+    createdAt: room.createdAt,
+    ...(room.gameId !== undefined ? { gameId: room.gameId } : {}),
+    isHost: room.hostPlayerId === actor.playerId,
+    participantCount: participants.length,
+    participants,
+    roomCode: room.roomCode,
+    roomId: room.roomId,
+    seats: SEAT_INDICES.map((seatIndex) => {
+      const assignment = room.seats[seatIndex];
+
+      return {
+        ...(assignment ? { displayName: assignment.displayName } : {}),
+        isViewer: assignment?.playerId === actor.playerId,
+        occupied: assignment !== null,
+        seatIndex: toAppSyncSeatIndex(seatIndex)
+      };
+    }),
+    status: room.status,
+    updatedAt: room.updatedAt,
+    ...(viewerSeat !== null
+      ? { viewerSeat: toAppSyncSeatIndex(viewerSeat) }
+      : {})
   };
 }
 

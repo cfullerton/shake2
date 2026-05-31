@@ -418,6 +418,18 @@ function createMockStore(records: MultiplayerStoredGameRecords): MockStore {
     loadedGames,
     loadedIdempotency,
     store: {
+      async loadRoom() {
+        return records.room;
+      },
+      async loadRoomByCode() {
+        return records.room;
+      },
+      async createRoomRecord() {
+        return records.room;
+      },
+      async saveRoomRecord() {
+        return records.room;
+      },
       async loadGameSnapshot(input): Promise<MultiplayerStoredGameRecords> {
         loadedGames.push(input);
         return records;

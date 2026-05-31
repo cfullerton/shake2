@@ -21,7 +21,7 @@ test("multiplayer stack defines Cognito, DynamoDB, AppSync, Lambda, and IAM", ()
   template.resourceCountIs("AWS::Cognito::UserPoolClient", 1);
   template.resourceCountIs("AWS::DynamoDB::Table", 1);
   template.resourceCountIs("AWS::AppSync::GraphQLApi", 1);
-  template.resourceCountIs("AWS::Lambda::Function", 4);
+  template.resourceCountIs("AWS::Lambda::Function", 9);
   template.hasResourceProperties("AWS::IAM::Role", {
     AssumeRolePolicyDocument: Match.objectLike({
       Statement: Match.arrayWith([
@@ -43,7 +43,12 @@ test("AppSync uses Cognito authorization and Lambda resolvers", () => {
   });
 
   for (const [typeName, fieldName] of [
+    ["Mutation", "createRoom"],
+    ["Mutation", "joinRoom"],
+    ["Mutation", "takeSeat"],
     ["Mutation", "submitGameAction"],
+    ["Query", "getRoom"],
+    ["Query", "getRoomByCode"],
     ["Query", "getGameSnapshot"],
     ["Query", "getMyPrivateHand"],
     ["Query", "getReconnectView"]
@@ -54,7 +59,7 @@ test("AppSync uses Cognito authorization and Lambda resolvers", () => {
     });
   }
 
-  template.resourceCountIs("AWS::AppSync::DataSource", 4);
+  template.resourceCountIs("AWS::AppSync::DataSource", 9);
 });
 
 test("Cognito app client is native-app shaped without hosted OAuth defaults", () => {
@@ -74,6 +79,7 @@ test("Lambda functions receive store configuration environment", () => {
     Environment: Match.objectLike({
       Variables: Match.objectLike({
         SHAKE2_MULTIPLAYER_TABLE_NAME: Match.anyValue(),
+        SHAKE2_ROOM_CODE_INDEX_NAME: "RoomCodeIndex",
         SHAKE2_ROOM_GAME_ID_INDEX_NAME: "GameIdIndex"
       })
     })
@@ -98,6 +104,9 @@ test("DynamoDB table supports current multiplayer access patterns", () => {
     GlobalSecondaryIndexes: Match.arrayWith([
       Match.objectLike({
         IndexName: "GameIdIndex"
+      }),
+      Match.objectLike({
+        IndexName: "RoomCodeIndex"
       })
     ])
   });

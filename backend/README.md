@@ -54,6 +54,16 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 - `src/functions/shared/deployed-runtime.ts`
   - Shared deployed-runtime wiring for DynamoDB store construction, resolver context, and engine context.
 
+- `src/functions/rooms/handler.ts`
+  - Accepts AppSync-like `createRoom`, `joinRoom`, `takeSeat`, `getRoom`, and `getRoomByCode` events.
+  - Uses Cognito/mock identity as the authoritative room actor.
+  - Delegates room creation, joining, and seating rules to the shared multiplayer engine.
+  - Persists room metadata through conditional DynamoDB store methods.
+  - Returns safe room views without raw Cognito/player IDs.
+
+- `src/functions/createRoom`, `src/functions/joinRoom`, `src/functions/takeSeat`, `src/functions/getRoom`, and `src/functions/getRoomByCode`
+  - Deployed Lambda entrypoints for the room lifecycle AppSync fields.
+
 - `src/smoke/deployed-smoke.ts`
   - Loads CDK stack outputs.
   - Optionally creates/resets a temporary Cognito smoke user.
@@ -64,7 +74,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 - `src/dynamodb/store.ts`
   - Defines `MultiplayerStore`.
   - Implements `DynamoDBMultiplayerStore` with AWS SDK v3 DynamoDB DocumentClient commands.
-  - Supports loading full game records for command validation, loading public snapshots, loading private hand records, loading reconnect records, loading one idempotency result, and committing transaction intents.
+  - Supports creating, loading, and conditionally updating room records; loading full game records for command validation; loading public snapshots, private hand records, reconnect records, and one idempotency result; and committing transaction intents.
   - Maps DynamoDB transaction cancellation reasons back to stable backend/game-engine error codes for duplicate action, stale action, and persistence conflicts.
   - Is unit-tested with a mocked client and does not require AWS credentials in tests.
 
@@ -98,10 +108,15 @@ Drafted in `src/appsync/schema.graphql`:
 
 ```graphql
 type Mutation {
+  createRoom(input: CreateRoomInput!): RoomView!
+  joinRoom(input: JoinRoomInput!): RoomView!
+  takeSeat(input: TakeSeatInput!): RoomView!
   submitGameAction(input: SubmitGameActionInput!): SubmitGameActionResult!
 }
 
 type Query {
+  getRoom(roomId: ID!): RoomView!
+  getRoomByCode(roomCode: String!): RoomView!
   getGameSnapshot(gameId: ID!): PublicGameSnapshot!
   getMyPrivateHand(input: GetMyPrivateHandInput!): PrivateHandResponse!
   getReconnectView(input: GetReconnectViewInput!): ReconnectView!
@@ -150,6 +165,7 @@ Required when constructing from environment:
 
 ```text
 SHAKE2_MULTIPLAYER_TABLE_NAME
+SHAKE2_ROOM_CODE_INDEX_NAME
 SHAKE2_ROOM_GAME_ID_INDEX_NAME
 ```
 
@@ -179,7 +195,7 @@ The deployed smoke runner automatically loads `backend/.env` when present, then 
 
 Set `SHAKE2_SMOKE_SEED_GAME=true` to run the extended smoke path. That path writes a disposable room/game into DynamoDB through the engine storage records, submits one legal bid through AppSync, verifies duplicate action idempotency, checks public/private hand separation, and verifies reconnect pending-action classification. If `SHAKE2_SMOKE_CREATE_USER=true`, the runner also creates/resets a derived secondary user by default and verifies that authenticated non-members cannot read the seeded public snapshot or private hand. You can provide the `SHAKE2_SMOKE_SECONDARY_*` values to use an existing second user or override the derived one. If `SHAKE2_SMOKE_SEEDED_GAME_ID` is omitted, the runner generates a unique smoke game ID.
 
-The room game ID index must allow lookup of room metadata by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
+The room code index must allow lookup of room metadata by `roomCode`, and the room game ID index must allow lookup by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 
 ## Test Commands
 
@@ -200,7 +216,8 @@ npm test
 
 ## Next Steps
 
-1. Add DynamoDB Local or equivalent integration tests for conditional transaction failures and retry behavior.
-2. Validate AppSync subscription delivery and client-side sequence-gap recovery.
-3. Add frontend multiplayer configuration and session UI behind a feature flag.
-4. Add production hardening: rate limits, alarms, log review, and retention policies.
+1. Add a backend `startGame` room lifecycle mutation that turns a ready room into persisted game records.
+2. Add deployed smoke coverage for create/join/take-seat room flows.
+3. Add DynamoDB Local or equivalent integration tests for conditional transaction failures and retry behavior.
+4. Validate AppSync subscription delivery and client-side sequence-gap recovery.
+5. Add frontend multiplayer configuration and session UI behind a feature flag.

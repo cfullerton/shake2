@@ -2,10 +2,12 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
   GetCommand,
+  PutCommand,
   QueryCommand,
   TransactWriteCommand,
   type TransactWriteCommandInput,
   type GetCommandOutput,
+  type PutCommandOutput,
   type QueryCommandOutput,
   type TransactWriteCommandOutput
 } from "@aws-sdk/lib-dynamodb";
@@ -33,6 +35,23 @@ import {
 
 export interface LoadGameSnapshotInput {
   readonly gameId: string;
+}
+
+export interface LoadRoomInput {
+  readonly roomId: string;
+}
+
+export interface LoadRoomByCodeInput {
+  readonly roomCode: string;
+}
+
+export interface CreateRoomRecordInput {
+  readonly room: MultiplayerRoomRecord;
+}
+
+export interface SaveRoomRecordInput {
+  readonly previousRoom: MultiplayerRoomRecord;
+  readonly room: MultiplayerRoomRecord;
 }
 
 export interface LoadPublicSnapshotInput {
@@ -69,6 +88,14 @@ export interface CommitWritePlanInput {
 }
 
 export interface MultiplayerStore {
+  loadRoom(
+    input: LoadRoomInput
+  ): Promise<MultiplayerRoomRecord>;
+  loadRoomByCode(
+    input: LoadRoomByCodeInput
+  ): Promise<MultiplayerRoomRecord>;
+  createRoomRecord(input: CreateRoomRecordInput): Promise<MultiplayerRoomRecord>;
+  saveRoomRecord(input: SaveRoomRecordInput): Promise<MultiplayerRoomRecord>;
   loadGameSnapshot(
     input: LoadGameSnapshotInput
   ): Promise<MultiplayerStoredGameRecords>;
@@ -89,11 +116,13 @@ export interface MultiplayerStore {
 
 export type DynamoDBMultiplayerStoreCommand =
   | GetCommand
+  | PutCommand
   | QueryCommand
   | TransactWriteCommand;
 
 export type DynamoDBMultiplayerStoreCommandOutput =
   | GetCommandOutput
+  | PutCommandOutput
   | QueryCommandOutput
   | TransactWriteCommandOutput;
 
@@ -105,6 +134,7 @@ export interface DynamoDBDocumentClientLike {
 
 export interface DynamoDBMultiplayerStoreConfig {
   readonly consistentRead?: boolean;
+  readonly roomCodeIndexName?: string;
   readonly roomGameIdIndexName: string;
   readonly tableName: string;
 }
@@ -112,12 +142,16 @@ export interface DynamoDBMultiplayerStoreConfig {
 export interface DynamoDBMultiplayerStoreEnvConfig {
   readonly AWS_REGION?: string;
   readonly SHAKE2_MULTIPLAYER_TABLE_NAME?: string;
+  readonly SHAKE2_ROOM_CODE_INDEX_NAME?: string;
   readonly SHAKE2_ROOM_GAME_ID_INDEX_NAME?: string;
 }
 
 export class DynamoDBMultiplayerStore implements MultiplayerStore {
   private readonly client: DynamoDBDocumentClientLike;
-  private readonly config: DynamoDBMultiplayerStoreConfig;
+  private readonly config: DynamoDBMultiplayerStoreConfig & {
+    readonly consistentRead: boolean;
+    readonly roomCodeIndexName: string;
+  };
 
   constructor(
     client: DynamoDBDocumentClientLike,
@@ -126,13 +160,136 @@ export class DynamoDBMultiplayerStore implements MultiplayerStore {
     this.client = client;
     this.config = {
       ...config,
-      consistentRead: config.consistentRead ?? true
+      consistentRead: config.consistentRead ?? true,
+      roomCodeIndexName: config.roomCodeIndexName ?? "RoomCodeIndex"
     };
     assertNonEmptyString(this.config.tableName, "DynamoDB table name");
     assertNonEmptyString(
       this.config.roomGameIdIndexName,
       "DynamoDB room game ID index name"
     );
+    assertNonEmptyString(
+      this.config.roomCodeIndexName,
+      "DynamoDB room code index name"
+    );
+  }
+
+  async loadRoom(input: LoadRoomInput): Promise<MultiplayerRoomRecord> {
+    const output = await this.client.send(
+      new GetCommand({
+        ConsistentRead: this.config.consistentRead,
+        Key: {
+          pk: `ROOM#${input.roomId}`,
+          sk: "META"
+        },
+        TableName: this.config.tableName
+      })
+    );
+    const item = "Item" in output ? output.Item : undefined;
+
+    if (!item) {
+      throw new BackendResolverError(
+        "GAME_NOT_FOUND",
+        "Multiplayer room was not found."
+      );
+    }
+
+    return parseMultiplayerRoomRecord(item);
+  }
+
+  async loadRoomByCode(
+    input: LoadRoomByCodeInput
+  ): Promise<MultiplayerRoomRecord> {
+    const output = await this.client.send(
+      new QueryCommand({
+        ExpressionAttributeNames: {
+          "#roomCode": "roomCode"
+        },
+        ExpressionAttributeValues: {
+          ":roomCode": input.roomCode
+        },
+        IndexName: this.config.roomCodeIndexName,
+        KeyConditionExpression: "#roomCode = :roomCode",
+        Limit: 10,
+        ScanIndexForward: false,
+        TableName: this.config.tableName
+      })
+    );
+    const room = getOutputItems(output)
+      .map((item) => parseMultiplayerRoomRecord(item))
+      .find((record) => record.roomCode === input.roomCode);
+
+    if (!room) {
+      throw new BackendResolverError(
+        "GAME_NOT_FOUND",
+        "Multiplayer room code was not found."
+      );
+    }
+
+    return room;
+  }
+
+  async createRoomRecord(
+    input: CreateRoomRecordInput
+  ): Promise<MultiplayerRoomRecord> {
+    const room = parseMultiplayerRoomRecord(input.room);
+
+    try {
+      await this.client.send(
+        new PutCommand({
+          ConditionExpression: "attribute_not_exists(#pk) AND attribute_not_exists(#sk)",
+          ExpressionAttributeNames: {
+            "#pk": "pk",
+            "#sk": "sk"
+          },
+          Item: room,
+          TableName: this.config.tableName
+        })
+      );
+    } catch (error) {
+      throw mapDynamoDbConditionalWriteError(
+        error,
+        "Room already exists or conflicted with another write."
+      );
+    }
+
+    return room;
+  }
+
+  async saveRoomRecord(
+    input: SaveRoomRecordInput
+  ): Promise<MultiplayerRoomRecord> {
+    const previousRoom = parseMultiplayerRoomRecord(input.previousRoom);
+    const room = parseMultiplayerRoomRecord(input.room);
+
+    try {
+      await this.client.send(
+        new PutCommand({
+          ConditionExpression: "#pk = :pk AND #sk = :sk AND #updatedAt = :expectedUpdatedAt AND #status = :expectedStatus",
+          ExpressionAttributeNames: {
+            "#pk": "pk",
+            "#sk": "sk",
+            "#status": "status",
+            "#updatedAt": "updatedAt"
+          },
+          ExpressionAttributeValues: {
+            ":expectedStatus": previousRoom.status,
+            ":expectedUpdatedAt": previousRoom.updatedAt,
+            ":pk": previousRoom.pk,
+            ":sk": previousRoom.sk
+          },
+          Item: room,
+          TableName: this.config.tableName
+        })
+      );
+    } catch (error) {
+      throw mapDynamoDbConditionalWriteError(
+        error,
+        "Room changed before the update could commit."
+      );
+    }
+
+    return room;
   }
 
   async loadGameSnapshot(
@@ -574,6 +731,22 @@ function isTransactionCanceledError(
   return error instanceof Error && error.name === "TransactionCanceledException";
 }
 
+function mapDynamoDbConditionalWriteError(
+  error: unknown,
+  message: string
+): Error {
+  if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
+    return new BackendResolverError("PERSISTENCE_CONFLICT", message);
+  }
+
+  return error instanceof Error
+    ? error
+    : new BackendResolverError(
+        "PERSISTENCE_ERROR",
+        "Unexpected DynamoDB conditional write failure."
+      );
+}
+
 export function createDynamoDBMultiplayerStoreFromEnv(
   env: DynamoDBMultiplayerStoreEnvConfig,
   client?: DynamoDBDocumentClientLike
@@ -586,6 +759,7 @@ export function createDynamoDBMultiplayerStoreFromEnv(
     env.SHAKE2_ROOM_GAME_ID_INDEX_NAME,
     "SHAKE2_ROOM_GAME_ID_INDEX_NAME"
   );
+  const roomCodeIndexName = env.SHAKE2_ROOM_CODE_INDEX_NAME ?? "RoomCodeIndex";
   const documentClient = client ?? DynamoDBDocumentClient.from(
     new DynamoDBClient(
       env.AWS_REGION ? { region: env.AWS_REGION } : {}
@@ -593,6 +767,7 @@ export function createDynamoDBMultiplayerStoreFromEnv(
   );
 
   return new DynamoDBMultiplayerStore(documentClient, {
+    roomCodeIndexName,
     roomGameIdIndexName,
     tableName
   });
@@ -600,6 +775,18 @@ export function createDynamoDBMultiplayerStoreFromEnv(
 
 export function createUnimplementedMultiplayerStore(): MultiplayerStore {
   return {
+    async loadRoom(): Promise<MultiplayerRoomRecord> {
+      throw new Error("MultiplayerStore.loadRoom is not implemented.");
+    },
+    async loadRoomByCode(): Promise<MultiplayerRoomRecord> {
+      throw new Error("MultiplayerStore.loadRoomByCode is not implemented.");
+    },
+    async createRoomRecord(): Promise<MultiplayerRoomRecord> {
+      throw new Error("MultiplayerStore.createRoomRecord is not implemented.");
+    },
+    async saveRoomRecord(): Promise<MultiplayerRoomRecord> {
+      throw new Error("MultiplayerStore.saveRoomRecord is not implemented.");
+    },
     async loadGameSnapshot(): Promise<MultiplayerStoredGameRecords> {
       throw new Error("MultiplayerStore.loadGameSnapshot is not implemented.");
     },

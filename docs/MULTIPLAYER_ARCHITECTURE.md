@@ -2,9 +2,9 @@
 
 ## Current Implementation
 
-The first multiplayer slice lives in `packages/game-engine/src/multiplayer/session.ts`.
+The core multiplayer authority model lives in `packages/game-engine/src/multiplayer`.
 
-It is backend-neutral and pure TypeScript. There is still no Cognito, AppSync, DynamoDB, Lambda, or mobile multiplayer UI.
+It is backend-neutral and pure TypeScript. A backend workspace and CDK development stack now adapt that authority model to Cognito, AppSync, Lambda, and DynamoDB. There is still no mobile multiplayer UI.
 
 Implemented now:
 
@@ -26,6 +26,7 @@ Implemented now:
 - Validated replay for restored event streams, including forged trick-winner and forged hand-score rejection.
 - Runtime boundary parsers for action envelopes, durable records, public snapshots, private hands, idempotency records, and client reconnect state.
 - Backend-neutral write plans for game start, accepted player actions, and rejected player actions.
+- AppSync/Lambda room lifecycle fields for creating rooms, joining by room code, taking seats, and reading safe room views.
 
 ## Authority Model
 
@@ -63,7 +64,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, and conditional write planning. Actual DynamoDB persistence, auth, and realtime fanout are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, and DynamoDB persistence for current room/action/read flows. Realtime subscription validation and mobile multiplayer UI are still missing.
 
 ## Durable Record Shape
 
@@ -181,10 +182,10 @@ The current reconnect helper returns:
 
 ## Still Missing
 
-- Authenticated identity mapping to `playerId`.
-- Physical DynamoDB adapter for the durable records.
+- Backend `startGame` mutation that turns a ready room into persisted game records.
 - Schema migration/version-compatibility tooling for future payload changes.
-- AppSync schema/resolvers and DynamoDB conditional writes.
+- Deployed smoke coverage for organic create/join/take-seat room flows.
+- Live AppSync subscription validation.
 - Subscription gap detection.
 - Leave/rejoin/replacement behavior.
 - Mobile multiplayer screens.

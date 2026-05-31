@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   GetCommand,
+  PutCommand,
   QueryCommand,
   TransactWriteCommand
 } from "@aws-sdk/lib-dynamodb";
@@ -21,6 +22,7 @@ import {
   createMultiplayerDynamoDbTransactionWritePlan,
   createMultiplayerGameStartWritePlan,
   createMultiplayerRoom,
+  createMultiplayerRoomRecord,
   createMultiplayerStorageRecords,
   createPassBid,
   joinMultiplayerRoom,
@@ -39,6 +41,7 @@ import {
 } from "../game-engine.ts";
 
 const TABLE_NAME = "Shake2Multiplayer";
+const ROOM_CODE_INDEX_NAME = "RoomCodeIndex";
 const ROOM_GAME_ID_INDEX_NAME = "GameIdIndex";
 
 test("loads game snapshot records from DynamoDB query results", async () => {
@@ -111,6 +114,133 @@ test("loads a single idempotency result by action ID", async () => {
     pk: "ACTION#bid-1",
     sk: "RESULT"
   });
+});
+
+test("loads room records by room ID", async () => {
+  const context = createTestContext();
+  const records = createMultiplayerStorageRecords(createStartedSession(context));
+  const client = createMockDynamoClient(records);
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+  const result = await store.loadRoom({
+    roomId: "room-1"
+  });
+  const get = getCommandInput(client.commands[0], GetCommand);
+
+  assert.deepEqual(result, records.room);
+  assert.deepEqual(get.Key, {
+    pk: "ROOM#room-1",
+    sk: "META"
+  });
+});
+
+test("loads room records by room code index", async () => {
+  const context = createTestContext();
+  const records = createMultiplayerStorageRecords(createStartedSession(context));
+  const client = createMockDynamoClient(records);
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomCodeIndexName: ROOM_CODE_INDEX_NAME,
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+  const result = await store.loadRoomByCode({
+    roomCode: "ROOM42"
+  });
+  const query = getCommandInput(client.commands[0], QueryCommand);
+
+  assert.deepEqual(result, records.room);
+  assert.equal(query.IndexName, ROOM_CODE_INDEX_NAME);
+  assert.equal(query.KeyConditionExpression, "#roomCode = :roomCode");
+  assert.equal(query.ScanIndexForward, false);
+  assert.deepEqual(query.ExpressionAttributeValues, {
+    ":roomCode": "ROOM42"
+  });
+});
+
+test("creates room records with a must-not-exist condition", async () => {
+  const context = createTestContext();
+  const room = createMultiplayerRoomRecord(createRoom(context));
+  const client = createMockDynamoClient(createMultiplayerStorageRecords(createStartedSession(context)));
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+  const result = await store.createRoomRecord({
+    room
+  });
+  const put = getCommandInput(client.commands[0], PutCommand);
+
+  assert.deepEqual(result, room);
+  assert.equal(put.TableName, TABLE_NAME);
+  assert.equal(
+    put.ConditionExpression,
+    "attribute_not_exists(#pk) AND attribute_not_exists(#sk)"
+  );
+  assert.deepEqual(put.Item, room);
+});
+
+test("saves room records with stale-room protection", async () => {
+  const context = createTestContext();
+  const previousRoom = createMultiplayerRoomRecord(createRoom(context));
+  const nextRoom = createMultiplayerRoomRecord(
+    unwrapResult(
+      joinMultiplayerRoom(
+        previousRoom.room,
+        {
+          displayName: "Bob",
+          playerId: "player-1"
+        },
+        context
+      )
+    )
+  );
+  const client = createMockDynamoClient(createMultiplayerStorageRecords(createStartedSession(context)));
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+  const result = await store.saveRoomRecord({
+    previousRoom,
+    room: nextRoom
+  });
+  const put = getCommandInput(client.commands[0], PutCommand);
+
+  assert.deepEqual(result, nextRoom);
+  assert.match(
+    String(put.ConditionExpression ?? ""),
+    /#updatedAt = :expectedUpdatedAt/
+  );
+  assert.deepEqual(put.ExpressionAttributeValues, {
+    ":expectedStatus": previousRoom.status,
+    ":expectedUpdatedAt": previousRoom.updatedAt,
+    ":pk": previousRoom.pk,
+    ":sk": previousRoom.sk
+  });
+});
+
+test("maps room conditional write failures to persistence conflicts", async () => {
+  const context = createTestContext();
+  const room = createMultiplayerRoomRecord(createRoom(context));
+  const client = createMockDynamoClient(
+    createMultiplayerStorageRecords(createStartedSession(context)),
+    undefined,
+    createConditionalCheckFailedError()
+  );
+  const store = new DynamoDBMultiplayerStore(client, {
+    roomGameIdIndexName: ROOM_GAME_ID_INDEX_NAME,
+    tableName: TABLE_NAME
+  });
+
+  await assert.rejects(
+    () => store.createRoomRecord({
+      room
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "PERSISTENCE_CONFLICT"
+  );
 });
 
 test("loads a public snapshot record without private hands", async () => {
@@ -465,7 +595,8 @@ class MockDynamoClient implements DynamoDBDocumentClientLike {
 
   constructor(
     private readonly records: MultiplayerStoredGameRecords,
-    private readonly transactionFailure?: Error
+    private readonly transactionFailure?: Error,
+    private readonly putFailure?: Error
   ) {}
 
   async send(
@@ -475,6 +606,16 @@ class MockDynamoClient implements DynamoDBDocumentClientLike {
 
     if (command instanceof TransactWriteCommand && this.transactionFailure) {
       throw this.transactionFailure;
+    }
+
+    if (command instanceof PutCommand) {
+      if (this.putFailure) {
+        throw this.putFailure;
+      }
+
+      return {
+        $metadata: {}
+      };
     }
 
     if (command instanceof QueryCommand) {
@@ -503,6 +644,13 @@ class MockDynamoClient implements DynamoDBDocumentClientLike {
         readonly pk?: string;
         readonly sk?: string;
       } | undefined;
+
+      if (key?.pk === "ROOM#room-1" && key.sk === "META") {
+        return {
+          $metadata: {},
+          Item: this.records.room
+        };
+      }
 
       if (key?.pk === "GAME#game-1" && key.sk === "SNAPSHOT#LATEST") {
         return {
@@ -556,9 +704,10 @@ class MockDynamoClient implements DynamoDBDocumentClientLike {
 
 function createMockDynamoClient(
   records: MultiplayerStoredGameRecords,
-  transactionFailure?: Error
+  transactionFailure?: Error,
+  putFailure?: Error
 ): MockDynamoClient {
-  return new MockDynamoClient(records, transactionFailure);
+  return new MockDynamoClient(records, transactionFailure, putFailure);
 }
 
 function createCancellationReasons(
@@ -589,6 +738,14 @@ function createTransactionCanceledError(
   if (cancellationReasons) {
     error.CancellationReasons = cancellationReasons;
   }
+
+  return error;
+}
+
+function createConditionalCheckFailedError(): Error {
+  const error = new Error("The conditional request failed.");
+
+  error.name = "ConditionalCheckFailedException";
 
   return error;
 }
@@ -673,6 +830,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function createRoom(context: EngineContext): MultiplayerRoom {
+  return createMultiplayerRoom(
+    {
+      hostDisplayName: "Alice",
+      hostPlayerId: "player-0",
+      roomCode: "ROOM42",
+      roomId: "room-1"
+    },
+    context
+  );
+}
+
 function createStartedSession(context: EngineContext): MultiplayerGameSession {
   return unwrapResult(
     startMultiplayerGame(
@@ -730,15 +899,7 @@ function submitSeatBidResult(
 }
 
 function createReadyRoom(context: EngineContext): MultiplayerRoom {
-  let room = createMultiplayerRoom(
-    {
-      hostDisplayName: "Alice",
-      hostPlayerId: "player-0",
-      roomCode: "ROOM42",
-      roomId: "room-1"
-    },
-    context
-  );
+  let room = createRoom(context);
 
   for (const playerId of ["player-1", "player-2", "player-3"]) {
     room = unwrapResult(

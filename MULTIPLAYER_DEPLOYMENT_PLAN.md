@@ -8,7 +8,7 @@ The CDK stack in `infra/` defines the development multiplayer environment:
 - Cognito App Client for the Expo app.
 - DynamoDB multiplayer table for rooms, game events, public snapshots, private hands, and idempotency results.
 - AppSync GraphQL API using `backend/src/appsync/schema.graphql`.
-- Lambda resolvers for `submitGameAction`, `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView`.
+- Lambda resolvers for room lifecycle operations, `submitGameAction`, `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView`.
 - IAM roles for Lambda execution and DynamoDB access.
 
 ## Deployment Flow
@@ -77,6 +77,7 @@ For manual local resolver experiments, copy `backend/.env.example` and set:
 ```text
 AWS_REGION
 SHAKE2_MULTIPLAYER_TABLE_NAME
+SHAKE2_ROOM_CODE_INDEX_NAME
 SHAKE2_ROOM_GAME_ID_INDEX_NAME
 ```
 
@@ -85,6 +86,7 @@ SHAKE2_ROOM_GAME_ID_INDEX_NAME
 Current tests verify:
 
 - Public snapshot responses do not expose private hands.
+- Room lifecycle responses do not expose raw Cognito/player IDs.
 - Public snapshot reads require authenticated room membership.
 - Private hand resolver responses require actor/seat ownership.
 - Cognito `sub` is propagated as the backend multiplayer `playerId`.

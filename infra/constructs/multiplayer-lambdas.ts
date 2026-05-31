@@ -19,6 +19,11 @@ import { join } from "node:path";
 import { createResourceName, type MultiplayerInfrastructureConfig } from "../config/multiplayer-config.ts";
 
 export type MultiplayerLambdaId =
+  | "createRoom"
+  | "joinRoom"
+  | "takeSeat"
+  | "getRoom"
+  | "getRoomByCode"
   | "submitGameAction"
   | "getGameSnapshot"
   | "getMyPrivateHand"
@@ -44,9 +49,40 @@ export class MultiplayerLambdaConstruct extends Construct {
     const environment = {
       NODE_OPTIONS: "--enable-source-maps",
       SHAKE2_MULTIPLAYER_TABLE_NAME: props.multiplayerTable.tableName,
+      SHAKE2_ROOM_CODE_INDEX_NAME: props.config.roomCodeIndexName,
       SHAKE2_ROOM_GAME_ID_INDEX_NAME: props.config.roomGameIdIndexName
     };
 
+    const createRoom = this.createFunction(
+      "CreateRoom",
+      "createRoom",
+      props,
+      environment
+    );
+    const joinRoom = this.createFunction(
+      "JoinRoom",
+      "joinRoom",
+      props,
+      environment
+    );
+    const takeSeat = this.createFunction(
+      "TakeSeat",
+      "takeSeat",
+      props,
+      environment
+    );
+    const getRoom = this.createFunction(
+      "GetRoom",
+      "getRoom",
+      props,
+      environment
+    );
+    const getRoomByCode = this.createFunction(
+      "GetRoomByCode",
+      "getRoomByCode",
+      props,
+      environment
+    );
     const submitGameAction = this.createFunction(
       "SubmitGameAction",
       "submitGameAction",
@@ -72,15 +108,25 @@ export class MultiplayerLambdaConstruct extends Construct {
       environment
     );
 
+    props.multiplayerTable.grantReadWriteData(createRoom);
+    props.multiplayerTable.grantReadWriteData(joinRoom);
+    props.multiplayerTable.grantReadWriteData(takeSeat);
+    props.multiplayerTable.grantReadData(getRoom);
+    props.multiplayerTable.grantReadData(getRoomByCode);
     props.multiplayerTable.grantReadWriteData(submitGameAction);
     props.multiplayerTable.grantReadData(getGameSnapshot);
     props.multiplayerTable.grantReadData(getMyPrivateHand);
     props.multiplayerTable.grantReadData(getReconnectView);
 
     this.functions = {
+      createRoom,
       getGameSnapshot,
       getMyPrivateHand,
+      getRoom,
+      getRoomByCode,
       getReconnectView,
+      joinRoom,
+      takeSeat,
       submitGameAction
     };
   }
