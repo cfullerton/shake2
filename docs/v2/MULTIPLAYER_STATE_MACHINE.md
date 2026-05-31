@@ -52,7 +52,7 @@ type RoomState = {
 - Playing trick to scoring hand requires seven completed tricks.
 - Scoring hand to hand complete requires point and mark calculation.
 - Hand complete to game complete requires a team reaching target marks.
-- Otherwise rotate dealer and deal again.
+- Otherwise the reducer rotates dealer and returns to `setup`; the backend `startNextHand` mutation performs the host-triggered server deal and returns players to bidding.
 
 ## Connection State
 

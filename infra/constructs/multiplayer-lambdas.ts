@@ -23,6 +23,7 @@ export type MultiplayerLambdaId =
   | "joinRoom"
   | "takeSeat"
   | "startGame"
+  | "startNextHand"
   | "getRoom"
   | "getRoomByCode"
   | "listPublicRooms"
@@ -80,6 +81,12 @@ export class MultiplayerLambdaConstruct extends Construct {
       props,
       environment
     );
+    const startNextHand = this.createFunction(
+      "StartNextHand",
+      "startNextHand",
+      props,
+      environment
+    );
     const getRoom = this.createFunction(
       "GetRoom",
       "getRoom",
@@ -127,6 +134,7 @@ export class MultiplayerLambdaConstruct extends Construct {
     props.multiplayerTable.grantReadWriteData(joinRoom);
     props.multiplayerTable.grantReadWriteData(takeSeat);
     props.multiplayerTable.grantReadWriteData(startGame);
+    props.multiplayerTable.grantReadWriteData(startNextHand);
     props.multiplayerTable.grantReadData(getRoom);
     props.multiplayerTable.grantReadData(getRoomByCode);
     props.multiplayerTable.grantReadData(listPublicRooms);
@@ -145,6 +153,7 @@ export class MultiplayerLambdaConstruct extends Construct {
       joinRoom,
       listPublicRooms,
       startGame,
+      startNextHand,
       takeSeat,
       submitGameAction
     };

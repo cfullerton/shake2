@@ -27,6 +27,7 @@ import type {
 export type MultiplayerActiveGameAction =
   | "loadPrivateHand"
   | "refresh"
+  | "startNextHand"
   | "submitBid"
   | "submitDomino"
   | "submitTrump";
@@ -49,6 +50,7 @@ export interface MultiplayerActiveGameController {
   readonly view: MultiplayerActiveGameView;
   clearError(): void;
   refresh(): Promise<void>;
+  startNextHand(): Promise<void>;
   submitBid(bid: MultiplayerBid): Promise<void>;
   submitDomino(play: MultiplayerActiveDominoPlay): Promise<void>;
   submitTrump(trumpSuit: MultiplayerTrumpSuit): Promise<void>;
@@ -156,6 +158,24 @@ export function useMultiplayerActiveGame({
 
       await applySnapshotUpdate(nextSnapshot, {
         allowEqualSequence: true
+      });
+    });
+  }
+
+  async function startNextHand(): Promise<void> {
+    await runAction("startNextHand", async () => {
+      const identity = requireActionIdentity();
+      const result = await client.startNextHand({
+        gameId: snapshot.gameId
+      });
+
+      if (!result.accepted || !result.snapshot) {
+        throw new Error(result.error?.message ?? "The server could not deal the next hand.");
+      }
+
+      await applySnapshotUpdate(result.snapshot, {
+        allowEqualSequence: true,
+        viewerSeat: identity.actorSeat
       });
     });
   }
@@ -290,7 +310,7 @@ export function useMultiplayerActiveGame({
       return;
     }
 
-    await loadPrivateHandFor(reconnect.snapshot.gameId, roomViewerSeatRef.current);
+    await loadPrivateHandFor(reconnect.snapshot, roomViewerSeatRef.current);
   }
 
   async function applySnapshotUpdate(
@@ -315,29 +335,26 @@ export function useMultiplayerActiveGame({
 
     snapshotRef.current = nextSnapshot;
     setSnapshot(nextSnapshot);
-    await loadPrivateHandFor(
-      nextSnapshot.gameId,
-      options.viewerSeat ?? roomViewerSeatRef.current
-    );
+    await loadPrivateHandFor(nextSnapshot, options.viewerSeat ?? roomViewerSeatRef.current);
   }
 
   async function loadPrivateHand(): Promise<void> {
     await runAction("loadPrivateHand", async () => {
-      await loadPrivateHandFor(snapshot.gameId, room.viewerSeat ?? null);
+      await loadPrivateHandFor(snapshot, room.viewerSeat ?? null);
     });
   }
 
   async function loadPrivateHandFor(
-    gameId: string,
+    targetSnapshot: MultiplayerPublicGameSnapshot,
     viewerSeat: AppSyncSeatIndex | null
   ): Promise<void> {
-    if (!viewerSeat) {
+    if (!viewerSeat || !snapshotIncludesPrivateHands(targetSnapshot)) {
       setPrivateHand(null);
       return;
     }
 
     setPrivateHand(await client.getMyPrivateHand({
-      gameId,
+      gameId: targetSnapshot.gameId,
       seatIndex: viewerSeat
     }));
   }
@@ -386,6 +403,7 @@ export function useMultiplayerActiveGame({
     refresh,
     room,
     snapshot,
+    startNextHand,
     submitBid,
     submitDomino,
     submitTrump,
@@ -395,6 +413,12 @@ export function useMultiplayerActiveGame({
 
 function toGameErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Multiplayer game request failed.";
+}
+
+function snapshotIncludesPrivateHands(
+  snapshot: MultiplayerPublicGameSnapshot
+): boolean {
+  return snapshot.handCounts !== undefined && snapshot.handCounts !== null;
 }
 
 function hasLiveEventGap(

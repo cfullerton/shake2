@@ -5,6 +5,7 @@ import {
   createMultiplayerAcceptedActionWritePlan,
   createMultiplayerActionEnvelope,
   createMultiplayerGameStartWritePlan,
+  createMultiplayerNextHandWritePlan,
   createMultiplayerRejectedActionWritePlan,
   createMultiplayerRoom,
   createMultiplayerStorageRecords,
@@ -13,6 +14,7 @@ import {
   joinMultiplayerRoom,
   restoreMultiplayerSessionFromRecords,
   startMultiplayerGame,
+  startNextMultiplayerHand,
   submitMultiplayerGameAction,
   takeMultiplayerSeat,
   type EngineContext,
@@ -20,6 +22,7 @@ import {
   type MultiplayerGameSession,
   type MultiplayerResult,
   type MultiplayerRoom,
+  type MultiplayerStartNextHandResult,
   type MultiplayerStoredGameRecords,
   type MultiplayerSubmitActionResult,
   type MultiplayerWriteOperation,
@@ -324,6 +327,76 @@ test("accepted action private-hand writes are guarded by previous snapshot expec
   }
 });
 
+test("next-hand write plan appends a server deal and replaces private hands", () => {
+  const context = createTestContext();
+  const previousSession = createPostHandSession(context);
+  const result = unwrapResult(
+    startNextMultiplayerHand(
+      previousSession,
+      {
+        actorId: "player-0"
+      },
+      context
+    )
+  );
+  const plan = createMultiplayerNextHandWritePlan(previousSession, result);
+
+  assert.equal(plan.kind, "nextHand");
+  assert.equal(countOperations(plan, "putEvent"), 1);
+  assert.equal(countOperations(plan, "putSnapshot"), 1);
+  assert.equal(countOperations(plan, "putPrivateHand"), 4);
+  assert.equal(countOperations(plan, "putActionResult"), 0);
+  assert.deepEqual(
+    result.events.map((event) => event.event.type),
+    ["fortyTwo.hand.dealt"]
+  );
+
+  const snapshotOperation = getSingleOperation(plan, "putSnapshot");
+  assert.deepEqual(snapshotOperation.condition, {
+    expectedLastEventSequence: previousSession.snapshot.lastEventSequence,
+    expectedSnapshotVersion: previousSession.snapshot.snapshotVersion,
+    gameId: previousSession.snapshot.gameId,
+    kind: "snapshotMatches"
+  });
+
+  const privateHandOperations = plan.operations.filter(
+    (operation): operation is Extract<
+      MultiplayerWriteOperation,
+      { readonly kind: "putPrivateHand" }
+    > => operation.kind === "putPrivateHand"
+  );
+
+  for (const operation of privateHandOperations) {
+    assert.deepEqual(operation.condition, snapshotOperation.condition);
+    assert.equal(operation.record.handNumber, 2);
+  }
+});
+
+test("next-hand write plan rejects forged non-deal result streams", () => {
+  const context = createTestContext();
+  const previousSession = createPostHandSession(context);
+  const result = unwrapResult(
+    startNextMultiplayerHand(
+      previousSession,
+      {
+        actorId: "player-0"
+      },
+      context
+    )
+  );
+  const forgedResult: MultiplayerStartNextHandResult = {
+    ...result,
+    events: []
+  };
+
+  assert.throws(
+    () => createMultiplayerNextHandWritePlan(previousSession, forgedResult),
+    {
+      code: "INVALID_ACTION"
+    }
+  );
+});
+
 function createStartedSession(context: EngineContext): MultiplayerGameSession {
   return unwrapResult(
     startMultiplayerGame(
@@ -336,6 +409,39 @@ function createStartedSession(context: EngineContext): MultiplayerGameSession {
       context
     )
   );
+}
+
+function createPostHandSession(context: EngineContext): MultiplayerGameSession {
+  const session = createStartedSession(context);
+  const state = session.snapshot.snapshot;
+
+  if (state.phase !== "dealt") {
+    throw new Error("Expected started session to be dealt.");
+  }
+
+  return {
+    ...session,
+    snapshot: {
+      ...session.snapshot,
+      generatedAt: context.now(),
+      lastEventSequence: 30,
+      snapshot: {
+        createdAt: state.createdAt,
+        dealer: 1,
+        gameId: state.gameId,
+        handNumber: 2,
+        marks: state.marks,
+        mode: state.mode,
+        phase: "setup",
+        players: state.players,
+        rules: state.rules,
+        schemaVersion: state.schemaVersion,
+        teams: state.teams,
+        updatedAt: context.now()
+      },
+      snapshotVersion: 30
+    }
+  };
 }
 
 function createReadyRoom(context: EngineContext): MultiplayerRoom {

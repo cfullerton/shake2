@@ -130,6 +130,10 @@ export interface StartMultiplayerGameInput {
   readonly teamNames?: Partial<Record<FortyTwoTeamId, string>>;
 }
 
+export interface StartNextMultiplayerHandInput {
+  readonly actorId: string;
+}
+
 export interface MultiplayerGameSession {
   readonly actionResults: MultiplayerActionResultIndex;
   readonly events: readonly FortyTwoEventEnvelope[];
@@ -179,6 +183,12 @@ export type MultiplayerSubmitActionResult =
       readonly ok: false;
       readonly session: MultiplayerGameSession;
     };
+
+export interface MultiplayerStartNextHandResult {
+  readonly events: readonly FortyTwoEventEnvelope[];
+  readonly session: MultiplayerGameSession;
+  readonly snapshot: FortyTwoSnapshotEnvelope;
+}
 
 export interface CreateMultiplayerActionEnvelopeInput<
   TAction extends FortyTwoAction
@@ -414,6 +424,65 @@ export function startMultiplayerGame(
         status: "inGame",
         updatedAt
       },
+      snapshot: dealt.snapshot
+    };
+  });
+}
+
+export function startNextMultiplayerHand(
+  session: MultiplayerGameSession,
+  input: StartNextMultiplayerHandInput,
+  context: Pick<EngineContext, "newId" | "now" | "random">
+): MultiplayerResult<MultiplayerStartNextHandResult> {
+  return runMultiplayerResult(() => {
+    if (input.actorId !== session.room.hostPlayerId) {
+      throw new EngineError("INVALID_ACTOR", "Only the room host can deal the next hand.");
+    }
+
+    if (session.room.status !== "inGame") {
+      throw new EngineError("INVALID_PHASE", "Room is not in an active game.");
+    }
+
+    if (session.snapshot.snapshot.phase !== "setup") {
+      throw new EngineError(
+        "INVALID_PHASE",
+        "The next hand can only be dealt after a completed hand."
+      );
+    }
+
+    const dealt = unwrapFortyTwoResult(
+      handleDealFortyTwoHandCommand(
+        session.snapshot,
+        createFortyTwoActionEnvelope<DealFortyTwoHandAction>(
+          session.snapshot.gameId,
+          {
+            payload: {
+              dealer: session.snapshot.snapshot.dealer,
+              handNumber: session.snapshot.snapshot.handNumber
+            },
+            type: "fortyTwo.hand.deal"
+          },
+          {
+            actorId: "server",
+            context,
+            snapshot: session.snapshot
+          }
+        ),
+        context
+      )
+    );
+    const nextSession: MultiplayerGameSession = {
+      ...session,
+      events: [
+        ...session.events,
+        ...dealt.events
+      ],
+      snapshot: dealt.snapshot
+    };
+
+    return {
+      events: dealt.events,
+      session: nextSession,
       snapshot: dealt.snapshot
     };
   });

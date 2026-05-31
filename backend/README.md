@@ -55,16 +55,17 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
   - Shared deployed-runtime wiring for DynamoDB store construction, resolver context, and engine context.
 
 - `src/functions/rooms/handler.ts`
-  - Accepts AppSync-like `createRoom`, `joinRoom`, `takeSeat`, `startGame`, `getRoom`, `getRoomByCode`, and `listPublicRooms` events.
+  - Accepts AppSync-like `createRoom`, `joinRoom`, `takeSeat`, `startGame`, `startNextHand`, `getRoom`, `getRoomByCode`, and `listPublicRooms` events.
   - Uses Cognito/mock identity as the authoritative room actor.
   - Generates short, non-sensitive uppercase room invite codes and normalizes pasted join/look-up codes before store access.
   - Supports private rooms by invite code and public rooms through a dedicated open-room list query.
   - Delegates room creation, joining, seating, and host-only game-start rules to the shared multiplayer engine.
   - Persists room metadata through conditional DynamoDB store methods.
   - Commits game-start write plans through the same DynamoDB transaction path used by gameplay actions.
+  - Commits host-triggered next-hand deal write plans from completed-hand setup states and returns `SubmitGameActionResult`-shaped public updates for subscriptions.
   - Returns safe room views without raw Cognito/player IDs.
 
-- `src/functions/createRoom`, `src/functions/joinRoom`, `src/functions/takeSeat`, `src/functions/startGame`, `src/functions/getRoom`, `src/functions/getRoomByCode`, and `src/functions/listPublicRooms`
+- `src/functions/createRoom`, `src/functions/joinRoom`, `src/functions/takeSeat`, `src/functions/startGame`, `src/functions/startNextHand`, `src/functions/getRoom`, `src/functions/getRoomByCode`, and `src/functions/listPublicRooms`
   - Deployed Lambda entrypoints for the room lifecycle AppSync fields.
 
 - `src/smoke/deployed-smoke.ts`
@@ -84,7 +85,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
 
 - `src/appsync/schema.graphql`
   - Defines the AppSync GraphQL boundary used by the CDK API.
-  - Defines room lifecycle, start-game, `submitGameAction`, public snapshot, private hand, reconnect, and game-update subscription operations.
+  - Defines room lifecycle, start-game, next-hand, `submitGameAction`, public snapshot, private hand, reconnect, and game-update subscription operations.
   - Uses `AWSJSON` for submit-action envelopes; deployed GraphQL clients should send the action as a JSON-encoded string, while local resolver tests may still pass already-parsed objects.
   - Separates public/redacted snapshots from private hand responses.
   - Uses safe event summaries and subscription notifications instead of raw trusted event payloads.

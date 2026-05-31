@@ -100,11 +100,11 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 - Hardened scorekeeper validation for target marks, mark awards, timestamps, IDs, names, and notes.
 - Pure TypeScript scorekeeper engine with tests for creation, mark awards, dealer rotation, undo, winner detection, validation, and persistence codecs.
 - Pure TypeScript full-rules engine with tests for deal, bidding, trump, legal play, trick winners, hand scoring, replay, local session orchestration, legal-random bots, 100 completed simulated hands, and 25 completed simulated games.
-- Backend-neutral multiplayer room/session primitives in the engine: room creation, joins, seat assignment, host-only start, multiplayer-mode snapshots, server-managed initial deal, authorized bid/trump/play submission, duplicate action ID handling, automatic bidding completion, and private-hand redaction.
+- Backend-neutral multiplayer room/session primitives in the engine: room creation, joins, seat assignment, host-only start, multiplayer-mode snapshots, server-managed initial deal, host next-hand deal, authorized bid/trump/play submission, duplicate action ID handling, automatic bidding completion, and private-hand redaction.
 - Backend-neutral multiplayer storage/reconnect primitives: public snapshot records omit full hands, private hands are stored by seat, authoritative sessions can be restored from records, and reconnect views classify accepted/rejected/unknown pending actions.
 - Validated accepted-event replay for restored Forty Two event streams, including runtime envelope checks, deal validation, derived bid/trump/play validation, trick-winner recomputation, hand-score recomputation, and stored-snapshot comparison.
 - Runtime schema parsers for multiplayer network/storage boundaries. Multiplayer action submission, session restore, and reconnect now parse `unknown` payloads before typed engine code trusts them.
-- Backend-neutral multiplayer write plans for game start, accepted actions, and rejected actions. The plans validate accepted event replay before writes and include conditional-write hints for append-only events, current snapshot expectations, room state expectations, and idempotent action results.
+- Backend-neutral multiplayer write plans for game start, next-hand deal, accepted actions, and rejected actions. The plans validate accepted event replay before writes and include conditional-write hints for append-only events, current snapshot expectations, room state expectations, and idempotent action results.
 - Initial shared contracts for `GameAction`, `GameEvent`, `GameSnapshot`, `GameActionResult`, and `GameErrorCode`.
 - React Native Testing Library coverage for core scorekeeper flows and AsyncStorage persistence wrapper behavior.
 - GitHub Actions CI for install, typecheck, tests, and non-blocking audit reporting.
@@ -115,7 +115,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 ## Features Partially Implemented
 
 - Game engine: full local Texas 42 play now exists for standard numeric bids and pip-suit trump, but does not implement variants or advanced bot strategy.
-- Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, lobby UI with public rooms and room polling, active-game bidding/trump/trick-play UI, baseline mobile game-update subscriptions, and gap-triggered reconnect refresh exist, but there is still no pending-action retry queue, reconnect UX, post-hand/next-hand controls, or production lifecycle/abuse handling.
+- Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, lobby UI with public rooms and room polling, active-game bidding/trump/trick-play/next-hand UI, baseline mobile game-update subscriptions, and gap-triggered reconnect refresh exist, but there is still no pending-action retry queue, reconnect UX, rich post-hand/game-over UX, or production lifecycle/abuse handling.
 - Game state model: current scorekeeper shape is serializable, but the app does not yet apply shared actions/events or replay an event log.
 - Persistence: local JSON persistence has schema versioning and legacy migration for scorekeeper games, but local practice games are currently in-memory only.
 - Navigation: functional stack navigation exists, but deep-linking, route guards, and multiplayer room paths do not.
@@ -156,7 +156,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 5. Expand contract tests around duplicate actions, stale sequences, reconnect snapshots, and unsupported schemas.
 6. Build the physical AWS backend adapter around the backend-neutral session/storage/write-plan modules.
 7. Add schema migration/version-compatibility coverage for physical adapter payloads.
-8. Expand mobile multiplayer active-game support with post-hand/next-hand controls, pending-action retry, and reconnect UX.
+8. Expand mobile multiplayer active-game support with post-hand scoring recap, game-over UX, pending-action retry, and reconnect UX.
 
 ## Architecture Decisions That Differ From Original Docs
 

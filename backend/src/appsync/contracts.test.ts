@@ -38,6 +38,7 @@ test("schema file exists and includes required operations", () => {
   assertTypeField(schema, "Mutation", "joinRoom");
   assertTypeField(schema, "Mutation", "takeSeat");
   assertTypeField(schema, "Mutation", "startGame");
+  assertTypeField(schema, "Mutation", "startNextHand");
   assertTypeField(schema, "Mutation", "submitGameAction");
   assertTypeField(schema, "Query", "getRoom");
   assertTypeField(schema, "Query", "getRoomByCode");
@@ -243,6 +244,7 @@ test("subscription output matches submit mutation and remains public-safe", () =
     subscriptionType,
     /onGameUpdated\(gameId: ID!\): SubmitGameActionResult\b/
   );
+  assert.match(subscriptionType, /\bstartNextHand\b/);
   assert.doesNotMatch(
     subscriptionType,
     /onGameUpdated\(gameId: ID!\): SubmitGameActionResult!/

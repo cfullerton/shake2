@@ -39,6 +39,10 @@ export interface GetReconnectViewInput {
   readonly snapshotVersion: number;
 }
 
+export interface StartNextHandInput {
+  readonly gameId: string;
+}
+
 export interface SubmitMultiplayerBidInput {
   readonly actorId: string;
   readonly actorSeat: AppSyncSeatIndex;
@@ -174,6 +178,28 @@ export class MultiplayerGameClient {
     };
   }
 
+  async startNextHand(
+    input: StartNextHandInput
+  ): Promise<MultiplayerSubmitGameActionResult> {
+    const data = await this.graphql.execute<{
+      readonly startNextHand: MultiplayerSubmitGameActionResultPayload;
+    }>({
+      operationName: "StartNextHand",
+      query: `
+        mutation StartNextHand($input: StartNextHandInput!) {
+          startNextHand(input: $input) {
+            ${SUBMIT_GAME_ACTION_RESULT_SELECTION}
+          }
+        }
+      `,
+      variables: {
+        input
+      }
+    });
+
+    return normalizeSubmitGameActionResult(data.startNextHand);
+  }
+
   async submitBid(
     input: SubmitMultiplayerBidInput
   ): Promise<MultiplayerSubmitGameActionResult> {
@@ -285,25 +311,7 @@ export class MultiplayerGameClient {
       query: `
         mutation SubmitGameAction($input: SubmitGameActionInput!) {
           submitGameAction(input: $input) {
-            accepted
-            committed
-            duplicate
-            gameId
-            error {
-              code
-              message
-            }
-            events {
-              actionId
-              actorId
-              actorSeat
-              eventId
-              eventType
-              sequence
-            }
-            snapshot {
-              ${PUBLIC_SNAPSHOT_SELECTION}
-            }
+            ${SUBMIT_GAME_ACTION_RESULT_SELECTION}
           }
         }
       `,
@@ -315,23 +323,7 @@ export class MultiplayerGameClient {
       }
     });
 
-    const { snapshot, ...result } = data.submitGameAction;
-
-    if (snapshot) {
-      return {
-        ...result,
-        snapshot: normalizeMultiplayerPublicGameSnapshot(snapshot)
-      };
-    }
-
-    if (snapshot === null) {
-      return {
-        ...result,
-        snapshot: null
-      };
-    }
-
-    return result;
+    return normalizeSubmitGameActionResult(data.submitGameAction);
   }
 }
 
@@ -350,6 +342,50 @@ const PUBLIC_SNAPSHOT_SELECTION = `
   }
   redactedState
 `;
+
+const SUBMIT_GAME_ACTION_RESULT_SELECTION = `
+  accepted
+  committed
+  duplicate
+  gameId
+  error {
+    code
+    message
+  }
+  events {
+    actionId
+    actorId
+    actorSeat
+    eventId
+    eventType
+    sequence
+  }
+  snapshot {
+    ${PUBLIC_SNAPSHOT_SELECTION}
+  }
+`;
+
+function normalizeSubmitGameActionResult(
+  payload: MultiplayerSubmitGameActionResultPayload
+): MultiplayerSubmitGameActionResult {
+  const { snapshot, ...result } = payload;
+
+  if (snapshot) {
+    return {
+      ...result,
+      snapshot: normalizeMultiplayerPublicGameSnapshot(snapshot)
+    };
+  }
+
+  if (snapshot === null) {
+    return {
+      ...result,
+      snapshot: null
+    };
+  }
+
+  return result;
+}
 
 function toSeatNumber(seat: AppSyncSeatIndex): number {
   switch (seat) {

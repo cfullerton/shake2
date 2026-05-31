@@ -62,6 +62,10 @@ export interface AppSyncStartGameInput {
   readonly targetMarks?: number;
 }
 
+export interface AppSyncStartNextHandInput {
+  readonly gameId: string;
+}
+
 export type AppSyncSeatIndex =
   | "SEAT_0"
   | "SEAT_1"

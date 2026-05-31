@@ -9,12 +9,15 @@ Use GraphQL operations focused on actions and snapshots, not low-level CRUD.
 ```graphql
 type Mutation {
   submitGameAction(input: SubmitGameActionInput!): SubmitGameActionResult!
+  startNextHand(input: StartNextHandInput!): SubmitGameActionResult!
   createRoom(input: CreateRoomInput!): CreateRoomResult!
   joinRoom(input: JoinRoomInput!): JoinRoomResult!
 }
 ```
 
 `CreateRoomInput` includes a `visibility` enum so clients can create invite-only private rooms or discoverable public rooms.
+
+`startNextHand` is a server-owned lifecycle mutation. It deals from the authoritative post-hand `setup` state, is host-only in the current API, returns the same safe public result shape as `submitGameAction`, and is included in the game-update subscription fan-out.
 
 ## Queries
 
@@ -35,7 +38,7 @@ type Query {
 
 ```graphql
 type Subscription {
-  onGameEvent(gameId: ID!): GameEventView
+  onGameUpdated(gameId: ID!): SubmitGameActionResult
   onRoomUpdated(roomId: ID!): RoomView
 }
 ```

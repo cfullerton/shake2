@@ -1,4 +1,4 @@
-import { AlertCircle, RefreshCw, Send } from "lucide-react-native";
+import { AlertCircle, Play, RefreshCw, Send } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "../components/Button";
@@ -234,6 +234,18 @@ export function MultiplayerActiveGamePanel({
               variant="secondary"
             >
               Pass
+            </Button>
+          </>
+        ) : view.canStartNextHand ? (
+          <>
+            <Text style={styles.copy}>Ready for the next hand.</Text>
+            <Button
+              disabled={!canSubmitActions}
+              icon={<Play color={palette.surface} size={16} />}
+              loading={game.busyAction === "startNextHand"}
+              onPress={game.startNextHand}
+            >
+              Deal Next Hand
             </Button>
           </>
         ) : (

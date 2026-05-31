@@ -238,6 +238,77 @@ test("active game panel submits legal domino plays", async () => {
   });
 });
 
+test("active game panel lets the host deal the next multiplayer hand", async () => {
+  const hand = {
+    ...createPrivateHand(),
+    handNumber: 2
+  };
+  const accepted: MultiplayerSubmitGameActionResult = {
+    accepted: true,
+    committed: true,
+    duplicate: false,
+    events: [],
+    gameId: "game-1",
+    snapshot: createSnapshot({
+      handCounts: {
+        seat0: 7,
+        seat1: 7,
+        seat2: 7,
+        seat3: 7
+      },
+      lastEventSequence: 32,
+      phase: "dealt",
+      redactedState: {
+        dealer: 1,
+        handNumber: 2,
+        phase: "dealt",
+        rules: {
+          bidding: {
+            maximumNumericBid: 42,
+            minimumBid: 30
+          }
+        }
+      },
+      snapshotVersion: 32
+    })
+  };
+  const client = {
+    getGameSnapshot: jest.fn(async () => createSnapshot()),
+    getMyPrivateHand: jest.fn(async () => hand),
+    startNextHand: jest.fn(async () => accepted),
+    submitBid: jest.fn(),
+    submitDomino: jest.fn(),
+    submitTrump: jest.fn()
+  } as unknown as MultiplayerLobbyGameClient;
+  const view = render(
+    <MultiplayerActiveGamePanel
+      actorId="actor-sub"
+      client={client}
+      initialRoom={createRoomView()}
+      initialSnapshot={createPostHandSetupSnapshot()}
+      session={createSession()}
+    />
+  );
+
+  expect(view.getByText("Deal Next Hand")).toBeTruthy();
+  expect(client.getMyPrivateHand).not.toHaveBeenCalled();
+
+  fireEvent.press(view.getByText("Deal Next Hand"));
+
+  await waitFor(() => {
+    expect(client.startNextHand).toHaveBeenCalledWith({
+      gameId: "game-1"
+    });
+  });
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledWith({
+      gameId: "game-1",
+      seatIndex: "SEAT_1"
+    });
+  });
+  expect(view.getByText("Snapshot 32 · Event 32")).toBeTruthy();
+});
+
 test("active game panel applies live game update snapshots", async () => {
   const hand = createPrivateHand();
   let observer: MultiplayerGameUpdateObserver | null = null;
@@ -585,6 +656,20 @@ function createTrickPlaySnapshot(
     },
     snapshotVersion: 7,
     ...overrides
+  });
+}
+
+function createPostHandSetupSnapshot(): MultiplayerPublicGameSnapshot {
+  return createSnapshot({
+    handCounts: null,
+    lastEventSequence: 31,
+    phase: "setup",
+    redactedState: {
+      dealer: 1,
+      handNumber: 2,
+      phase: "setup"
+    },
+    snapshotVersion: 31
   });
 }
 

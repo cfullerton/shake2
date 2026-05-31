@@ -7,7 +7,8 @@ import type {
   MultiplayerPrivateHand,
   MultiplayerPublicGameSnapshotPayload,
   MultiplayerPublicGameSnapshot,
-  MultiplayerSubmitGameActionResult
+  MultiplayerSubmitGameActionResult,
+  MultiplayerSubmitGameActionResultPayload
 } from "../types";
 
 test("MultiplayerGameClient reads snapshots and parses AWSJSON state", async () => {
@@ -203,6 +204,66 @@ test("MultiplayerGameClient submits bids as AppSync AWSJSON actions", async () =
     actorId: "actor-sub",
     actorSeat: 1,
     gameId: "game-1"
+  });
+});
+
+test("MultiplayerGameClient starts the next hand through AppSync", async () => {
+  const graphql = new MockGraphqlClient({
+    startNextHand: {
+      accepted: true,
+      committed: true,
+      duplicate: false,
+      events: [
+        {
+          actionId: "server-deal",
+          actorId: "server",
+          eventId: "event-32",
+          eventType: "fortyTwo.hand.dealt",
+          sequence: 32
+        }
+      ],
+      gameId: "game-1",
+      snapshot: {
+        gameId: "game-1",
+        generatedAt: "2026-05-31T00:00:00.000Z",
+        handCounts: {
+          seat0: 7,
+          seat1: 7,
+          seat2: 7,
+          seat3: 7
+        },
+        lastEventSequence: 32,
+        phase: "dealt",
+        redactedState: JSON.stringify({
+          dealer: 1,
+          handNumber: 2,
+          phase: "dealt"
+        }),
+        schemaVersion: 1,
+        snapshotVersion: 32
+      }
+    } satisfies MultiplayerSubmitGameActionResultPayload
+  });
+  const client = new MultiplayerGameClient(graphql);
+
+  await expect(
+    client.startNextHand({
+      gameId: "game-1"
+    })
+  ).resolves.toMatchObject({
+    accepted: true,
+    snapshot: {
+      phase: "dealt",
+      redactedState: {
+        handNumber: 2
+      }
+    }
+  });
+  expect(graphql.requests[0]?.operationName).toBe("StartNextHand");
+  expect(graphql.requests[0]?.variables).toEqual({
+    input: {
+      gameId: "game-1"
+    }
   });
 });
 

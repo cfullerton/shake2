@@ -8,22 +8,22 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, room lookup, and public-room listing flows, with non-sensitive generated invite codes and normalized code lookup. The mobile app now has a multiplayer network/auth foundation, lobby UI for Cognito sign-in, private/public create/join/seat/start, polling-based lobby refresh, and an active-game UI slice for public snapshots, private hands, bidding, declarer trump selection, trick-play domino submission, AppSync realtime game-update sync, and gap-triggered reconnect refresh. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client pending-action/reconnect UX, abuse handling, and post-hand/next-hand multiplayer controls.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, next-hand, room lookup, and public-room listing flows, with non-sensitive generated invite codes and normalized code lookup. The mobile app now has a multiplayer network/auth foundation, lobby UI for Cognito sign-in, private/public create/join/seat/start, polling-based lobby refresh, and an active-game UI slice for public snapshots, private hands, bidding, declarer trump selection, trick-play domino submission, host next-hand dealing, AppSync realtime game-update sync, and gap-triggered reconnect refresh. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring, the optional seeded gameplay/read/reconnect path, and live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, client pending-action/reconnect UX, abuse handling, and richer post-hand/game-over UX.
 
 ## Current Multiplayer Architecture
 
 Current multiplayer code is backend-neutral and lives under `packages/game-engine/src/multiplayer`.
 
-- `session.ts`: room membership, seat ownership, host-only start, server-managed initial game/deal, player action submission, idempotency, automation for bidding completion, redacted player views.
+- `session.ts`: room membership, seat ownership, host-only start, server-managed initial game/deal, host-only next-hand deal, player action submission, idempotency, automation for bidding completion, redacted player views.
 - `storage.ts`: durable record shapes for room metadata, trusted event records, public snapshots, private hands, and action results; restore/reconnect helpers.
 - `schema.ts`: runtime parsers for action envelopes, storage records, public snapshots, private hands, idempotency records, and client reconnect state.
-- `write-plan.ts`: backend-neutral persistence write intentions for game start, accepted actions, and rejected actions.
+- `write-plan.ts`: backend-neutral persistence write intentions for game start, next-hand deal, accepted actions, and rejected actions.
 - `dynamodb-adapter.ts`: pure DynamoDB transaction-intent conversion for write plans, with conditional-write expressions for room state, snapshot version, event append, and action idempotency conflicts.
 
 Backend shell code now lives under `backend`.
 
 - `src/functions/submitGameAction/handler.ts`: AppSync-like Lambda resolver shell for submit-game-action requests.
-- `src/functions/rooms/handler.ts`: AppSync-like room lifecycle resolver shells for creating private/public rooms with safe invite codes, joining by normalized room code, listing public open rooms, taking seats, starting ready rooms, and reading safe room views.
+- `src/functions/rooms/handler.ts`: AppSync-like room lifecycle resolver shells for creating private/public rooms with safe invite codes, joining by normalized room code, listing public open rooms, taking seats, starting ready rooms, dealing the next hand from post-hand setup, and reading safe room views.
 - `src/functions/getGameSnapshot/handler.ts`: AppSync-like query resolver shell that returns only public/redacted game snapshots after room membership authorization.
 - `src/functions/getMyPrivateHand/handler.ts`: AppSync-like query resolver shell that enforces private-hand seat ownership before returning dominoes.
 - `src/functions/getReconnectView/handler.ts`: AppSync-like query resolver shell that returns latest public state, actor private hand when seated, and accepted/rejected/unknown pending action status.
@@ -41,22 +41,22 @@ Mobile multiplayer foundation now lives under `apps/mobile/src/multiplayer`.
 - `graphql.ts`: sends authenticated AppSync GraphQL requests without leaking token handling into UI code.
 - `realtime.ts`: opens authenticated AppSync `graphql-ws` subscriptions for live `onGameUpdated` snapshots.
 - `rooms.ts`: wraps create/join/list-public/take-seat/start room GraphQL operations behind typed helpers.
-- `game.ts`: wraps public snapshot, private hand, reconnect, and submit-action GraphQL operations behind typed helpers.
-- `activeGame.ts`: projects normalized public snapshots plus the viewer private hand into table, score, turn, bidding, trump-selection, and trick-play UI state outside React components.
-- `useMultiplayerActiveGame.ts`: owns active-game snapshot/private-hand loading, live game-update subscription application, gap-triggered reconnect refresh, manual refresh, pass/numeric bid submission, declarer trump-call state, and domino-play submission.
+- `game.ts`: wraps public snapshot, private hand, reconnect, next-hand, and submit-action GraphQL operations behind typed helpers.
+- `activeGame.ts`: projects normalized public snapshots plus the viewer private hand into table, score, turn, bidding, trump-selection, trick-play, and next-hand UI state outside React components.
+- `useMultiplayerActiveGame.ts`: owns active-game snapshot/private-hand loading, live game-update subscription application, gap-triggered reconnect refresh, manual refresh, host next-hand dealing, pass/numeric bid submission, declarer trump-call state, and domino-play submission.
 - `useMultiplayerLobby.ts`: owns mobile lobby auth/client/session state, polling-based room/public-list refresh, and room lifecycle operations outside screen components.
 
 The first mobile multiplayer screens now live under `apps/mobile/src/screens`.
 
 - `MultiplayerLobbyScreen.tsx`: gates missing config, signs in through Cognito, creates private or public rooms, joins by code or public listing, renders room code/participants/seats, lets players take seats, and lets the host start a ready room before handing off to the active-game panel.
-- `MultiplayerActiveGamePanel.tsx`: renders a started multiplayer game with public table state, scores, turn/dealer/bid/trump/live status, the current trick, the viewer private hand, refresh, pass/numeric bidding controls, declarer trump controls, and legal domino-play controls.
+- `MultiplayerActiveGamePanel.tsx`: renders a started multiplayer game with public table state, scores, turn/dealer/bid/trump/live status, the current trick, the viewer private hand, refresh, pass/numeric bidding controls, declarer trump controls, legal domino-play controls, and host next-hand controls.
 
 Infrastructure code now lives under `infra`.
 
 - `config/multiplayer-config.ts`: stage-aware resource naming, removal policy, and index-name configuration.
 - `constructs/multiplayer-auth.ts`: Cognito User Pool and native-app-shaped app client.
 - `constructs/multiplayer-data.ts`: DynamoDB table with room/game/action record access patterns, TTL, point-in-time recovery, and GSIs for room codes, room game IDs, and open public rooms.
-- `constructs/multiplayer-lambdas.ts`: Lambda functions for room lifecycle, start-game, submit action, and read-side query resolvers, with table configuration injected by environment.
+- `constructs/multiplayer-lambdas.ts`: Lambda functions for room lifecycle, start-game, next-hand, submit action, and read-side query resolvers, with table configuration injected by environment.
 - `constructs/multiplayer-appsync.ts`: AppSync API, schema deployment wiring, Lambda data sources, and resolver definitions.
 - `stacks/multiplayer-infrastructure-stack.ts`: development stack that wires auth, data, Lambda, AppSync, IAM, and CloudFormation outputs.
 
@@ -65,7 +65,7 @@ Current authority model:
 - Client state is not trusted.
 - Server owns game truth.
 - Clients request joins, seats, bids, trump calls, and domino plays.
-- Server-managed transitions create/deal/complete bidding/complete trick/complete hand/complete game.
+- Server-managed transitions create/deal/next-hand deal/complete bidding/complete trick/complete hand/complete game.
 - Public snapshots omit full hands.
 - Private hands are split into seat-specific records.
 - Accepted events are validated before restore and before write planning.
@@ -92,7 +92,7 @@ Production multiplayer blockers:
 
 3. AppSync or realtime transport
    - A GraphQL schema, local contract tests, and CDK AppSync/Lambda resolver wiring now exist.
-   - Room lifecycle fields now exist for create/join/take-seat/start, room lookups, and public-room listing, and new rooms now use short generated invite codes instead of infrastructure-derived fallback IDs.
+   - Room lifecycle fields now exist for create/join/take-seat/start/next-hand, room lookups, and public-room listing, and new rooms now use short generated invite codes instead of infrastructure-derived fallback IDs.
    - A deployed smoke script is available for the mutation and query resolvers, including a seeded happy-path action/read/reconnect check.
    - The smoke harness can validate live AppSync `onGameUpdated` delivery after registering the subscription and before submitting the seeded action.
    - Seeded live subscription smoke has passed against the deployed dev stack.
@@ -108,8 +108,8 @@ Production multiplayer blockers:
 
 5. Mobile multiplayer UI
    - Room creation/join/start lobby screen now exists and uses the mobile multiplayer client foundation.
-   - First active-game screen now exists for snapshot rendering, private hand loading, live update sync, gap-triggered reconnect refresh, manual refresh, bidding actions, declarer trump calls, current-trick display, and legal domino plays.
-   - No post-hand/next-hand multiplayer controls yet.
+   - First active-game screen now exists for snapshot rendering, private hand loading, live update sync, gap-triggered reconnect refresh, manual refresh, bidding actions, declarer trump calls, current-trick display, legal domino plays, and host next-hand dealing.
+   - No rich post-hand scoring recap or game-over multiplayer UX yet.
    - No reconnect/offline/pending-action UX.
 
 6. Lifecycle and abuse handling
@@ -360,8 +360,8 @@ Production-quality casual multiplayer:
 4. Reconnect client model
    - Add pending action queue and retry behavior, using subscriptions as hints and reconnect queries as truth.
 
-5. Post-hand and next-hand multiplayer controls
-   - Decide whether the server auto-deals the next hand or exposes a host/ready transition.
+5. Post-hand summary and game-over multiplayer UX
+   - Surface the completed hand score before or alongside the host next-hand control.
    - Keep action derivation in `apps/mobile/src/multiplayer`, not in screen components.
 
 6. Security test matrix

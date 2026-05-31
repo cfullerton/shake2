@@ -4,6 +4,7 @@ import {
   type AppSyncCreateRoomInput,
   type AppSyncJoinRoomInput,
   type AppSyncRoomView,
+  type AppSyncStartNextHandInput,
   type AppSyncStartGameInput,
   type AppSyncStartGameResult,
   type AppSyncTakeSeatInput
@@ -13,24 +14,33 @@ import {
   createUnimplementedMultiplayerStore,
   type MultiplayerStore
 } from "../../dynamodb/store.ts";
-import { BackendResolverError } from "../../errors/errors.ts";
+import {
+  BackendResolverError,
+  createBackendErrorResponse
+} from "../../errors/errors.ts";
 import {
   createMultiplayerDynamoDbTransactionWritePlan,
   createMultiplayerGameStartWritePlan,
+  createMultiplayerNextHandWritePlan,
   createMultiplayerRoom,
   createMultiplayerRoomRecord,
   createMultiplayerVisibleSnapshot,
   getEngineRandom,
+  getMultiplayerSeatForPlayer,
   joinMultiplayerRoom,
+  restoreMultiplayerSessionFromRecords,
   startMultiplayerGame,
+  startNextMultiplayerHand,
   takeMultiplayerSeat,
   type EngineContext,
+  type MultiplayerGameSession,
   type MultiplayerResult,
   type MultiplayerRoom,
   type MultiplayerWritePlan
 } from "../../game-engine.ts";
 import {
-  type ResolverContext
+  type ResolverContext,
+  type SubmitGameActionResponse
 } from "../../types/index.ts";
 import {
   parseArguments,
@@ -61,6 +71,10 @@ export type ListPublicRoomsHandler = (
 export type StartGameHandler = (
   event: AppSyncResolverEvent
 ) => Promise<AppSyncStartGameResult>;
+
+export type StartNextHandHandler = (
+  event: AppSyncResolverEvent
+) => Promise<SubmitGameActionResponse>;
 
 export function createCreateRoomHandler(
   dependencies: RoomLifecycleHandlerDependencies
@@ -211,6 +225,98 @@ export function createStartGameHandler(
   };
 }
 
+export function createStartNextHandHandler(
+  dependencies: StartGameHandlerDependencies
+): StartNextHandHandler {
+  return async (event) => {
+    try {
+      const actor = extractBackendActor(event.identity);
+      const input = parseStartNextHandInput(event);
+      const previousSession = restoreSession(
+        await dependencies.store.loadGameSnapshot({
+          gameId: input.gameId
+        })
+      );
+
+      assertRoomHost(
+        previousSession.room,
+        actor.playerId,
+        "Only the room host can deal the next hand."
+      );
+
+      if (previousSession.room.status !== "inGame") {
+        throw new BackendResolverError(
+          "INVALID_PHASE",
+          "Room is not in an active game."
+        );
+      }
+
+      if (previousSession.snapshot.snapshot.phase !== "setup") {
+        if (isActiveHandPhase(previousSession.snapshot.snapshot.phase)) {
+          return {
+            accepted: true,
+            committed: false,
+            duplicate: true,
+            events: [],
+            snapshot: createMultiplayerVisibleSnapshot(
+              previousSession.snapshot,
+              getMultiplayerSeatForPlayer(previousSession.room, actor.playerId)
+            )
+          };
+        }
+
+        throw new BackendResolverError(
+          "INVALID_PHASE",
+          "The next hand can only be dealt after a completed hand."
+        );
+      }
+
+      const result = unwrapMultiplayerResult(
+        startNextMultiplayerHand(
+          previousSession,
+          {
+            actorId: actor.playerId
+          },
+          dependencies.engineContext
+        )
+      );
+      const writePlan = createMultiplayerNextHandWritePlan(
+        previousSession,
+        result
+      );
+      const transaction = createTransaction(
+        writePlan,
+        dependencies.resolverContext
+      );
+
+      await dependencies.store.commitWritePlan({
+        gameId: result.snapshot.gameId,
+        transaction,
+        writePlan
+      });
+
+      return {
+        accepted: true,
+        committed: true,
+        duplicate: false,
+        events: result.events,
+        snapshot: createMultiplayerVisibleSnapshot(
+          result.snapshot,
+          getMultiplayerSeatForPlayer(result.session.room, actor.playerId)
+        ),
+        transaction
+      };
+    } catch (error) {
+      return {
+        accepted: false,
+        committed: false,
+        duplicate: false,
+        error: createBackendErrorResponse(error)
+      };
+    }
+  };
+}
+
 export function createGetRoomHandler(
   dependencies: Pick<RoomLifecycleHandlerDependencies, "store">
 ): RoomLifecycleHandler {
@@ -279,6 +385,15 @@ export const startGameHandler = createStartGameHandler({
   store: createUnimplementedMultiplayerStore()
 });
 
+export const startNextHandHandler = createStartNextHandHandler({
+  engineContext: createSystemEngineContext(),
+  resolverContext: {
+    requestId: "unconfigured",
+    tableName: "UNCONFIGURED_MULTIPLAYER_TABLE"
+  },
+  store: createUnimplementedMultiplayerStore()
+});
+
 export const getRoomHandler = createGetRoomHandler({
   store: createUnimplementedMultiplayerStore()
 });
@@ -339,6 +454,17 @@ function parseStartGameInput(
   return {
     roomId: parseNonEmptyString(input.roomId, "startGame.roomId").trim(),
     ...(targetMarks !== undefined ? { targetMarks } : {})
+  };
+}
+
+function parseStartNextHandInput(
+  event: AppSyncResolverEvent
+): AppSyncStartNextHandInput {
+  const args = parseArguments(event, "startNextHand");
+  const input = parseInputObject(args.input, "startNextHand.input");
+
+  return {
+    gameId: parseNonEmptyString(input.gameId, "startNextHand.gameId").trim()
   };
 }
 
@@ -437,13 +563,34 @@ function normalizeRoomCode(value: string): string {
   return value.trim().replace(/[\s-]/gu, "").toUpperCase();
 }
 
-function assertRoomHost(room: MultiplayerRoom, playerId: string): void {
+function assertRoomHost(
+  room: MultiplayerRoom,
+  playerId: string,
+  message = "Only the room host can start the game."
+): void {
   if (room.hostPlayerId !== playerId) {
     throw new BackendResolverError(
       "INVALID_ACTOR",
-      "Only the room host can start the game."
+      message
     );
   }
+}
+
+function restoreSession(records: unknown): MultiplayerGameSession {
+  const restored = restoreMultiplayerSessionFromRecords(records);
+
+  if (!restored.ok) {
+    throw restored.error;
+  }
+
+  return restored.value;
+}
+
+function isActiveHandPhase(phase: string): boolean {
+  return phase === "dealt" ||
+    phase === "bidding" ||
+    phase === "trump" ||
+    phase === "trickPlay";
 }
 
 function createSystemEngineContext(): EngineContext {

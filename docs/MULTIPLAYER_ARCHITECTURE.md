@@ -70,7 +70,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh, active-game bidding/trump/trick-play UI, mobile AppSync realtime subscription handling for game updates, mobile gap-triggered reconnect refresh, and an optional deployed smoke path for live AppSync subscription validation. Reconnect UX, pending-action retry, and post-hand/next-hand multiplayer controls are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh, active-game bidding/trump/trick-play UI, host-triggered next-hand dealing after completed hands, mobile AppSync realtime subscription handling for game updates, mobile gap-triggered reconnect refresh, and an optional deployed smoke path for live AppSync subscription validation. Reconnect UX, pending-action retry, and richer post-hand summary UX are still missing.
 
 ## Durable Record Shape
 
@@ -135,6 +135,7 @@ It does not call AWS. Instead, it converts authoritative multiplayer sessions an
 Covered plans:
 
 - game start
+- next hand deal
 - accepted player action
 - rejected player action
 
@@ -153,7 +154,7 @@ Write plans carry backend-neutral conditions for future adapters:
 - latest snapshot must match expected previous sequence/version
 - action idempotency records must not already exist
 
-Accepted-action and game-start plans run validated replay before emitting records. This closes the earlier gap where accepted-event validation existed for restore but not for initial persistence planning.
+Accepted-action, game-start, and next-hand plans run validated replay before emitting records. This closes the earlier gap where accepted-event validation existed for restore but not for initial persistence planning.
 
 ## Hidden Information
 
@@ -194,4 +195,4 @@ The mobile active-game hook now detects missing live event sequences from `onGam
 - Deployed smoke coverage for organic create/join/take-seat/start room flows.
 - Pending-action retry and fuller reconnect UX.
 - Leave/rejoin/replacement behavior.
-- Mobile post-hand and next-hand multiplayer controls.
+- Rich post-hand score summary and game-over UX in multiplayer.

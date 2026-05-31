@@ -330,6 +330,44 @@ test("active game view filters domino plays when the viewer must follow suit", (
   ]);
 });
 
+test("active game view exposes host next-hand control during setup", () => {
+  const hostView = createMultiplayerActiveGameView({
+    privateHand: createPrivateHand(),
+    room: createRoomView({
+      isHost: true
+    }),
+    snapshot: createSnapshot({
+      handCounts: null,
+      phase: "setup",
+      redactedState: {
+        dealer: 1,
+        handNumber: 2,
+        phase: "setup"
+      }
+    })
+  });
+  const guestView = createMultiplayerActiveGameView({
+    privateHand: createPrivateHand(),
+    room: createRoomView({
+      isHost: false
+    }),
+    snapshot: createSnapshot({
+      handCounts: null,
+      phase: "setup",
+      redactedState: {
+        dealer: 1,
+        handNumber: 2,
+        phase: "setup"
+      }
+    })
+  });
+
+  expect(hostView.canStartNextHand).toBe(true);
+  expect(hostView.waitingMessage).toBe("Waiting for host to deal the next hand.");
+  expect(guestView.canStartNextHand).toBe(false);
+  expect(guestView.waitingMessage).toBe("Waiting for host to deal the next hand.");
+});
+
 function declarerViewSnapshot(): MultiplayerPublicGameSnapshot {
   return createSnapshot({
     phase: "trump",

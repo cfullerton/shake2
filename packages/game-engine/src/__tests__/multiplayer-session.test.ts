@@ -6,13 +6,16 @@ import {
   createMultiplayerRoom,
   createNumericBid,
   createPassBid,
+  chooseLegalRandomBotDecision,
   getMultiplayerPlayerView,
   joinMultiplayerRoom,
   replayFortyTwoEvents,
   startMultiplayerGame,
+  startNextMultiplayerHand,
   submitMultiplayerGameAction,
   takeMultiplayerSeat,
   type EngineContext,
+  type LegalRandomBotDecision,
   type MultiplayerGameSession,
   type MultiplayerResult,
   type MultiplayerRoom,
@@ -203,14 +206,98 @@ test("multiplayer player views redact other players' hands", () => {
   );
 });
 
-function createStartedSession(context: EngineContext): MultiplayerGameSession {
+test("multiplayer host deals the next hand after a completed hand", () => {
+  const context = createTestContext();
+  let session = createStartedSession(context, {
+    targetMarks: 250
+  });
+
+  session = playOneHandToSetup(session, context);
+  assert.equal(session.snapshot.snapshot.phase, "setup");
+  assert.equal(session.snapshot.snapshot.dealer, 1);
+  assert.equal(session.snapshot.snapshot.handNumber, 2);
+
+  const result = startNextMultiplayerHand(
+    session,
+    {
+      actorId: "player-0"
+    },
+    context
+  );
+
+  assert.equal(result.ok, true);
+
+  if (result.ok) {
+    assert.deepEqual(
+      result.value.events.map((event) => event.event.type),
+      ["fortyTwo.hand.dealt"]
+    );
+    assert.equal(result.value.snapshot.snapshot.phase, "dealt");
+    assert.equal(result.value.snapshot.snapshot.dealer, 1);
+    assert.equal(result.value.snapshot.snapshot.handNumber, 2);
+    assert.deepEqual(
+      replayFortyTwoEvents(
+        result.value.session.initialSnapshot,
+        result.value.session.events
+      ),
+      result.value.session.snapshot
+    );
+  }
+});
+
+test("multiplayer next-hand deal requires the host and post-hand setup", () => {
+  const context = createTestContext();
+  const session = createStartedSession(context);
+  const nonHost = startNextMultiplayerHand(
+    session,
+    {
+      actorId: "player-1"
+    },
+    context
+  );
+  const tooEarly = startNextMultiplayerHand(
+    session,
+    {
+      actorId: "player-0"
+    },
+    context
+  );
+
+  assert.equal(nonHost.ok, false);
+  assert.equal(tooEarly.ok, false);
+
+  if (!nonHost.ok) {
+    assert.equal(nonHost.error.code, "INVALID_ACTOR");
+  }
+
+  if (!tooEarly.ok) {
+    assert.equal(tooEarly.error.code, "INVALID_PHASE");
+  }
+});
+
+function createStartedSession(context: EngineContext): MultiplayerGameSession;
+function createStartedSession(
+  context: EngineContext,
+  options: {
+    readonly targetMarks?: number;
+  }
+): MultiplayerGameSession;
+function createStartedSession(
+  context: EngineContext,
+  options: {
+    readonly targetMarks?: number;
+  } = {}
+): MultiplayerGameSession {
   return unwrapResult(
     startMultiplayerGame(
       createReadyRoom(context),
       {
         actorId: "player-0",
         dealer: 0,
-        gameId: "game-1"
+        gameId: "game-1",
+        ...(options.targetMarks !== undefined
+          ? { targetMarks: options.targetMarks }
+          : {})
       },
       context
     )
@@ -282,6 +369,107 @@ function submitSeatBid(
   return unwrapSubmit(
     submitMultiplayerGameAction(session, action, context)
   ).session;
+}
+
+function playOneHandToSetup(
+  session: MultiplayerGameSession,
+  context: EngineContext
+): MultiplayerGameSession {
+  let nextSession = session;
+  let remainingActions = 80;
+
+  while (nextSession.snapshot.snapshot.phase !== "setup" && remainingActions > 0) {
+    const seat = getCurrentTurnSeat(nextSession);
+    const decision = chooseLegalRandomBotDecision({
+      context,
+      seat,
+      snapshot: nextSession.snapshot
+    });
+
+    nextSession = submitBotDecision(nextSession, decision, context);
+    remainingActions -= 1;
+
+    if (nextSession.snapshot.snapshot.phase === "gameComplete") {
+      throw new Error("Expected test hand not to complete the game.");
+    }
+  }
+
+  if (nextSession.snapshot.snapshot.phase !== "setup") {
+    throw new Error("Expected test session to reach next-hand setup.");
+  }
+
+  return nextSession;
+}
+
+function getCurrentTurnSeat(session: MultiplayerGameSession): SeatIndex {
+  const state = session.snapshot.snapshot;
+
+  if (state.phase === "dealt") {
+    return ((state.dealer + 1) % 4) as SeatIndex;
+  }
+
+  if (state.phase === "bidding" && state.bidding.currentSeat !== null) {
+    return state.bidding.currentSeat;
+  }
+
+  if (state.phase === "trump" && state.trump.declarer !== null) {
+    return state.trump.declarer;
+  }
+
+  if (state.phase === "trickPlay") {
+    return ((state.currentTrick.leader +
+      state.currentTrick.playedDominoes.length) % 4) as SeatIndex;
+  }
+
+  throw new Error(`No current turn seat for phase ${state.phase}.`);
+}
+
+function submitBotDecision(
+  session: MultiplayerGameSession,
+  decision: LegalRandomBotDecision,
+  context: EngineContext
+): MultiplayerGameSession {
+  const action = createMultiplayerActionEnvelope(
+    session,
+    {
+      action: createBotAction(decision),
+      actorId: playerIdForSeat(decision.seat)
+    },
+    context
+  );
+
+  return unwrapSubmit(
+    submitMultiplayerGameAction(session, action, context)
+  ).session;
+}
+
+function createBotAction(decision: LegalRandomBotDecision) {
+  switch (decision.kind) {
+    case "bid":
+      return {
+        payload: {
+          bid: decision.bid,
+          seat: decision.seat
+        },
+        type: "fortyTwo.bid.submit" as const
+      };
+    case "callTrump":
+      return {
+        payload: {
+          trumpSuit: decision.trumpSuit
+        },
+        type: "fortyTwo.trump.call" as const
+      };
+    case "playDomino":
+      return {
+        payload: {
+          domino: decision.play.domino,
+          ...(decision.play.ledSuit ? { ledSuit: decision.play.ledSuit } : {}),
+          seat: decision.seat
+        },
+        type: "fortyTwo.domino.play" as const
+      };
+  }
 }
 
 function playerIdForSeat(seat: SeatIndex): string {

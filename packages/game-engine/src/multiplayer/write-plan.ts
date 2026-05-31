@@ -11,6 +11,7 @@ import {
 import {
   type MultiplayerGameSession,
   type MultiplayerRoom,
+  type MultiplayerStartNextHandResult,
   type MultiplayerSubmitActionResult
 } from "./session.ts";
 import {
@@ -29,6 +30,7 @@ import {
 
 export type MultiplayerWritePlanKind =
   | "gameStart"
+  | "nextHand"
   | "acceptedAction"
   | "rejectedAction";
 
@@ -122,6 +124,44 @@ export function createMultiplayerGameStartWritePlan(
         createMustNotExistCondition(snapshotRecord.pk, snapshotRecord.sk)
       ),
       ...privateHandOperations
+    ]
+  };
+}
+
+export function createMultiplayerNextHandWritePlan(
+  previousSession: MultiplayerGameSession,
+  result: MultiplayerStartNextHandResult
+): MultiplayerWritePlan {
+  assertSessionLineage(previousSession, result.session);
+  assertValidatedReplay(previousSession.snapshot, result.events, result.snapshot);
+  assertSnapshotsMatch(result.snapshot, result.session.snapshot);
+
+  const firstEvent = result.events[0];
+
+  if (result.events.length !== 1 || firstEvent?.event.type !== "fortyTwo.hand.dealt") {
+    throw new EngineError(
+      "INVALID_ACTION",
+      "Next-hand write plan requires exactly one dealt-hand event."
+    );
+  }
+
+  const snapshotCondition = createSnapshotMatchesCondition(previousSession.snapshot);
+  const snapshotRecord = createMultiplayerSnapshotRecord(result.session.snapshot);
+
+  return {
+    gameId: result.session.snapshot.gameId,
+    kind: "nextHand",
+    operations: [
+      ...createRoomOperations(previousSession.room, result.session.room),
+      ...result.events.map(createEventWriteOperation),
+      createPutOperation(
+        "putSnapshot",
+        snapshotRecord,
+        snapshotCondition
+      ),
+      ...createMultiplayerPrivateHandRecords(result.session).map((record) =>
+        createPutOperation("putPrivateHand", record, snapshotCondition)
+      )
     ]
   };
 }

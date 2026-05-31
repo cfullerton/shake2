@@ -43,6 +43,7 @@ export interface MultiplayerActiveGameView {
   readonly canCallTrump: boolean;
   readonly canPass: boolean;
   readonly canPlayDomino: boolean;
+  readonly canStartNextHand: boolean;
   readonly canSubmitBid: boolean;
   readonly currentBidLabel: string;
   readonly currentTrickLeadLabel: string;
@@ -122,6 +123,9 @@ export function createMultiplayerActiveGameView(input: {
       currentTurnSeat === toSeatNumber(viewerSeat) &&
       isBiddingPhase(input.snapshot.phase),
     canPlayDomino: legalDominoPlays.length > 0,
+    canStartNextHand: input.room.isHost &&
+      input.room.status === "inGame" &&
+      input.snapshot.phase === "setup",
     canSubmitBid: legalBidAmounts.length > 0,
     currentBidLabel: currentBidAmount === null ? "No bid yet" : String(currentBidAmount),
     currentTrickLeadLabel: createCurrentTrickLeadLabel(
@@ -459,6 +463,10 @@ function createWaitingMessage(
   currentTurnSeat: SeatNumber | null,
   viewerSeat: AppSyncSeatIndex | null
 ): string {
+  if (phase === "setup") {
+    return "Waiting for host to deal the next hand.";
+  }
+
   if (currentTurnSeat === null) {
     return "Waiting for the next server update.";
   }

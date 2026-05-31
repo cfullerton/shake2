@@ -27,12 +27,13 @@ type Mutation {
   joinRoom(input: JoinRoomInput!): RoomView!
   takeSeat(input: TakeSeatInput!): RoomView!
   startGame(input: StartGameInput!): StartGameResult!
+  startNextHand(input: StartNextHandInput!): SubmitGameActionResult!
   submitGameAction(input: SubmitGameActionInput!): SubmitGameActionResult!
 }
 
 type Subscription {
   onGameUpdated(gameId: ID!): SubmitGameActionResult
-    @aws_subscribe(mutations: ["submitGameAction"])
+    @aws_subscribe(mutations: ["submitGameAction", "startNextHand"])
 }
 
 input SubmitGameActionInput {
@@ -58,6 +59,10 @@ input TakeSeatInput {
 input StartGameInput {
   roomId: ID!
   targetMarks: Int
+}
+
+input StartNextHandInput {
+  gameId: ID!
 }
 
 input GetMyPrivateHandInput {
