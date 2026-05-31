@@ -26,6 +26,7 @@ type Mutation {
   createRoom(input: CreateRoomInput!): RoomView!
   joinRoom(input: JoinRoomInput!): RoomView!
   takeSeat(input: TakeSeatInput!): RoomView!
+  addBot(input: AddBotInput!): RoomView!
   startGame(input: StartGameInput!): StartGameResult!
   startNextHand(input: StartNextHandInput!): SubmitGameActionResult!
   submitGameAction(input: SubmitGameActionInput!): SubmitGameActionResult!
@@ -54,6 +55,12 @@ input JoinRoomInput {
 input TakeSeatInput {
   roomId: ID!
   seatIndex: SeatIndex!
+}
+
+input AddBotInput {
+  roomId: ID!
+  seatIndex: SeatIndex!
+  displayName: String
 }
 
 input StartGameInput {
@@ -150,6 +157,7 @@ type RoomParticipant {
   displayName: String!
   connectionStatus: String!
   joinedAt: AWSDateTime!
+  isBot: Boolean!
   isViewer: Boolean!
 }
 
@@ -157,6 +165,7 @@ type RoomSeat {
   seatIndex: SeatIndex!
   occupied: Boolean!
   displayName: String
+  isBot: Boolean!
   isViewer: Boolean!
 }
 

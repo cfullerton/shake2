@@ -54,6 +54,7 @@ test("MultiplayerRoomClient joins, seats, and starts rooms through AppSync", asy
     }
   };
   const graphql = new MockGraphqlClient({
+    addBot: room,
     getRoom: room,
     joinRoom: room,
     listPublicRooms: [room],
@@ -75,6 +76,12 @@ test("MultiplayerRoomClient joins, seats, and starts rooms through AppSync", asy
     })
   ).resolves.toBe(room);
   await expect(
+    client.addBot({
+      roomId: "room-1",
+      seatIndex: "SEAT_2"
+    })
+  ).resolves.toBe(room);
+  await expect(
     client.getRoom({
       roomId: "room-1"
     })
@@ -90,18 +97,25 @@ test("MultiplayerRoomClient joins, seats, and starts rooms through AppSync", asy
   expect(graphql.requests.map((request) => request.operationName)).toEqual([
     "JoinRoom",
     "TakeSeat",
+    "AddBot",
     "GetRoom",
     "ListPublicRooms",
     "StartGame"
   ]);
-  expect(graphql.requests[4]?.variables).toEqual({
+  expect(graphql.requests[2]?.variables).toEqual({
+    input: {
+      roomId: "room-1",
+      seatIndex: "SEAT_2"
+    }
+  });
+  expect(graphql.requests[5]?.variables).toEqual({
     input: {
       roomId: "room-1",
       targetMarks: 5
     }
   });
-  expect(graphql.requests[4]?.query).toContain("snapshot");
-  expect(graphql.requests[4]?.query).not.toContain("hands");
+  expect(graphql.requests[5]?.query).toContain("snapshot");
+  expect(graphql.requests[5]?.query).not.toContain("hands");
 });
 
 class MockGraphqlClient implements GraphqlClient {
@@ -127,6 +141,7 @@ function createRoomView(): MultiplayerRoomView {
       {
         connectionStatus: "online",
         displayName: "Alice",
+        isBot: false,
         isViewer: true,
         joinedAt: "2026-05-31T00:00:00.000Z"
       }
@@ -136,21 +151,25 @@ function createRoomView(): MultiplayerRoomView {
     seats: [
       {
         isViewer: false,
+        isBot: false,
         occupied: false,
         seatIndex: "SEAT_0"
       },
       {
         isViewer: false,
+        isBot: false,
         occupied: false,
         seatIndex: "SEAT_1"
       },
       {
         isViewer: false,
+        isBot: false,
         occupied: false,
         seatIndex: "SEAT_2"
       },
       {
         isViewer: false,
+        isBot: false,
         occupied: false,
         seatIndex: "SEAT_3"
       }

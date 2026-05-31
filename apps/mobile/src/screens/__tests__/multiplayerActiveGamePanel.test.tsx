@@ -717,24 +717,28 @@ function createRoomView(): MultiplayerRoomView {
     seats: [
       {
         displayName: "North",
+        isBot: false,
         isViewer: false,
         occupied: true,
         seatIndex: "SEAT_0"
       },
       {
         displayName: "East",
+        isBot: false,
         isViewer: true,
         occupied: true,
         seatIndex: "SEAT_1"
       },
       {
         displayName: "South",
+        isBot: false,
         isViewer: false,
         occupied: true,
         seatIndex: "SEAT_2"
       },
       {
         displayName: "West",
+        isBot: false,
         isViewer: false,
         occupied: true,
         seatIndex: "SEAT_3"

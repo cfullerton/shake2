@@ -7,12 +7,14 @@ export type AppSyncSeatIndex =
 export interface MultiplayerRoomParticipant {
   readonly connectionStatus: string;
   readonly displayName: string;
+  readonly isBot: boolean;
   readonly isViewer: boolean;
   readonly joinedAt: string;
 }
 
 export interface MultiplayerRoomSeat {
   readonly displayName?: string | null;
+  readonly isBot: boolean;
   readonly isViewer: boolean;
   readonly occupied: boolean;
   readonly seatIndex: AppSyncSeatIndex;

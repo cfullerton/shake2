@@ -37,6 +37,7 @@ test("schema file exists and includes required operations", () => {
   assertTypeField(schema, "Mutation", "createRoom");
   assertTypeField(schema, "Mutation", "joinRoom");
   assertTypeField(schema, "Mutation", "takeSeat");
+  assertTypeField(schema, "Mutation", "addBot");
   assertTypeField(schema, "Mutation", "startGame");
   assertTypeField(schema, "Mutation", "startNextHand");
   assertTypeField(schema, "Mutation", "submitGameAction");
@@ -221,7 +222,9 @@ test("room view adapter hides raw player IDs and marks the viewer", () => {
   assert.equal(view.isHost, false);
   assert.equal(view.viewerSeat, "SEAT_1");
   assert.equal(view.participants.find((participant) => participant.isViewer)?.displayName, "Bob");
+  assert.equal(view.participants.every((participant) => participant.isBot === false), true);
   assert.equal(view.seats.find((seat) => seat.seatIndex === "SEAT_1")?.isViewer, true);
+  assert.equal(view.seats.find((seat) => seat.seatIndex === "SEAT_1")?.isBot, false);
   assert.doesNotMatch(serialized, /player-0/);
   assert.doesNotMatch(serialized, /player-1/);
 });

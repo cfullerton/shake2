@@ -59,6 +59,12 @@ export interface AppSyncTakeSeatInput {
   readonly seatIndex: SeatIndex;
 }
 
+export interface AppSyncAddBotInput {
+  readonly displayName?: string;
+  readonly roomId: string;
+  readonly seatIndex: SeatIndex;
+}
+
 export interface AppSyncStartGameInput {
   readonly roomId: string;
   readonly targetMarks?: number;
@@ -151,12 +157,14 @@ export interface AppSyncPendingActionRejection {
 export interface AppSyncRoomParticipant {
   readonly connectionStatus: string;
   readonly displayName: string;
+  readonly isBot: boolean;
   readonly isViewer: boolean;
   readonly joinedAt: string;
 }
 
 export interface AppSyncRoomSeat {
   readonly displayName?: string;
+  readonly isBot: boolean;
   readonly isViewer: boolean;
   readonly occupied: boolean;
   readonly seatIndex: AppSyncSeatIndex;
@@ -364,6 +372,7 @@ export function toAppSyncRoomView(
     .map((participant) => ({
       connectionStatus: participant.connectionStatus,
       displayName: participant.displayName,
+      isBot: participant.kind === "bot",
       isViewer: participant.playerId === actor.playerId,
       joinedAt: participant.joinedAt
     }));
@@ -378,9 +387,13 @@ export function toAppSyncRoomView(
     roomId: room.roomId,
     seats: SEAT_INDICES.map((seatIndex) => {
       const assignment = room.seats[seatIndex];
+      const participant = assignment
+        ? room.participants[assignment.playerId]
+        : undefined;
 
       return {
         ...(assignment ? { displayName: assignment.displayName } : {}),
+        isBot: participant?.kind === "bot",
         isViewer: assignment?.playerId === actor.playerId,
         occupied: assignment !== null,
         seatIndex: toAppSyncSeatIndex(seatIndex)

@@ -82,11 +82,13 @@ test("lobby screen renders seats and starts ready host rooms", async () => {
   const room = createRoomView({
     status: "ready"
   });
+  const addBot = jest.fn(async () => undefined);
   const startGame = jest.fn(async () => undefined);
   const takeSeat = jest.fn(async () => undefined);
   const view = render(
     <MultiplayerLobbyContent
       lobby={createLobbyController({
+        addBot,
         room,
         startGame,
         takeSeat
@@ -100,6 +102,14 @@ test("lobby screen renders seats and starts ready host rooms", async () => {
   fireEvent.press(view.getByLabelText("East seat empty"));
   await waitFor(() => {
     expect(takeSeat).toHaveBeenCalledWith({
+      roomId: "room-1",
+      seatIndex: "SEAT_1"
+    });
+  });
+
+  fireEvent.press(view.getByText("Fill Bots"));
+  await waitFor(() => {
+    expect(addBot).toHaveBeenCalledWith({
       roomId: "room-1",
       seatIndex: "SEAT_1"
     });
@@ -183,6 +193,7 @@ function createLobbyController(
 ): MultiplayerLobbyController {
   return {
     busyAction: null,
+    addBot: jest.fn(async () => undefined),
     clearError: jest.fn(),
     completeNewPassword: jest.fn(async () => undefined),
     configError: null,
@@ -246,6 +257,7 @@ function createRoomView(
       {
         connectionStatus: "online",
         displayName: "Alice",
+        isBot: false,
         isViewer: true,
         joinedAt: "2026-05-31T00:00:00.000Z"
       }
@@ -255,23 +267,27 @@ function createRoomView(
     seats: [
       {
         displayName: "North",
+        isBot: false,
         isViewer: false,
         occupied: true,
         seatIndex: "SEAT_0"
       },
       {
         isViewer: false,
+        isBot: false,
         occupied: false,
         seatIndex: "SEAT_1"
       },
       {
         displayName: "Alice",
+        isBot: false,
         isViewer: true,
         occupied: true,
         seatIndex: "SEAT_2"
       },
       {
         displayName: "West",
+        isBot: false,
         isViewer: false,
         occupied: true,
         seatIndex: "SEAT_3"

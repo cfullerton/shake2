@@ -141,10 +141,10 @@ export function createMultiplayerNextHandWritePlan(
 
   const firstEvent = result.events[0];
 
-  if (result.events.length !== 1 || firstEvent?.event.type !== "fortyTwo.hand.dealt") {
+  if (firstEvent?.event.type !== "fortyTwo.hand.dealt") {
     throw new EngineError(
       "INVALID_ACTION",
-      "Next-hand write plan requires exactly one dealt-hand event."
+      "Next-hand write plan requires a dealt-hand event first."
     );
   }
 

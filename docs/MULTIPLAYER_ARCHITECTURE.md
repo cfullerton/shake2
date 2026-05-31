@@ -10,6 +10,7 @@ Implemented now:
 
 - Room creation with host membership.
 - Player join and four-seat assignment.
+- Host-added bot seats for online test rooms. Bots are stored as room participants with `kind = "bot"` and safe room views expose only `isBot`, display name, and seat occupancy.
 - Ready/in-game/completed room status.
 - Host-only game start.
 - Private rooms by invite code and public rooms discoverable from an authenticated public-room list.
@@ -20,6 +21,7 @@ Implemented now:
 - Seat ownership checks before actions reach the rules engine.
 - Duplicate `actionId` handling for idempotent retries.
 - Automatic server completion of bidding after the fourth bid.
+- Server-side bot advancement after game start, next-hand deal, and accepted human actions. Bot decisions use the legal-random bot helper and still flow through multiplayer authorization plus Forty Two command validation before their events are persisted.
 - Redacted player views that hide other players' hands.
 - Replay verification through existing Forty Two event reducers.
 - Serializable storage records for rooms, trusted events, public snapshots, private hands, and action idempotency.
@@ -41,6 +43,7 @@ Clients may request actions:
 
 - join room
 - take seat
+- add a bot to an empty seat as host before the game starts
 - start game as host once the room is ready
 - submit bid
 - call trump
@@ -70,7 +73,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh, active-game bidding/trump/trick-play UI, host-triggered next-hand dealing after completed hands, compact post-hand/game-over recap, mobile AppSync realtime subscription handling for game updates, mobile gap-triggered reconnect refresh, and an optional deployed smoke path for live AppSync subscription validation. Full reconnect UX and pending-action retry are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, host-added bot seats, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh and host bot filling, active-game bidding/trump/trick-play UI, server-side online bot advancement, host-triggered next-hand dealing after completed hands, compact post-hand/game-over recap, mobile AppSync realtime subscription handling for game updates, mobile gap-triggered reconnect refresh, and an optional deployed smoke path for live AppSync subscription validation. Full reconnect UX and pending-action retry are still missing.
 
 ## Durable Record Shape
 

@@ -3,6 +3,10 @@ import {
   getEngineTimestamp,
   type EngineContext
 } from "../context.ts";
+import {
+  chooseLegalRandomBotDecision,
+  type LegalRandomBotDecision
+} from "../bots/legal-random.ts";
 import { type Domino } from "../dominoes/domino.ts";
 import { EngineError } from "../errors.ts";
 import {
@@ -67,10 +71,15 @@ export type MultiplayerConnectionStatus =
   | "backgrounded"
   | "disconnected";
 
+export type MultiplayerParticipantKind =
+  | "human"
+  | "bot";
+
 export interface MultiplayerParticipant {
   readonly connectionStatus: MultiplayerConnectionStatus;
   readonly displayName: string;
   readonly joinedAt: string;
+  readonly kind: MultiplayerParticipantKind;
   readonly playerId: string;
 }
 
@@ -118,6 +127,13 @@ export interface JoinMultiplayerRoomInput {
 
 export interface TakeMultiplayerSeatInput {
   readonly playerId: string;
+  readonly seat: SeatIndex;
+}
+
+export interface AddMultiplayerBotInput {
+  readonly actorId: string;
+  readonly botPlayerId?: string;
+  readonly displayName?: string;
   readonly seat: SeatIndex;
 }
 
@@ -185,6 +201,16 @@ export type MultiplayerSubmitActionResult =
     };
 
 export interface MultiplayerStartNextHandResult {
+  readonly events: readonly FortyTwoEventEnvelope[];
+  readonly session: MultiplayerGameSession;
+  readonly snapshot: FortyTwoSnapshotEnvelope;
+}
+
+export interface MultiplayerBotAdvanceOptions {
+  readonly maxActions?: number;
+}
+
+export interface MultiplayerBotAdvanceResult {
   readonly events: readonly FortyTwoEventEnvelope[];
   readonly session: MultiplayerGameSession;
   readonly snapshot: FortyTwoSnapshotEnvelope;
@@ -325,6 +351,71 @@ export function takeMultiplayerSeat(
 
     return {
       ...room,
+      seats,
+      status: areAllSeatsFilled(seats) ? "ready" : "waiting",
+      updatedAt
+    };
+  });
+}
+
+export function addMultiplayerBot(
+  room: MultiplayerRoom,
+  input: AddMultiplayerBotInput,
+  context: Pick<EngineContext, "now">
+): MultiplayerResult<MultiplayerRoom> {
+  return runMultiplayerResult(() => {
+    assertRoomCanChange(room);
+    assertSeatIndex(input.seat);
+
+    if (input.actorId !== room.hostPlayerId) {
+      throw new EngineError("INVALID_ACTOR", "Only the room host can add bots.");
+    }
+
+    const seatAssignment = room.seats[input.seat];
+    const botPlayerId = input.botPlayerId ?? createBotPlayerId(input.seat);
+
+    if (seatAssignment) {
+      if (seatAssignment.playerId === botPlayerId) {
+        return room;
+      }
+
+      throw new EngineError("INVALID_SEAT", "Seat is already occupied.");
+    }
+
+    const existing = room.participants[botPlayerId];
+
+    if (existing && existing.kind !== "bot") {
+      throw new EngineError("INVALID_ACTOR", "Bot player ID is already used by a player.");
+    }
+
+    const existingBotSeat = getSeatForPlayer(room, botPlayerId);
+
+    if (existingBotSeat !== null && existingBotSeat !== input.seat) {
+      throw new EngineError("INVALID_SEAT", "Bot already has a different seat.");
+    }
+
+    const updatedAt = getEngineTimestamp(context);
+    const bot = existing ?? createParticipant(
+      botPlayerId,
+      input.displayName ?? createBotDisplayName(input.seat),
+      updatedAt,
+      "bot"
+    );
+    const seats = {
+      ...room.seats,
+      [input.seat]: {
+        displayName: bot.displayName,
+        playerId: bot.playerId,
+        seat: input.seat
+      }
+    };
+
+    return {
+      ...room,
+      participants: {
+        ...room.participants,
+        [bot.playerId]: bot
+      },
       seats,
       status: areAllSeatsFilled(seats) ? "ready" : "waiting",
       updatedAt
@@ -542,56 +633,34 @@ export function submitMultiplayerGameAction(
       };
     }
 
-    assertMultiplayerActionAuthorized(session, parsedAction);
+    const applied = applyAuthorizedMultiplayerAction(
+      session,
+      parsedAction,
+      context
+    );
 
-    const commandResult = runFortyTwoAction(session.snapshot, parsedAction, context);
-
-    if (!commandResult.ok) {
+    if (!applied.ok) {
       return storeActionFailure(
         session,
         parsedAction.actionId,
         parsedAction.actorId,
-        commandResult.error
+        applied.error
       );
     }
 
-    const advanced = applyMultiplayerAutomation(
-      commandResult.snapshot,
-      commandResult.events,
-      context
-    );
-    const events: readonly FortyTwoEventEnvelope[] = [
-      ...commandResult.events,
-      ...advanced.events
-    ];
-    const snapshot = advanced.snapshot;
     const nextSession = storeActionSuccess(
-      {
-        ...session,
-        events: [
-          ...session.events,
-          ...events
-        ],
-        room: snapshot.snapshot.phase === "gameComplete"
-          ? {
-              ...session.room,
-              status: "completed",
-              updatedAt: snapshot.snapshot.completedAt
-            }
-          : session.room,
-        snapshot
-      },
+      applied.session,
       parsedAction.actionId,
       parsedAction.actorId,
-      events
+      applied.events
     );
 
     return {
       duplicate: false,
-      events,
+      events: applied.events,
       ok: true,
       session: nextSession,
-      snapshot
+      snapshot: applied.snapshot
     };
   } catch (error) {
     if (error instanceof EngineError) {
@@ -614,6 +683,118 @@ export function submitMultiplayerGameAction(
 
     throw error;
   }
+}
+
+export function submitMultiplayerGameActionWithBots(
+  session: MultiplayerGameSession,
+  action: unknown,
+  context: Pick<EngineContext, "newId" | "now" | "random">,
+  options: MultiplayerBotAdvanceOptions = {}
+): MultiplayerSubmitActionResult {
+  const result = submitMultiplayerGameAction(session, action, context);
+
+  if (!result.ok || result.duplicate) {
+    return result;
+  }
+
+  const botAdvance = advanceMultiplayerBots(
+    result.session,
+    context,
+    options
+  );
+
+  if (!botAdvance.ok) {
+    throw botAdvance.error;
+  }
+
+  const parsedAction = parseFortyTwoActionEnvelope(action);
+  const events = [
+    ...result.events,
+    ...botAdvance.value.events
+  ];
+  const sessionWithUpdatedActionResult = storeActionSuccess(
+    botAdvance.value.session,
+    parsedAction.actionId,
+    parsedAction.actorId,
+    events
+  );
+
+  return {
+    duplicate: false,
+    events,
+    ok: true,
+    session: sessionWithUpdatedActionResult,
+    snapshot: botAdvance.value.snapshot
+  };
+}
+
+export function advanceMultiplayerBots(
+  session: MultiplayerGameSession,
+  context: Pick<EngineContext, "newId" | "now" | "random">,
+  options: MultiplayerBotAdvanceOptions = {}
+): MultiplayerResult<MultiplayerBotAdvanceResult> {
+  return runMultiplayerResult(() => {
+    const maxActions = options.maxActions ?? 120;
+    const events: FortyTwoEventEnvelope[] = [];
+    let nextSession = session;
+    let actionCount = 0;
+
+    while (actionCount < maxActions) {
+      const seat = getCurrentMultiplayerTurnSeat(nextSession.snapshot);
+
+      if (seat === null || !isBotSeat(nextSession.room, seat)) {
+        break;
+      }
+
+      const assignment = nextSession.room.seats[seat];
+
+      if (!assignment) {
+        break;
+      }
+
+      const decision = chooseLegalRandomBotDecision({
+        context,
+        seat,
+        snapshot: nextSession.snapshot
+      });
+      const action = createMultiplayerActionEnvelope(
+        nextSession,
+        {
+          action: createBotFortyTwoAction(decision),
+          actorId: assignment.playerId,
+          actorSeat: seat
+        },
+        context
+      );
+      const applied = applyAuthorizedMultiplayerAction(
+        nextSession,
+        action,
+        context
+      );
+
+      if (!applied.ok) {
+        throw applied.error;
+      }
+
+      events.push(...applied.events);
+      nextSession = applied.session;
+      actionCount += 1;
+    }
+
+    if (actionCount >= maxActions) {
+      const seat = getCurrentMultiplayerTurnSeat(nextSession.snapshot);
+
+      if (seat !== null && isBotSeat(nextSession.room, seat)) {
+        throw new EngineError("INVALID_ACTION", "Bot automation exceeded its action limit.");
+      }
+    }
+
+    return {
+      events,
+      session: nextSession,
+      snapshot: nextSession.snapshot
+    };
+  });
 }
 
 export function getMultiplayerPlayerView(
@@ -655,7 +836,8 @@ export function getMultiplayerSeatForPlayer(
 function createParticipant(
   playerId: string,
   displayName: string,
-  joinedAt: string
+  joinedAt: string,
+  kind: MultiplayerParticipantKind = "human"
 ): MultiplayerParticipant {
   if (playerId.trim().length === 0) {
     throw new EngineError("INVALID_ACTOR", "Player ID is required.");
@@ -671,8 +853,26 @@ function createParticipant(
     connectionStatus: "online",
     displayName: normalizedDisplayName,
     joinedAt,
+    kind,
     playerId
   };
+}
+
+function createBotPlayerId(seat: SeatIndex): string {
+  return `bot-seat-${seat}`;
+}
+
+function createBotDisplayName(seat: SeatIndex): string {
+  switch (seat) {
+    case 0:
+      return "Bot North";
+    case 1:
+      return "Bot East";
+    case 2:
+      return "Bot South";
+    case 3:
+      return "Bot West";
+  }
 }
 
 function createEmptySeats(): MultiplayerSeats {
@@ -841,6 +1041,46 @@ function runFortyTwoAction(
   }
 }
 
+function applyAuthorizedMultiplayerAction(
+  session: MultiplayerGameSession,
+  action: FortyTwoActionEnvelope,
+  context: Pick<EngineContext, "newId" | "now">
+): {
+  readonly error: EngineError;
+  readonly ok: false;
+} | {
+  readonly events: readonly FortyTwoEventEnvelope[];
+  readonly ok: true;
+  readonly session: MultiplayerGameSession;
+  readonly snapshot: FortyTwoSnapshotEnvelope;
+} {
+  assertMultiplayerActionAuthorized(session, action);
+
+  const commandResult = runFortyTwoAction(session.snapshot, action, context);
+
+  if (!commandResult.ok) {
+    return commandResult;
+  }
+
+  const advanced = applyMultiplayerAutomation(
+    commandResult.snapshot,
+    commandResult.events,
+    context
+  );
+  const events: readonly FortyTwoEventEnvelope[] = [
+    ...commandResult.events,
+    ...advanced.events
+  ];
+  const snapshot = advanced.snapshot;
+
+  return {
+    events,
+    ok: true,
+    session: appendMultiplayerEvents(session, events, snapshot),
+    snapshot
+  };
+}
+
 function applyMultiplayerAutomation(
   snapshot: FortyTwoSnapshotEnvelope,
   events: readonly FortyTwoEventEnvelope[],
@@ -885,6 +1125,96 @@ function applyMultiplayerAutomation(
     events: [],
     snapshot
   };
+}
+
+function appendMultiplayerEvents(
+  session: MultiplayerGameSession,
+  events: readonly FortyTwoEventEnvelope[],
+  snapshot: FortyTwoSnapshotEnvelope
+): MultiplayerGameSession {
+  return {
+    ...session,
+    events: [
+      ...session.events,
+      ...events
+    ],
+    room: snapshot.snapshot.phase === "gameComplete"
+      ? {
+          ...session.room,
+          status: "completed",
+          updatedAt: snapshot.snapshot.completedAt
+        }
+      : session.room,
+    snapshot
+  };
+}
+
+function getCurrentMultiplayerTurnSeat(
+  snapshot: FortyTwoSnapshotEnvelope
+): SeatIndex | null {
+  const state = snapshot.snapshot;
+
+  if (state.phase === "dealt") {
+    return ((state.dealer + 1) % 4) as SeatIndex;
+  }
+
+  if (state.phase === "bidding") {
+    return state.bidding.currentSeat;
+  }
+
+  if (state.phase === "trump") {
+    return state.trump.declarer;
+  }
+
+  if (state.phase === "trickPlay") {
+    return ((state.currentTrick.leader +
+      state.currentTrick.playedDominoes.length) % 4) as SeatIndex;
+  }
+
+  return null;
+}
+
+function isBotSeat(room: MultiplayerRoom, seat: SeatIndex): boolean {
+  const assignment = room.seats[seat];
+
+  if (!assignment) {
+    return false;
+  }
+
+  return room.participants[assignment.playerId]?.kind === "bot";
+}
+
+function createBotFortyTwoAction(
+  decision: LegalRandomBotDecision
+): SubmitFortyTwoBidAction | CallFortyTwoTrumpAction | PlayFortyTwoDominoAction {
+  switch (decision.kind) {
+    case "bid":
+      return {
+        payload: {
+          bid: decision.bid,
+          seat: decision.seat
+        },
+        type: "fortyTwo.bid.submit"
+      };
+    case "callTrump":
+      return {
+        payload: {
+          trumpSuit: decision.trumpSuit
+        },
+        type: "fortyTwo.trump.call"
+      };
+    case "playDomino":
+      return {
+        payload: {
+          domino: decision.play.domino,
+          ...(decision.play.ledSuit !== undefined
+            ? { ledSuit: decision.play.ledSuit }
+            : {}),
+          seat: decision.seat
+        },
+        type: "fortyTwo.domino.play"
+      };
+  }
 }
 
 function storeActionSuccess(

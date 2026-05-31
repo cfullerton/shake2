@@ -33,6 +33,21 @@ test("multiplayer schema parses JSON-roundtripped storage records", () => {
   assert.deepEqual(restored.snapshot, session.snapshot);
 });
 
+test("multiplayer schema defaults legacy participants to human kind", () => {
+  const context = createTestContext();
+  const session = createStartedSession(context);
+  const records = toJsonValue(createMultiplayerStorageRecords(session)) as any;
+
+  for (const participant of Object.values(records.room.room.participants) as any[]) {
+    delete participant.kind;
+  }
+
+  const restored = unwrapResult(restoreMultiplayerSessionFromRecords(records));
+
+  assert.equal(restored.room.participants["player-0"]?.kind, "human");
+  assert.equal(restored.room.participants["player-1"]?.kind, "human");
+});
+
 test("multiplayer schema rejects public snapshots that expose hands", () => {
   const context = createTestContext();
   const session = createStartedSession(context);

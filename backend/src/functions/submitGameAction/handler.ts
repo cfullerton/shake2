@@ -16,7 +16,7 @@ import {
   getMultiplayerSeatForPlayer,
   parseFortyTwoActionEnvelope,
   restoreMultiplayerSessionFromRecords,
-  submitMultiplayerGameAction,
+  submitMultiplayerGameActionWithBots,
   type EngineContext,
   type FortyTwoActionEnvelope,
   type MultiplayerActionIdempotencyRecord,
@@ -67,7 +67,7 @@ export function createSubmitGameActionHandler(
           idempotencyResult
         )
       );
-      const result = submitMultiplayerGameAction(
+      const result = submitMultiplayerGameActionWithBots(
         previousSession,
         action,
         dependencies.engineContext

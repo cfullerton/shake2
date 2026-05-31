@@ -42,6 +42,7 @@ test("normalizes lobby form values before room requests", async () => {
     signIn: jest.fn(async () => session)
   };
   const roomClient: MultiplayerLobbyClient = {
+    addBot: jest.fn(async () => room),
     createRoom: jest.fn(async () => room),
     getRoom: jest.fn(async () => room),
     joinRoom: jest.fn(async () => room),
@@ -80,6 +81,12 @@ test("normalizes lobby form values before room requests", async () => {
     });
   });
   await act(async () => {
+    await harness.current.addBot({
+      roomId: "room-1",
+      seatIndex: "SEAT_0"
+    });
+  });
+  await act(async () => {
     await harness.current.startGame({
       roomId: "room-1",
       targetMarks: 7
@@ -100,6 +107,10 @@ test("normalizes lobby form values before room requests", async () => {
   expect(roomClient.takeSeat).toHaveBeenCalledWith({
     roomId: "room-1",
     seatIndex: "SEAT_2"
+  });
+  expect(roomClient.addBot).toHaveBeenCalledWith({
+    roomId: "room-1",
+    seatIndex: "SEAT_0"
   });
   expect(roomClient.startGame).toHaveBeenCalledWith({
     roomId: "room-1",
@@ -126,6 +137,7 @@ test("refreshes room state and starts non-hosts when the host starts", async () 
     signIn: jest.fn(async () => session)
   };
   const roomClient: MultiplayerLobbyClient = {
+    addBot: jest.fn(async () => readyRoom),
     createRoom: jest.fn(async () => readyRoom),
     getRoom: jest.fn(async () => startedRoom),
     joinRoom: jest.fn(async () => readyRoom),
@@ -182,6 +194,7 @@ test("refreshes public room listings", async () => {
     signIn: jest.fn(async () => session)
   };
   const roomClient: MultiplayerLobbyClient = {
+    addBot: jest.fn(async () => publicRoom),
     createRoom: jest.fn(async () => publicRoom),
     getRoom: jest.fn(async () => publicRoom),
     joinRoom: jest.fn(async () => publicRoom),
@@ -246,6 +259,7 @@ test("completes Cognito new-password challenges", async () => {
     })
   };
   const roomClient: MultiplayerLobbyClient = {
+    addBot: jest.fn(async () => createRoomView()),
     createRoom: jest.fn(async () => createRoomView()),
     getRoom: jest.fn(async () => createRoomView()),
     joinRoom: jest.fn(async () => createRoomView()),
@@ -362,6 +376,7 @@ function createRoomView(
       {
         connectionStatus: "online",
         displayName: "Alice",
+        isBot: false,
         isViewer: true,
         joinedAt: "2026-05-31T00:00:00.000Z"
       }
@@ -371,22 +386,26 @@ function createRoomView(
     seats: [
       {
         isViewer: false,
+        isBot: false,
         occupied: false,
         seatIndex: "SEAT_0"
       },
       {
         displayName: "Alice",
+        isBot: false,
         isViewer: true,
         occupied: true,
         seatIndex: "SEAT_1"
       },
       {
         isViewer: false,
+        isBot: false,
         occupied: false,
         seatIndex: "SEAT_2"
       },
       {
         isViewer: false,
+        isBot: false,
         occupied: false,
         seatIndex: "SEAT_3"
       }

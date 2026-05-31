@@ -12,6 +12,8 @@ Bots should use the same legal-action engine as human players and never bypass v
 
 Purpose: test full hand flow.
 
+Online multiplayer now uses this bot as a server-side test helper. The host can add bots to empty lobby seats before the room starts; those bots are persisted as room participants with `kind = "bot"`, shown to clients as `isBot`, and advanced by the backend after start-game, next-hand, and accepted human actions. Bot moves are generated from legal actions and then applied through the same multiplayer authorization and Forty Two command validation path as human moves.
+
 ## Bot V2 — Basic Heuristic
 
 Bidding: estimate hand strength from doubles, trump concentration, and count dominoes.

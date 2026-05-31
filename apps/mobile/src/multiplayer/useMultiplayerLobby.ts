@@ -18,6 +18,7 @@ import { AppSyncGraphqlClient } from "./graphql";
 import { MultiplayerGameClient } from "./game";
 import { AppSyncRealtimeClient } from "./realtime";
 import {
+  type AddBotInput,
   type CreateRoomInput,
   type GetRoomInput,
   type JoinRoomInput,
@@ -32,6 +33,7 @@ import type {
 } from "./types";
 
 export type MultiplayerLobbyAction =
+  | "addBot"
   | "completeNewPassword"
   | "createRoom"
   | "joinRoom"
@@ -42,6 +44,7 @@ export type MultiplayerLobbyAction =
   | "takeSeat";
 
 export interface MultiplayerLobbyClient {
+  addBot(input: AddBotInput): Promise<MultiplayerRoomView>;
   createRoom(input: CreateRoomInput): Promise<MultiplayerRoomView>;
   getRoom(input: GetRoomInput): Promise<MultiplayerRoomView>;
   joinRoom(input: JoinRoomInput): Promise<MultiplayerRoomView>;
@@ -96,6 +99,7 @@ export interface MultiplayerLobbyController extends MultiplayerLobbyState {
   completeNewPassword(
     input: MultiplayerLobbyCompleteNewPasswordInput
   ): Promise<void>;
+  addBot(input: AddBotInput): Promise<void>;
   createRoom(input: CreateRoomInput): Promise<void>;
   joinRoom(input: JoinRoomInput): Promise<void>;
   refreshPublicRooms(): Promise<void>;
@@ -271,6 +275,16 @@ export function useMultiplayerLobby(
     });
   }
 
+  async function addBot(input: AddBotInput): Promise<void> {
+    await runAction("addBot", async () => {
+      const nextRoom = await requireClient(client).addBot(input);
+
+      setRoom(nextRoom);
+      setStartedGame(null);
+      await maybeStartFromRoom(nextRoom);
+    });
+  }
+
   async function startGame(input: StartGameInput): Promise<void> {
     await runAction("startGame", async () => {
       const result = await requireClient(client).startGame(input);
@@ -422,6 +436,7 @@ export function useMultiplayerLobby(
   }
 
   return {
+    addBot,
     busyAction,
     clearError: () => setError(null),
     completeNewPassword,

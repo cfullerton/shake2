@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  addMultiplayerBot,
+  advanceMultiplayerBots,
   createMultiplayerActionEnvelope,
   createMultiplayerRoom,
   createNumericBid,
@@ -13,6 +15,7 @@ import {
   startMultiplayerGame,
   startNextMultiplayerHand,
   submitMultiplayerGameAction,
+  submitMultiplayerGameActionWithBots,
   takeMultiplayerSeat,
   type EngineContext,
   type LegalRandomBotDecision,
@@ -73,6 +76,89 @@ test("multiplayer game start requires the room host", () => {
   }
 });
 
+test("multiplayer host can fill open seats with bots", () => {
+  const context = createTestContext();
+  let room = createMultiplayerRoom(
+    {
+      hostDisplayName: "Alice",
+      hostPlayerId: "player-0",
+      roomCode: "ROOM42",
+      roomId: "room-1"
+    },
+    context
+  );
+
+  room = unwrapResult(
+    takeMultiplayerSeat(
+      room,
+      {
+        playerId: "player-0",
+        seat: 0
+      },
+      context
+    )
+  );
+
+  for (const seat of [1, 2, 3] as const) {
+    room = unwrapResult(
+      addMultiplayerBot(
+        room,
+        {
+          actorId: "player-0",
+          seat
+        },
+        context
+      )
+    );
+  }
+
+  assert.equal(room.status, "ready");
+  assert.equal(room.participants["bot-seat-1"]?.kind, "bot");
+  assert.equal(room.seats[1]?.displayName, "Bot East");
+});
+
+test("multiplayer bot seats advance to the next human turn after game start", () => {
+  const context = createTestContext();
+  const room = createHumanAndBotsRoom(context);
+  const started = unwrapResult(
+    startMultiplayerGame(
+      room,
+      {
+        actorId: "player-0",
+        dealer: 0,
+        gameId: "game-1"
+      },
+      context
+    )
+  );
+  const advanced = unwrapResult(
+    advanceMultiplayerBots(started, context)
+  );
+
+  assert.deepEqual(
+    advanced.events.map((event) => event.actorSeat),
+    [1, 2, 3]
+  );
+  assert.deepEqual(
+    advanced.events.map((event) => event.event.type),
+    [
+      "fortyTwo.bid.submitted",
+      "fortyTwo.bid.submitted",
+      "fortyTwo.bid.submitted"
+    ]
+  );
+  assert.equal(advanced.snapshot.snapshot.phase, "bidding");
+
+  if (advanced.snapshot.snapshot.phase === "bidding") {
+    assert.equal(advanced.snapshot.snapshot.bidding.currentSeat, 0);
+  }
+
+  assert.deepEqual(
+    replayFortyTwoEvents(advanced.session.initialSnapshot, advanced.session.events),
+    advanced.session.snapshot
+  );
+});
+
 test("multiplayer action submission rejects actors claiming another seat", () => {
   const context = createTestContext();
   const session = createStartedSession(context);
@@ -98,6 +184,86 @@ test("multiplayer action submission rejects actors claiming another seat", () =>
   if (!result.ok) {
     assert.equal(result.error.code, "INVALID_ACTOR");
   }
+});
+
+test("multiplayer accepted human actions can include consequential bot actions", () => {
+  const context = createTestContext();
+  let session = unwrapResult(
+    advanceMultiplayerBots(
+      unwrapResult(
+        startMultiplayerGame(
+          createHumanAndBotsRoom(context),
+          {
+            actorId: "player-0",
+            dealer: 0,
+            gameId: "game-1"
+          },
+          context
+        )
+      ),
+      context
+    )
+  ).session;
+  let playResult: Extract<MultiplayerSubmitActionResult, { readonly ok: true }> | null = null;
+  let playActionId = "";
+  let previousActionResultCount = 0;
+
+  for (let index = 0; index < 4 && playResult === null; index += 1) {
+    previousActionResultCount = Object.keys(session.actionResults).length;
+    const actionId = `human-action-${index}`;
+    const result = unwrapSubmit(
+      submitMultiplayerGameActionWithBots(
+        session,
+        createMultiplayerActionEnvelope(
+          session,
+          {
+            action: createBotAction(
+              chooseLegalRandomBotDecision({
+                context,
+                seat: 0,
+                snapshot: session.snapshot
+              })
+            ),
+            actionId,
+            actorId: "player-0"
+          },
+          context
+        ),
+        context
+      )
+    );
+
+    session = result.session;
+
+    if (result.events.some((event) => event.actorId.startsWith("bot-seat-"))) {
+      playResult = result;
+      playActionId = actionId;
+    }
+  }
+
+  if (!playResult) {
+    throw new Error("Expected a human action to trigger bot actions.");
+  }
+
+  assert.equal(
+    Object.keys(playResult.session.actionResults).length,
+    previousActionResultCount + 1
+  );
+  const storedResult = playResult.session.actionResults[playActionId];
+
+  assert.equal(storedResult?.ok, true);
+
+  if (storedResult?.ok) {
+    assert.equal(storedResult.events.length, playResult.events.length);
+  }
+  assert.equal(
+    playResult.events.some((event) => event.actorId.startsWith("bot-seat-")),
+    true
+  );
+  assert.deepEqual(
+    replayFortyTwoEvents(playResult.session.initialSnapshot, playResult.session.events),
+    playResult.session.snapshot
+  );
 });
 
 test("multiplayer bidding auto-completes after the fourth bid", () => {
@@ -334,6 +500,45 @@ function createReadyRoom(context: EngineContext): MultiplayerRoom {
         room,
         {
           playerId: playerIdForSeat(seat),
+          seat
+        },
+        context
+      )
+    );
+  }
+
+  assert.equal(room.status, "ready");
+  return room;
+}
+
+function createHumanAndBotsRoom(context: EngineContext): MultiplayerRoom {
+  let room = createMultiplayerRoom(
+    {
+      hostDisplayName: "Alice",
+      hostPlayerId: "player-0",
+      roomCode: "ROOM42",
+      roomId: "room-1"
+    },
+    context
+  );
+
+  room = unwrapResult(
+    takeMultiplayerSeat(
+      room,
+      {
+        playerId: "player-0",
+        seat: 0
+      },
+      context
+    )
+  );
+
+  for (const seat of [1, 2, 3] as const) {
+    room = unwrapResult(
+      addMultiplayerBot(
+        room,
+        {
+          actorId: "player-0",
           seat
         },
         context

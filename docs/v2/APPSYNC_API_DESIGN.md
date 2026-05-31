@@ -12,10 +12,13 @@ type Mutation {
   startNextHand(input: StartNextHandInput!): SubmitGameActionResult!
   createRoom(input: CreateRoomInput!): CreateRoomResult!
   joinRoom(input: JoinRoomInput!): JoinRoomResult!
+  addBot(input: AddBotInput!): RoomView!
 }
 ```
 
 `CreateRoomInput` includes a `visibility` enum so clients can create invite-only private rooms or discoverable public rooms.
+
+`addBot` is a host-only lobby mutation for filling empty seats before start. The response uses safe room fields with `isBot` flags; raw bot player IDs are not part of room views.
 
 `startNextHand` is a server-owned lifecycle mutation. It deals from the authoritative post-hand `setup` state, is host-only in the current API, returns the same safe public result shape as `submitGameAction`, and is included in the game-update subscription fan-out.
 

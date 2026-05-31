@@ -14,6 +14,7 @@ import {
 } from "../../dynamodb/store.ts";
 import { BackendResolverError } from "../../errors/errors.ts";
 import {
+  addMultiplayerBot,
   createMultiplayerRoom,
   createMultiplayerRoomRecord,
   createMultiplayerSnapshotRecord,
@@ -39,6 +40,7 @@ import {
 } from "../../game-engine.ts";
 import {
   createCreateRoomHandler,
+  createAddBotHandler,
   createGetRoomByCodeHandler,
   createGetRoomHandler,
   createJoinRoomHandler,
@@ -176,6 +178,36 @@ test("takeSeat rejects occupied seats before persistence", async () => {
   assert.equal(mock.saveRoomRecordCalls.length, 0);
 });
 
+test("addBot lets the host fill an empty seat without exposing bot IDs", async () => {
+  const context = createTestContext();
+  const room = createRoom(context);
+  const mock = createMockStore([room]);
+  const handler = createAddBotHandler({
+    engineContext: context,
+    store: mock.store
+  });
+  const response = await handler({
+    arguments: {
+      input: {
+        roomId: "room-1",
+        seatIndex: "SEAT_1"
+      }
+    },
+    identity: {
+      playerId: "player-0"
+    }
+  });
+  const botSeat = response.seats.find((seat) => seat.seatIndex === "SEAT_1");
+
+  assert.equal(response.status, "waiting");
+  assert.equal(response.participantCount, 2);
+  assert.equal(botSeat?.displayName, "Bot East");
+  assert.equal(botSeat?.isBot, true);
+  assert.equal(botSeat?.isViewer, false);
+  assert.equal(mock.saveRoomRecordCalls.length, 1);
+  assert.doesNotMatch(JSON.stringify(response), /bot-seat-1/);
+});
+
 test("startGame commits a game-start write plan and returns public state", async () => {
   const context = createTestContext();
   const readyRoom = createRoomWithPlayersAndSeats(context, [0, 1, 2, 3]);
@@ -216,6 +248,43 @@ test("startGame commits a game-start write plan and returns public state", async
   assert.equal(mock.commitWritePlanCalls.length, 1);
   assert.equal(mock.commitWritePlanCalls[0]?.writePlan.kind, "gameStart");
   assert.equal(mock.commitWritePlanCalls[0]?.transaction.tableName, "Shake2Multiplayer");
+});
+
+test("startGame advances bot seats before committing the game start", async () => {
+  const context = createTestContext();
+  const readyRoom = createRoomWithHostAndBots(context);
+  const mock = createMockStore([readyRoom]);
+  const handler = createStartGameHandler({
+    engineContext: context,
+    resolverContext: {
+      requestId: "test-request",
+      tableName: "Shake2Multiplayer"
+    },
+    store: mock.store
+  });
+  const response = await handler({
+    arguments: {
+      input: {
+        roomId: "room-1"
+      }
+    },
+    identity: {
+      playerId: "player-0"
+    }
+  });
+  const eventTypes = mock.commitWritePlanCalls[0]?.writePlan.operations
+    .filter((operation) => operation.kind === "putEvent")
+    .map((operation) => operation.record.eventType);
+
+  assert.equal(response.snapshot.phase, "bidding");
+  assert.equal((response.snapshot.redactedState as any).bidding.currentSeat, 0);
+  assert.deepEqual(eventTypes, [
+    "fortyTwo.game.created",
+    "fortyTwo.hand.dealt",
+    "fortyTwo.bid.submitted",
+    "fortyTwo.bid.submitted",
+    "fortyTwo.bid.submitted"
+  ]);
 });
 
 test("startGame rejects non-hosts before persistence", async () => {
@@ -697,6 +766,37 @@ function createRoomWithPlayersAndSeats(
     );
   }
 
+  return room;
+}
+
+function createRoomWithHostAndBots(context: EngineContext): MultiplayerRoom {
+  let room = createRoom(context);
+
+  room = unwrapResult(
+    takeMultiplayerSeat(
+      room,
+      {
+        playerId: "player-0",
+        seat: 0
+      },
+      context
+    )
+  );
+
+  for (const seat of [1, 2, 3] as const) {
+    room = unwrapResult(
+      addMultiplayerBot(
+        room,
+        {
+          actorId: "player-0",
+          seat
+        },
+        context
+      )
+    );
+  }
+
+  assert.equal(room.status, "ready");
   return room;
 }
 

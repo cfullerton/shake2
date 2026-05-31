@@ -21,7 +21,7 @@ test("multiplayer stack defines Cognito, DynamoDB, AppSync, Lambda, and IAM", ()
   template.resourceCountIs("AWS::Cognito::UserPoolClient", 1);
   template.resourceCountIs("AWS::DynamoDB::Table", 1);
   template.resourceCountIs("AWS::AppSync::GraphQLApi", 1);
-  template.resourceCountIs("AWS::Lambda::Function", 12);
+  template.resourceCountIs("AWS::Lambda::Function", 13);
   template.hasResourceProperties("AWS::IAM::Role", {
     AssumeRolePolicyDocument: Match.objectLike({
       Statement: Match.arrayWith([
@@ -46,6 +46,7 @@ test("AppSync uses Cognito authorization and Lambda resolvers", () => {
     ["Mutation", "createRoom"],
     ["Mutation", "joinRoom"],
     ["Mutation", "takeSeat"],
+    ["Mutation", "addBot"],
     ["Mutation", "startGame"],
     ["Mutation", "startNextHand"],
     ["Mutation", "submitGameAction"],
@@ -62,7 +63,7 @@ test("AppSync uses Cognito authorization and Lambda resolvers", () => {
     });
   }
 
-  template.resourceCountIs("AWS::AppSync::DataSource", 12);
+  template.resourceCountIs("AWS::AppSync::DataSource", 13);
 });
 
 test("Cognito app client is native-app shaped without hosted OAuth defaults", () => {

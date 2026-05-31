@@ -1,6 +1,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   AlertCircle,
+  Bot,
   Check,
   DoorOpen,
   Globe2,
@@ -108,6 +109,23 @@ export function MultiplayerLobbyContent({
         ? { targetMarks: parsedTarget }
         : {})
     });
+  }
+
+  async function handleFillBots() {
+    const room = lobby.room;
+
+    if (!room) {
+      return;
+    }
+
+    for (const seat of room.seats) {
+      if (!seat.occupied) {
+        await lobby.addBot({
+          roomId: room.roomId,
+          seatIndex: seat.seatIndex
+        });
+      }
+    }
   }
 
   return (
@@ -344,7 +362,11 @@ export function MultiplayerLobbyContent({
                           {participant.displayName}
                         </Text>
                         <Text style={styles.participantStatus}>
-                          {participant.isViewer ? "You" : participant.connectionStatus}
+                          {participant.isViewer
+                            ? "You"
+                            : participant.isBot
+                              ? "Bot"
+                              : participant.connectionStatus}
                         </Text>
                       </View>
                     ))}
@@ -365,6 +387,15 @@ export function MultiplayerLobbyContent({
                         onPress={handleStartGame}
                       >
                         Start Game
+                      </Button>
+                      <Button
+                        disabled={!hasOpenSeats(lobby.room)}
+                        icon={<Bot color={palette.denim} size={18} />}
+                        loading={lobby.busyAction === "addBot"}
+                        onPress={handleFillBots}
+                        variant="secondary"
+                      >
+                        Fill Bots
                       </Button>
                     </View>
                   ) : (
@@ -567,6 +598,12 @@ function findSeat(
   seatIndex: MultiplayerRoomSeat["seatIndex"]
 ): MultiplayerRoomSeat | undefined {
   return seats.find((seat) => seat.seatIndex === seatIndex);
+}
+
+function hasOpenSeats(
+  room: MultiplayerLobbyController["room"]
+): boolean {
+  return Boolean(room?.isHost && room.seats.some((seat) => !seat.occupied));
 }
 
 function formatRoomStatus(status: string): string {

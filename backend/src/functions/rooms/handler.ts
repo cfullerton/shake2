@@ -1,6 +1,7 @@
 import {
   toPublicGameSnapshot,
   toAppSyncRoomView,
+  type AppSyncAddBotInput,
   type AppSyncCreateRoomInput,
   type AppSyncJoinRoomInput,
   type AppSyncRoomView,
@@ -19,6 +20,8 @@ import {
   createBackendErrorResponse
 } from "../../errors/errors.ts";
 import {
+  addMultiplayerBot,
+  advanceMultiplayerBots,
   createMultiplayerDynamoDbTransactionWritePlan,
   createMultiplayerGameStartWritePlan,
   createMultiplayerNextHandWritePlan,
@@ -165,6 +168,40 @@ export function createTakeSeatHandler(
   };
 }
 
+export function createAddBotHandler(
+  dependencies: RoomLifecycleHandlerDependencies
+): RoomLifecycleHandler {
+  return async (event) => {
+    const actor = extractBackendActor(event.identity);
+    const input = parseAddBotInput(event);
+    const previousRoom = await dependencies.store.loadRoom({
+      roomId: input.roomId
+    });
+    const nextRoom = unwrapRoomResult(
+      addMultiplayerBot(
+        previousRoom.room,
+        {
+          actorId: actor.playerId,
+          ...(input.displayName ? { displayName: input.displayName } : {}),
+          seat: input.seatIndex
+        },
+        dependencies.engineContext
+      )
+    );
+
+    if (nextRoom === previousRoom.room) {
+      return toAppSyncRoomView(previousRoom.room, actor);
+    }
+
+    const record = await dependencies.store.saveRoomRecord({
+      previousRoom,
+      room: createMultiplayerRoomRecord(nextRoom)
+    });
+
+    return toAppSyncRoomView(record.room, actor);
+  };
+}
+
 export function createStartGameHandler(
   dependencies: StartGameHandlerDependencies
 ): StartGameHandler {
@@ -189,7 +226,7 @@ export function createStartGameHandler(
       };
     }
 
-    const session = unwrapMultiplayerResult(
+    const startedSession = unwrapMultiplayerResult(
       startMultiplayerGame(
         previousRoom.room,
         {
@@ -201,6 +238,10 @@ export function createStartGameHandler(
         dependencies.engineContext
       )
     );
+    const advanced = unwrapMultiplayerResult(
+      advanceMultiplayerBots(startedSession, dependencies.engineContext)
+    );
+    const session = advanced.session;
     const writePlan = createMultiplayerGameStartWritePlan(
       previousRoom.room,
       session
@@ -271,7 +312,7 @@ export function createStartNextHandHandler(
         );
       }
 
-      const result = unwrapMultiplayerResult(
+      const dealt = unwrapMultiplayerResult(
         startNextMultiplayerHand(
           previousSession,
           {
@@ -280,6 +321,17 @@ export function createStartNextHandHandler(
           dependencies.engineContext
         )
       );
+      const advanced = unwrapMultiplayerResult(
+        advanceMultiplayerBots(dealt.session, dependencies.engineContext)
+      );
+      const result = {
+        events: [
+          ...dealt.events,
+          ...advanced.events
+        ],
+        session: advanced.session,
+        snapshot: advanced.snapshot
+      };
       const writePlan = createMultiplayerNextHandWritePlan(
         previousSession,
         result
@@ -376,6 +428,11 @@ export const takeSeatHandler = createTakeSeatHandler({
   store: createUnimplementedMultiplayerStore()
 });
 
+export const addBotHandler = createAddBotHandler({
+  engineContext: createSystemEngineContext(),
+  store: createUnimplementedMultiplayerStore()
+});
+
 export const startGameHandler = createStartGameHandler({
   engineContext: createSystemEngineContext(),
   resolverContext: {
@@ -438,6 +495,20 @@ function parseTakeSeatInput(event: AppSyncResolverEvent): AppSyncTakeSeatInput {
   return {
     roomId: parseNonEmptyString(input.roomId, "takeSeat.roomId").trim(),
     seatIndex: parseSeatIndex(input.seatIndex, "takeSeat.seatIndex")
+  };
+}
+
+function parseAddBotInput(event: AppSyncResolverEvent): AppSyncAddBotInput {
+  const args = parseArguments(event, "addBot");
+  const input = parseInputObject(args.input, "addBot.input");
+  const displayName = input.displayName === undefined || input.displayName === null
+    ? undefined
+    : parseNonEmptyString(input.displayName, "addBot.displayName").trim();
+
+  return {
+    ...(displayName ? { displayName } : {}),
+    roomId: parseNonEmptyString(input.roomId, "addBot.roomId").trim(),
+    seatIndex: parseSeatIndex(input.seatIndex, "addBot.seatIndex")
   };
 }
 

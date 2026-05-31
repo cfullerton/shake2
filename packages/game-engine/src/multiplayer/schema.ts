@@ -65,6 +65,7 @@ import {
 } from "./storage.ts";
 import {
   type MultiplayerConnectionStatus,
+  type MultiplayerParticipantKind,
   type MultiplayerParticipant,
   type MultiplayerParticipants,
   type MultiplayerRoom,
@@ -92,6 +93,11 @@ const MULTIPLAYER_CONNECTION_STATUSES = [
   "backgrounded",
   "disconnected"
 ] as const satisfies readonly MultiplayerConnectionStatus[];
+
+const MULTIPLAYER_PARTICIPANT_KINDS = [
+  "human",
+  "bot"
+] as const satisfies readonly MultiplayerParticipantKind[];
 
 const MULTIPLAYER_SYNC_CONNECTION_STATUSES = [
   "connected",
@@ -1025,6 +1031,9 @@ function parseParticipant(
     ),
     displayName: parseNonEmptyString(participant.displayName, `${label}.displayName`),
     joinedAt: parseTimestamp(participant.joinedAt, `${label}.joinedAt`),
+    kind: participant.kind === undefined
+      ? "human"
+      : parseParticipantKind(participant.kind, `${label}.kind`),
     playerId: parseNonEmptyString(participant.playerId, `${label}.playerId`)
   };
 }
@@ -1284,6 +1293,18 @@ function parseConnectionStatus(
   return parseEnum(
     value,
     MULTIPLAYER_CONNECTION_STATUSES,
+    label,
+    "INVALID_ACTION"
+  );
+}
+
+function parseParticipantKind(
+  value: unknown,
+  label: string
+): MultiplayerParticipantKind {
+  return parseEnum(
+    value,
+    MULTIPLAYER_PARTICIPANT_KINDS,
     label,
     "INVALID_ACTION"
   );

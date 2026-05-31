@@ -23,6 +23,12 @@ export interface TakeSeatInput {
   readonly seatIndex: AppSyncSeatIndex;
 }
 
+export interface AddBotInput {
+  readonly displayName?: string;
+  readonly roomId: string;
+  readonly seatIndex: AppSyncSeatIndex;
+}
+
 export interface StartGameInput {
   readonly roomId: string;
   readonly targetMarks?: number;
@@ -132,6 +138,26 @@ export class MultiplayerRoomClient {
     return data.takeSeat;
   }
 
+  async addBot(input: AddBotInput): Promise<MultiplayerRoomView> {
+    const data = await this.graphql.execute<{
+      readonly addBot: MultiplayerRoomView;
+    }>({
+      operationName: "AddBot",
+      query: `
+        mutation AddBot($input: AddBotInput!) {
+          addBot(input: $input) {
+            ${ROOM_VIEW_SELECTION}
+          }
+        }
+      `,
+      variables: {
+        input
+      }
+    });
+
+    return data.addBot;
+  }
+
   async startGame(input: StartGameInput): Promise<MultiplayerStartGameResult> {
     const data = await this.graphql.execute<{
       readonly startGame: MultiplayerStartGameResultPayload;
@@ -186,12 +212,14 @@ const ROOM_VIEW_SELECTION = `
     displayName
     connectionStatus
     joinedAt
+    isBot
     isViewer
   }
   seats {
     seatIndex
     occupied
     displayName
+    isBot
     isViewer
   }
 `;
