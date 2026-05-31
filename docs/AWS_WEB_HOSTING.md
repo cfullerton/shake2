@@ -112,9 +112,20 @@ Set these repository variables in GitHub:
 | `AWS_ROLE_TO_ASSUME` | `GitHubActionsRoleArn` stack output. |
 | `AWS_S3_BUCKET` | `BucketName` stack output. |
 | `AWS_CLOUDFRONT_DISTRIBUTION_ID` | `CloudFrontDistributionId` stack output. Optional but recommended. |
+| `EXPO_PUBLIC_SHAKE2_AWS_REGION` | AWS region where the multiplayer stack was deployed. |
+| `EXPO_PUBLIC_SHAKE2_APPSYNC_GRAPHQL_URL` | `GraphqlApiUrl` output from the multiplayer stack. |
+| `EXPO_PUBLIC_SHAKE2_COGNITO_USER_POOL_ID` | `UserPoolId` output from the multiplayer stack. |
+| `EXPO_PUBLIC_SHAKE2_COGNITO_USER_POOL_CLIENT_ID` | `UserPoolClientId` output from the multiplayer stack. |
+| `EXPO_PUBLIC_SHAKE2_APPSYNC_REALTIME_URL` | Optional AppSync realtime URL override. If omitted, the app derives it from the GraphQL URL. |
 
 If a custom domain is configured, the stack also outputs `CustomDomainUrl` and
 `CertificateArn`.
+
+The `EXPO_PUBLIC_SHAKE2_*` values are public client configuration, not secrets.
+Expo bakes them into the web JavaScript bundle at build time, so changing one of
+these GitHub variables requires a new workflow run and redeploy. Do not store
+smoke usernames, smoke passwords, AWS access keys, or other credentials in
+`EXPO_PUBLIC_*` variables.
 
 The workflow deploys on pushes to `main` and can also be run manually.
 

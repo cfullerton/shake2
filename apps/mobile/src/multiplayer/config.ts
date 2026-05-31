@@ -111,9 +111,17 @@ function readOptionalValue(value: string | undefined): string | undefined {
 }
 
 function readDefaultEnvironment(): MobileMultiplayerEnvironment {
-  if (typeof process === "undefined") {
-    return {};
-  }
-
-  return process.env as MobileMultiplayerEnvironment;
+  return {
+    // Expo only inlines public env values when each key is referenced directly.
+    EXPO_PUBLIC_SHAKE2_APPSYNC_GRAPHQL_URL:
+      process.env.EXPO_PUBLIC_SHAKE2_APPSYNC_GRAPHQL_URL,
+    EXPO_PUBLIC_SHAKE2_APPSYNC_REALTIME_URL:
+      process.env.EXPO_PUBLIC_SHAKE2_APPSYNC_REALTIME_URL,
+    EXPO_PUBLIC_SHAKE2_AWS_REGION:
+      process.env.EXPO_PUBLIC_SHAKE2_AWS_REGION,
+    EXPO_PUBLIC_SHAKE2_COGNITO_USER_POOL_CLIENT_ID:
+      process.env.EXPO_PUBLIC_SHAKE2_COGNITO_USER_POOL_CLIENT_ID,
+    EXPO_PUBLIC_SHAKE2_COGNITO_USER_POOL_ID:
+      process.env.EXPO_PUBLIC_SHAKE2_COGNITO_USER_POOL_ID
+  };
 }
