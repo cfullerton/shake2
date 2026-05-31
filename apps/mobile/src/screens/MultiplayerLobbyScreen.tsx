@@ -12,7 +12,7 @@ import {
   Users,
   Wifi
 } from "lucide-react-native";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "../components/Button";
@@ -46,7 +46,9 @@ export function MultiplayerLobbyContent({
 }: {
   readonly lobby: MultiplayerLobbyController;
 }) {
-  const [displayName, setDisplayName] = useState("Player");
+  const [displayName, setDisplayName] = useState(
+    lobby.session?.username ?? ""
+  );
   const [newPassword, setNewPassword] = useState("");
   const [password, setPassword] = useState("");
   const [roomCode, setRoomCode] = useState("");
@@ -58,6 +60,13 @@ export function MultiplayerLobbyContent({
   const needsNewPassword = lobby.newPasswordChallenge !== null;
   const canStart = canStartMultiplayerRoom(lobby.room);
   const inStartedGame = lobby.startedGame !== null;
+  const sessionUsername = lobby.session?.username ?? null;
+
+  useEffect(() => {
+    if (sessionUsername) {
+      setDisplayName((prev) => prev || sessionUsername);
+    }
+  }, [sessionUsername]);
 
   async function handleSignIn() {
     await lobby.signIn({

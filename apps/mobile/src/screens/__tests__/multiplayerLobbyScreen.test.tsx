@@ -150,7 +150,7 @@ test("lobby screen creates public rooms and joins public listings", async () => 
 
   await waitFor(() => {
     expect(createRoom).toHaveBeenCalledWith({
-      displayName: "Player",
+      displayName: "smoke-user",
       visibility: "public"
     });
   });
@@ -164,7 +164,7 @@ test("lobby screen creates public rooms and joins public listings", async () => 
   fireEvent.press(joinButtons[joinButtons.length - 1]!);
   await waitFor(() => {
     expect(joinRoom).toHaveBeenCalledWith({
-      displayName: "Player",
+      displayName: "smoke-user",
       roomCode: "ROOM42"
     });
   });
