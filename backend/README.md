@@ -166,9 +166,13 @@ SHAKE2_SMOKE_USERNAME
 SHAKE2_SMOKE_PASSWORD
 SHAKE2_SMOKE_CREATE_USER
 SHAKE2_SMOKE_GAME_ID
+SHAKE2_SMOKE_SEED_GAME
+SHAKE2_SMOKE_SEEDED_GAME_ID
 ```
 
 The deployed smoke runner automatically loads `backend/.env` when present, then lets explicit shell environment variables override those values. Keep real `.env` files local only.
+
+Set `SHAKE2_SMOKE_SEED_GAME=true` to run the extended smoke path. That path writes a disposable room/game into DynamoDB through the engine storage records, submits one legal bid through AppSync, verifies duplicate action idempotency, checks public/private hand separation, and verifies reconnect pending-action classification. If `SHAKE2_SMOKE_SEEDED_GAME_ID` is omitted, the runner generates a unique smoke game ID.
 
 The room game ID index must allow lookup of room metadata by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 
