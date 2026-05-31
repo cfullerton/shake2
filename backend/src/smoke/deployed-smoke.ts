@@ -603,7 +603,7 @@ export function evaluateSmokeCheck(
     const ok = result.httpStatus === 200 &&
       !hasGraphqlErrors(result.body) &&
       typeof snapshot?.gameId === "string" &&
-      snapshot.phase === "bidding" &&
+      snapshot.phase === "dealt" &&
       readSeatHandCount(snapshot, "seat0") === 7 &&
       readSeatHandCount(snapshot, "seat1") === 7 &&
       readSeatHandCount(snapshot, "seat2") === 7 &&

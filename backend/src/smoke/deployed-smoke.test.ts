@@ -296,7 +296,7 @@ test("evaluates expected seeded smoke GraphQL results", () => {
               seat2: 7,
               seat3: 7
             },
-            phase: "bidding",
+            phase: "dealt",
             redactedState: {
               handCounts: {
                 0: 7,
