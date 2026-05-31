@@ -62,6 +62,8 @@ export type MultiplayerActiveGameLiveStatus =
   | "idle"
   | "reconnecting";
 
+export const multiplayerActiveGameSyncIntervalMs = 2_000;
+
 export function useMultiplayerActiveGame({
   actorId,
   client,
@@ -82,10 +84,16 @@ export function useMultiplayerActiveGame({
     initialRoom.viewerSeat ?? null
   );
   const snapshotRef = useRef<MultiplayerPublicGameSnapshot>(initialSnapshot);
+  const snapshotSyncInFlight = useRef(false);
+  const busyActionRef = useRef<MultiplayerActiveGameAction | null>(null);
 
   useEffect(() => {
     roomViewerSeatRef.current = room.viewerSeat ?? null;
   }, [room.viewerSeat]);
+
+  useEffect(() => {
+    busyActionRef.current = busyAction;
+  }, [busyAction]);
 
   useEffect(() => {
     snapshotRef.current = snapshot;
@@ -152,6 +160,18 @@ export function useMultiplayerActiveGame({
     };
   }, [client, snapshot.gameId]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void refreshSnapshotSilently();
+    }, multiplayerActiveGameSyncIntervalMs);
+
+    void refreshSnapshotSilently();
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [client, snapshot.gameId]);
+
   async function refresh(): Promise<void> {
     await runAction("refresh", async () => {
       const nextSnapshot = await client.getGameSnapshot(snapshot.gameId);
@@ -160,6 +180,36 @@ export function useMultiplayerActiveGame({
         allowEqualSequence: true
       });
     });
+  }
+
+  async function refreshSnapshotSilently(): Promise<void> {
+    if (snapshotSyncInFlight.current || busyActionRef.current) {
+      return;
+    }
+
+    const currentSnapshot = snapshotRef.current;
+
+    snapshotSyncInFlight.current = true;
+
+    try {
+      const nextSnapshot = await client.getGameSnapshot(currentSnapshot.gameId);
+
+      if (
+        nextSnapshot.gameId !== snapshotRef.current.gameId ||
+        nextSnapshot.lastEventSequence <= snapshotRef.current.lastEventSequence
+      ) {
+        return;
+      }
+
+      await applySnapshotUpdate(nextSnapshot, {
+        allowEqualSequence: false
+      });
+      setLiveError(null);
+    } catch {
+      // Background catch-up should not replace explicit action errors.
+    } finally {
+      snapshotSyncInFlight.current = false;
+    }
   }
 
   async function startNextHand(): Promise<void> {
@@ -363,6 +413,7 @@ export function useMultiplayerActiveGame({
     action: MultiplayerActiveGameAction,
     task: () => Promise<void>
   ): Promise<void> {
+    busyActionRef.current = action;
     setBusyAction(action);
     setError(null);
 
@@ -371,6 +422,7 @@ export function useMultiplayerActiveGame({
     } catch (caught) {
       setError(toGameErrorMessage(caught));
     } finally {
+      busyActionRef.current = null;
       setBusyAction(null);
     }
   }

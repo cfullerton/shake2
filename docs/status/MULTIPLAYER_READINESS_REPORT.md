@@ -43,7 +43,7 @@ Mobile multiplayer foundation now lives under `apps/mobile/src/multiplayer`.
 - `rooms.ts`: wraps create/join/list-public/take-seat/start room GraphQL operations behind typed helpers.
 - `game.ts`: wraps public snapshot, private hand, reconnect, next-hand, and submit-action GraphQL operations behind typed helpers.
 - `activeGame.ts`: projects normalized public snapshots plus the viewer private hand into table, score, turn, bidding, trump-selection, trick-play, and next-hand UI state outside React components.
-- `useMultiplayerActiveGame.ts`: owns active-game snapshot/private-hand loading, live game-update subscription application, gap-triggered reconnect refresh, manual refresh, host next-hand dealing, pass/numeric bid submission, declarer trump-call state, and domino-play submission.
+- `useMultiplayerActiveGame.ts`: owns active-game snapshot/private-hand loading, live game-update subscription application, background snapshot catch-up, gap-triggered reconnect refresh, manual refresh, host next-hand dealing, pass/numeric bid submission, declarer trump-call state, and domino-play submission.
 - `useMultiplayerLobby.ts`: owns mobile lobby auth/client/session state, polling-based room/public-list refresh, and room lifecycle operations outside screen components.
 
 The first mobile multiplayer screens now live under `apps/mobile/src/screens`.

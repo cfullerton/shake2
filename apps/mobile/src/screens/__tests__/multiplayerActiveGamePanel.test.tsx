@@ -1,5 +1,6 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
+import { multiplayerActiveGameSyncIntervalMs } from "../../multiplayer";
 import type {
   CognitoAuthSession,
   MultiplayerGameUpdate,
@@ -372,6 +373,65 @@ test("active game panel applies live game update snapshots", async () => {
     expect(client.getMyPrivateHand).toHaveBeenCalledTimes(2);
   });
   expect(view.getByText("Snapshot 3 · Event 3")).toBeTruthy();
+});
+
+test("active game panel silently refreshes when realtime stalls", async () => {
+  jest.useFakeTimers();
+  let view: ReturnType<typeof render> | null = null;
+
+  try {
+    const hand = createPrivateHand();
+    const nextSnapshot = createSnapshot({
+      lastEventSequence: 3,
+      phase: "bidding",
+      redactedState: {
+        bidding: {
+          currentSeat: 2
+        },
+        dealer: 0,
+        handNumber: 1,
+        phase: "bidding"
+      },
+      snapshotVersion: 3
+    });
+    const client = {
+      getGameSnapshot: jest.fn(async () => nextSnapshot),
+      getMyPrivateHand: jest.fn(async () => hand),
+      submitBid: jest.fn(),
+      submitDomino: jest.fn(),
+      submitTrump: jest.fn(),
+      subscribeToGameUpdates: jest.fn(() => ({
+        unsubscribe: jest.fn()
+      }))
+    } as unknown as MultiplayerLobbyGameClient;
+    view = render(
+      <MultiplayerActiveGamePanel
+        actorId="actor-sub"
+        client={client}
+        initialRoom={createRoomView()}
+        initialSnapshot={createSnapshot()}
+        session={createSession()}
+      />
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(client.getMyPrivateHand).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(multiplayerActiveGameSyncIntervalMs);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(client.getGameSnapshot).toHaveBeenCalledWith("game-1");
+    expect(view.getByText("Snapshot 3 · Event 3")).toBeTruthy();
+  } finally {
+    view?.unmount();
+    jest.useRealTimers();
+  }
 });
 
 test("active game panel reconnects when live updates skip event sequences", async () => {

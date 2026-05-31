@@ -4,7 +4,7 @@
 
 The core multiplayer authority model lives in `packages/game-engine/src/multiplayer`.
 
-It is backend-neutral and pure TypeScript. A backend workspace and CDK development stack now adapt that authority model to Cognito, AppSync, Lambda, and DynamoDB. The mobile app now has lobby UI for sign-in, private/public create and join flows, seat selection, host start, and polling-based lobby refresh, plus an active-game shell for public snapshots, private hands, bidding actions, declarer trump calls, trick-play domino submission, and AppSync subscription-backed snapshot sync.
+It is backend-neutral and pure TypeScript. A backend workspace and CDK development stack now adapt that authority model to Cognito, AppSync, Lambda, and DynamoDB. The mobile app now has lobby UI for sign-in, private/public create and join flows, seat selection, host start, and polling-based lobby refresh, plus an active-game shell for public snapshots, private hands, bidding actions, declarer trump calls, trick-play domino submission, AppSync subscription-backed snapshot sync, and a quiet polling fallback for mobile browser realtime stalls.
 
 Implemented now:
 
@@ -33,7 +33,7 @@ Implemented now:
 - AppSync/Lambda room lifecycle fields for creating rooms, joining by room code, taking seats, starting ready rooms, and reading safe room views.
 - Mobile multiplayer network foundation for public environment config, Cognito ID-token sign-in, authenticated AppSync GraphQL calls, and typed room/start operations.
 - Mobile multiplayer lobby UI for account sign-in, private/public room creation, join by room code, public room listing, room/seat display, seat taking, and host-only start-game.
-- Mobile multiplayer active-game UI for the started-room handoff, public table/score/turn rendering, private-hand loading, manual snapshot refresh, live game-update subscription sync, pass/numeric bid submission, declarer trump selection, current-trick rendering, legal domino-play submission, host next-hand dealing, compact post-hand recap, and game-over banner.
+- Mobile multiplayer active-game UI for the started-room handoff, public table/score/turn rendering, private-hand loading, manual snapshot refresh, live game-update subscription sync with background snapshot catch-up, pass/numeric bid submission, declarer trump selection, current-trick rendering, legal domino-play submission, host next-hand dealing, compact post-hand recap, and game-over banner.
 
 ## Authority Model
 
@@ -73,7 +73,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, host-added bot seats, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh and host bot filling, active-game bidding/trump/trick-play UI, server-side online bot advancement, host-triggered next-hand dealing after completed hands, compact post-hand/game-over recap, mobile AppSync realtime subscription handling for game updates, mobile gap-triggered reconnect refresh, and an optional deployed smoke path for live AppSync subscription validation. Full reconnect UX and pending-action retry are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, host-added bot seats, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh and host bot filling, active-game bidding/trump/trick-play UI, server-side online bot advancement, host-triggered next-hand dealing after completed hands, compact post-hand/game-over recap, mobile AppSync realtime subscription handling for game updates, mobile gap-triggered reconnect refresh, mobile active-game polling catch-up, and an optional deployed smoke path for live AppSync subscription validation. Full reconnect UX and pending-action retry are still missing.
 
 ## Durable Record Shape
 
