@@ -38,6 +38,12 @@ export interface AppSyncGetReconnectViewInput {
   readonly snapshotVersion: number;
 }
 
+export type AppSyncSeatIndex =
+  | "SEAT_0"
+  | "SEAT_1"
+  | "SEAT_2"
+  | "SEAT_3";
+
 export interface PrivateHandStoreBoundaryRequest {
   readonly actorPlayerId: string;
   readonly gameId: string;
@@ -73,14 +79,14 @@ export interface AppSyncPrivateHandResponse {
   readonly dominoes: readonly AppSyncDomino[];
   readonly gameId: string;
   readonly handNumber: number;
-  readonly seatIndex: SeatIndex;
+  readonly seatIndex: AppSyncSeatIndex;
   readonly updatedAt: string;
 }
 
 export interface AppSyncSafeGameEventSummary {
   readonly actionId: string;
   readonly actorId: string;
-  readonly actorSeat?: SeatIndex;
+  readonly actorSeat?: AppSyncSeatIndex;
   readonly eventId: string;
   readonly eventType: string;
   readonly sequence: number;
@@ -246,7 +252,7 @@ export function mapPrivateHandRecordToAppSyncResponse(
     dominoes: record.hand.map(toAppSyncDomino),
     gameId: record.gameId,
     handNumber: record.handNumber,
-    seatIndex: record.seatIndex,
+    seatIndex: toAppSyncSeatIndex(record.seatIndex),
     updatedAt: record.updatedAt
   };
 }
@@ -275,11 +281,26 @@ export function toSafeGameEventSummary(
   return {
     actionId: event.actionId,
     actorId: event.actorId,
-    ...(event.actorSeat !== undefined ? { actorSeat: event.actorSeat } : {}),
+    ...(event.actorSeat !== undefined
+      ? { actorSeat: toAppSyncSeatIndex(event.actorSeat) }
+      : {}),
     eventId: event.eventId,
     eventType: event.event.type,
     sequence: event.sequence
   };
+}
+
+export function toAppSyncSeatIndex(seat: SeatIndex): AppSyncSeatIndex {
+  switch (seat) {
+    case 0:
+      return "SEAT_0";
+    case 1:
+      return "SEAT_1";
+    case 2:
+      return "SEAT_2";
+    case 3:
+      return "SEAT_3";
+  }
 }
 
 function assertPrivateHandOwnership(
@@ -313,7 +334,7 @@ function createPrivateHandFromPlayerView(
     dominoes: viewerHand.map((domino) => toAppSyncDomino(domino as Domino)),
     gameId: view.view.snapshot.gameId,
     handNumber: readNumberField(state, "handNumber"),
-    seatIndex: viewerSeat,
+    seatIndex: toAppSyncSeatIndex(viewerSeat),
     updatedAt: view.view.snapshot.generatedAt
   };
 }
