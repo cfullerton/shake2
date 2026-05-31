@@ -71,6 +71,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
   - Authenticates through Cognito and calls the deployed AppSync API.
   - Verifies unauthenticated rejection, Cognito actor propagation, and invocation of current gameplay/read resolvers.
   - In seeded mode, can authenticate a second Cognito smoke user and verify non-members cannot read public snapshots or private hands.
+  - In seeded subscription mode, opens an AppSync realtime subscription before submitting the legal smoke action and verifies `onGameUpdated` receives a public/redacted accepted-action payload.
 
 - `src/dynamodb/store.ts`
   - Defines `MultiplayerStore`.
@@ -156,7 +157,7 @@ Cognito `sub` is authoritative and becomes `BackendActor.playerId`, which is the
 - No automatically deployed AWS resources.
 - CDK infrastructure exists in `infra/` and synthesizes a deployable development stack.
 - No Amplify backend configuration.
-- No live subscription fanout beyond the schema-level AppSync subscription shape.
+- No mobile subscription client or subscription gap-recovery loop.
 - No frontend multiplayer UI.
 - No game-rule changes.
 
@@ -192,11 +193,14 @@ SHAKE2_SMOKE_SEEDED_GAME_ID
 SHAKE2_SMOKE_SECONDARY_EMAIL
 SHAKE2_SMOKE_SECONDARY_USERNAME
 SHAKE2_SMOKE_SECONDARY_PASSWORD
+SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION
 ```
 
 The deployed smoke runner automatically loads `backend/.env` when present, then lets explicit shell environment variables override those values. Keep real `.env` files local only.
 
 Set `SHAKE2_SMOKE_SEED_GAME=true` to run the extended smoke path. That path writes a disposable room/game into DynamoDB through the engine storage records, submits one legal bid through AppSync, verifies duplicate action idempotency, checks public/private hand separation, and verifies reconnect pending-action classification. If `SHAKE2_SMOKE_CREATE_USER=true`, the runner also creates/resets a derived secondary user by default and verifies that authenticated non-members cannot read the seeded public snapshot or private hand. You can provide the `SHAKE2_SMOKE_SECONDARY_*` values to use an existing second user or override the derived one. If `SHAKE2_SMOKE_SEEDED_GAME_ID` is omitted, the runner generates a unique smoke game ID.
+
+Set `SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION=true` with `SHAKE2_SMOKE_SEED_GAME=true` to validate live AppSync delivery. In that mode the runner establishes `onGameUpdated(gameId)`, waits for `start_ack`, submits the seeded legal action over HTTPS, and verifies the WebSocket data message contains the accepted action, root `gameId`, safe event summaries, and a redacted public snapshot.
 
 The room code index must allow lookup of room metadata by `roomCode`, and the room game ID index must allow lookup by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 
@@ -221,5 +225,5 @@ npm test
 
 1. Add deployed smoke coverage for create/join/take-seat/start room flows.
 2. Add DynamoDB Local or equivalent integration tests for conditional transaction failures and retry behavior.
-3. Validate AppSync subscription delivery and client-side sequence-gap recovery.
+3. Run the subscription smoke mode against the current dev stack and add client-side sequence-gap recovery.
 4. Add frontend multiplayer configuration and session UI behind a feature flag.

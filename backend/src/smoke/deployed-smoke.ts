@@ -13,6 +13,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient
 } from "@aws-sdk/lib-dynamodb";
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,6 +37,7 @@ export interface DeployedSmokeEnvironment {
   readonly SHAKE2_SMOKE_SECONDARY_USERNAME?: string;
   readonly SHAKE2_SMOKE_STACK_NAME?: string;
   readonly SHAKE2_SMOKE_USERNAME?: string;
+  readonly SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION?: string;
 }
 
 export interface DeployedSmokeUserConfig {
@@ -56,6 +58,7 @@ export interface DeployedSmokeConfig {
   readonly stackName: string;
   readonly userEmail: string;
   readonly username: string;
+  readonly validateSubscription: boolean;
 }
 
 export interface MultiplayerStackOutputs {
@@ -116,6 +119,53 @@ export interface SmokeCheckEvaluation {
 }
 
 type SmokePayload = Record<string, any>;
+type RealtimeWebSocketEventType = "close" | "error" | "message" | "open";
+
+interface RealtimeWebSocketEvent {
+  readonly data?: unknown;
+}
+
+interface RealtimeWebSocket {
+  addEventListener(
+    type: RealtimeWebSocketEventType,
+    listener: (event: RealtimeWebSocketEvent) => void
+  ): void;
+  close(code?: number, reason?: string): void;
+  send(data: string): void;
+}
+
+type RealtimeWebSocketFactory = (
+  url: string,
+  protocols: readonly string[]
+) => RealtimeWebSocket;
+
+export interface AppSyncRealtimeAuthorization {
+  readonly Authorization: string;
+  readonly host: string;
+}
+
+export interface AppSyncRealtimeStartMessage {
+  readonly id: string;
+  readonly payload: {
+    readonly data: string;
+    readonly extensions: {
+      readonly authorization: AppSyncRealtimeAuthorization;
+    };
+  };
+  readonly type: "start";
+}
+
+interface ValidateSeededSubscriptionOptions {
+  readonly graphqlApiUrl: string;
+  readonly idToken: string;
+  readonly seed: DeployedSmokeGameSeed;
+  readonly timeoutMs?: number;
+  readonly webSocketFactory?: RealtimeWebSocketFactory;
+}
+
+const DEFAULT_REALTIME_SMOKE_TIMEOUT_MS = 30_000;
+const SEEDED_SUBSCRIPTION_TITLE =
+  "seeded onGameUpdated receives accepted action";
 
 export class DeployedSmokeError extends Error {
   constructor(message: string) {
@@ -128,6 +178,13 @@ export async function runDeployedSmoke(
   env: DeployedSmokeEnvironment = loadDeployedSmokeEnvironment()
 ): Promise<readonly SmokeCheckEvaluation[]> {
   const config = resolveDeployedSmokeConfig(env);
+
+  if (config.validateSubscription && !config.seedGame) {
+    throw new DeployedSmokeError(
+      "SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION=true requires SHAKE2_SMOKE_SEED_GAME=true."
+    );
+  }
+
   const cloudFormation = new CloudFormationClient({
     region: config.region
   });
@@ -151,8 +208,16 @@ export async function runDeployedSmoke(
   const secondaryIdToken = config.secondaryUser
     ? await authenticateSmokeUser(cognito, outputs, config.secondaryUser)
     : undefined;
-  const checks = [
-    ...createSmokeChecks(config.gameId)
+  const tokens = {
+    primary: idToken,
+    secondary: secondaryIdToken
+  };
+  const evaluations: SmokeCheckEvaluation[] = [
+    ...await evaluateSmokeChecks(
+      createSmokeChecks(config.gameId),
+      outputs.graphqlApiUrl,
+      tokens
+    )
   ];
 
   if (config.seedGame) {
@@ -169,27 +234,52 @@ export async function runDeployedSmoke(
       roomGameIdIndexName: config.roomGameIdIndexName,
       tableName: outputs.multiplayerTableName
     });
+    const seededChecks = createSeededSmokeChecks(seed);
 
-    checks.push(...createSeededSmokeChecks(seed));
+    if (config.validateSubscription) {
+      evaluations.push(
+        ...await evaluateSmokeChecks(
+          seededChecks.slice(0, 3),
+          outputs.graphqlApiUrl,
+          tokens
+        )
+      );
+      const subscriptionEvaluation = await validateSeededSubscription({
+        graphqlApiUrl: outputs.graphqlApiUrl,
+        idToken,
+        seed
+      });
+
+      evaluations.push(subscriptionEvaluation);
+
+      if (subscriptionEvaluation.ok) {
+        evaluations.push(
+          ...await evaluateSmokeChecks(
+            seededChecks.slice(4),
+            outputs.graphqlApiUrl,
+            tokens
+          )
+        );
+      }
+    } else {
+      evaluations.push(
+        ...await evaluateSmokeChecks(
+          seededChecks,
+          outputs.graphqlApiUrl,
+          tokens
+        )
+      );
+    }
 
     if (secondaryIdToken) {
-      checks.push(...createSeededNonMemberSmokeChecks(seed));
+      evaluations.push(
+        ...await evaluateSmokeChecks(
+          createSeededNonMemberSmokeChecks(seed),
+          outputs.graphqlApiUrl,
+          tokens
+        )
+      );
     }
-  }
-
-  const evaluations: SmokeCheckEvaluation[] = [];
-
-  for (const check of checks) {
-    const result = await executeGraphqlRequest(
-      outputs.graphqlApiUrl,
-      check.request,
-      getSmokeCheckIdToken(check, {
-        primary: idToken,
-        secondary: secondaryIdToken
-      })
-    );
-
-    evaluations.push(evaluateSmokeCheck(check, result));
   }
 
   const failed = evaluations.filter((evaluation) => !evaluation.ok);
@@ -256,6 +346,8 @@ export function resolveDeployedSmokeConfig(
   const seedGame = env.SHAKE2_SMOKE_SEED_GAME === "true";
   const seededGameId = readOptionalEnv(env.SHAKE2_SMOKE_SEEDED_GAME_ID);
   const username = env.SHAKE2_SMOKE_USERNAME ?? userEmail;
+  const validateSubscription =
+    env.SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION === "true";
   const secondaryUser = resolveSecondarySmokeUser(env, {
     password,
     userEmail,
@@ -276,7 +368,8 @@ export function resolveDeployedSmokeConfig(
     ...(seededGameId !== undefined ? { seededGameId } : {}),
     stackName: env.SHAKE2_SMOKE_STACK_NAME ?? "shake2-dev-multiplayer-infra",
     userEmail,
-    username
+    username,
+    validateSubscription
   };
 }
 
@@ -654,6 +747,29 @@ export function createSeededNonMemberSmokeChecks(
   ];
 }
 
+async function evaluateSmokeChecks(
+  checks: readonly SmokeCheck[],
+  graphqlApiUrl: string,
+  tokens: {
+    readonly primary: string;
+    readonly secondary: string | undefined;
+  }
+): Promise<readonly SmokeCheckEvaluation[]> {
+  const evaluations: SmokeCheckEvaluation[] = [];
+
+  for (const check of checks) {
+    const result = await executeGraphqlRequest(
+      graphqlApiUrl,
+      check.request,
+      getSmokeCheckIdToken(check, tokens)
+    );
+
+    evaluations.push(evaluateSmokeCheck(check, result));
+  }
+
+  return evaluations;
+}
+
 export function evaluateSmokeCheck(
   check: SmokeCheck,
   result: SmokeHttpResult
@@ -771,6 +887,7 @@ export function evaluateSmokeCheck(
       submit?.accepted === true &&
       submit.committed === true &&
       submit.duplicate === false &&
+      typeof submit.gameId === "string" &&
       Array.isArray(submit.events) &&
       submit.events.length > 0 &&
       submit.snapshot?.phase === "bidding" &&
@@ -861,6 +978,352 @@ export async function executeGraphqlRequest(
   };
 }
 
+export function deriveAppSyncRealtimeUrl(graphqlApiUrl: string): string {
+  const url = new URL(graphqlApiUrl);
+
+  url.protocol = "wss:";
+  url.search = "";
+  url.hash = "";
+
+  if (url.hostname.includes(".appsync-api.")) {
+    url.hostname = url.hostname.replace(
+      ".appsync-api.",
+      ".appsync-realtime-api."
+    );
+  } else {
+    url.pathname = `${url.pathname.replace(/\/$/u, "")}/realtime`;
+  }
+
+  return url.toString();
+}
+
+export function createAppSyncRealtimeAuthorization(
+  graphqlApiUrl: string,
+  idToken: string
+): AppSyncRealtimeAuthorization {
+  return {
+    Authorization: idToken,
+    host: new URL(graphqlApiUrl).host
+  };
+}
+
+export function createAppSyncRealtimeConnectUrl(
+  graphqlApiUrl: string,
+  idToken: string
+): string {
+  const realtimeUrl = new URL(deriveAppSyncRealtimeUrl(graphqlApiUrl));
+
+  realtimeUrl.searchParams.set(
+    "header",
+    Buffer.from(
+      JSON.stringify(createAppSyncRealtimeAuthorization(graphqlApiUrl, idToken)),
+      "utf8"
+    ).toString("base64")
+  );
+  realtimeUrl.searchParams.set(
+    "payload",
+    Buffer.from("{}", "utf8").toString("base64")
+  );
+
+  return realtimeUrl.toString();
+}
+
+export function createOnGameUpdatedSubscriptionStartMessage(
+  options: {
+    readonly graphqlApiUrl: string;
+    readonly idToken: string;
+    readonly seed: Pick<DeployedSmokeGameSeed, "gameId">;
+    readonly subscriptionId: string;
+  }
+): AppSyncRealtimeStartMessage {
+  const request = createOnGameUpdatedSubscriptionRequest(options.seed);
+
+  return {
+    id: options.subscriptionId,
+    payload: {
+      data: JSON.stringify({
+        query: request.query,
+        variables: request.variables
+      }),
+      extensions: {
+        authorization: createAppSyncRealtimeAuthorization(
+          options.graphqlApiUrl,
+          options.idToken
+        )
+      }
+    },
+    type: "start"
+  };
+}
+
+export function evaluateOnGameUpdatedSubscriptionPayload(
+  seed: Pick<DeployedSmokeGameSeed, "gameId">,
+  payload: unknown
+): SmokeCheckEvaluation {
+  const body = typeof payload === "object" && payload !== null
+    ? payload as GraphqlResponseBody
+    : null;
+  const update = getObjectPayload(body, "onGameUpdated");
+  const serialized = JSON.stringify(update);
+  const ok = !hasGraphqlErrors(body) &&
+    update?.accepted === true &&
+    update.committed === true &&
+    update.duplicate === false &&
+    update.gameId === seed.gameId &&
+    Array.isArray(update.events) &&
+    update.events.length > 0 &&
+    update.snapshot?.gameId === seed.gameId &&
+    update.snapshot?.phase === "bidding" &&
+    !serialized.includes("\"hands\"") &&
+    !serialized.includes("\"viewerHand\"");
+
+  return {
+    details: ok
+      ? "Subscription delivered the committed action with a public redacted snapshot."
+      : `Expected onGameUpdated accepted-action payload. ${summarizeRealtimePayload(payload)}`,
+    ok,
+    title: SEEDED_SUBSCRIPTION_TITLE
+  };
+}
+
+async function validateSeededSubscription(
+  options: ValidateSeededSubscriptionOptions
+): Promise<SmokeCheckEvaluation> {
+  try {
+    return await waitForSeededSubscriptionUpdate(options);
+  } catch (error) {
+    return {
+      details: error instanceof Error ? error.message : String(error),
+      ok: false,
+      title: SEEDED_SUBSCRIPTION_TITLE
+    };
+  }
+}
+
+async function waitForSeededSubscriptionUpdate(
+  options: ValidateSeededSubscriptionOptions
+): Promise<SmokeCheckEvaluation> {
+  const subscriptionId = `smoke-${randomUUID()}`;
+  const webSocketFactory = options.webSocketFactory ??
+    createDefaultRealtimeWebSocket;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_REALTIME_SMOKE_TIMEOUT_MS;
+  const connectUrl = createAppSyncRealtimeConnectUrl(
+    options.graphqlApiUrl,
+    options.idToken
+  );
+
+  return await new Promise((resolve) => {
+    let registered = false;
+    let settled = false;
+    let submitted = false;
+    let accepted = false;
+    let socket: RealtimeWebSocket | undefined;
+
+    const timeout = setTimeout(() => {
+      const waitingFor = !registered
+        ? "subscription acknowledgment"
+        : accepted
+          ? "onGameUpdated data"
+          : "accepted submitGameAction response";
+
+      settle({
+        details: `Timed out after ${timeoutMs}ms waiting for ${waitingFor}.`,
+        ok: false,
+        title: SEEDED_SUBSCRIPTION_TITLE
+      });
+    }, timeoutMs);
+
+    const settle = (evaluation: SmokeCheckEvaluation): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+
+      if (socket) {
+        if (registered) {
+          safelySendRealtimeMessage(socket, {
+            id: subscriptionId,
+            type: "stop"
+          });
+        }
+
+        try {
+          socket.close();
+        } catch {
+          // Best-effort cleanup; the smoke result above is the useful signal.
+        }
+      }
+
+      resolve(evaluation);
+    };
+
+    const submitSeededAction = async (): Promise<void> => {
+      if (submitted || settled) {
+        return;
+      }
+
+      submitted = true;
+
+      try {
+        const result = await executeGraphqlRequest(
+          options.graphqlApiUrl,
+          createSeededSubmitGameActionSmokeRequest(options.seed),
+          options.idToken
+        );
+        const evaluation = evaluateSmokeCheck(
+          {
+            expectation: "acceptedAction",
+            request: createSeededSubmitGameActionSmokeRequest(options.seed),
+            requiresAuth: true,
+            title: "seeded submitGameAction accepts a legal bid for subscription"
+          },
+          result
+        );
+
+        if (!evaluation.ok) {
+          settle({
+            details: `Subscription registered, but mutation validation failed. ${evaluation.details}`,
+            ok: false,
+            title: SEEDED_SUBSCRIPTION_TITLE
+          });
+          return;
+        }
+
+        accepted = true;
+      } catch (error) {
+        settle({
+          details: error instanceof Error ? error.message : String(error),
+          ok: false,
+          title: SEEDED_SUBSCRIPTION_TITLE
+        });
+      }
+    };
+
+    try {
+      socket = webSocketFactory(connectUrl, ["graphql-ws"]);
+    } catch (error) {
+      settle({
+        details: error instanceof Error ? error.message : String(error),
+        ok: false,
+        title: SEEDED_SUBSCRIPTION_TITLE
+      });
+      return;
+    }
+
+    socket.addEventListener("open", () => {
+      safelySendRealtimeMessage(socket, {
+        type: "connection_init"
+      });
+    });
+    socket.addEventListener("message", (event) => {
+      const message = parseRealtimeMessageData(event.data);
+
+      if (!message) {
+        return;
+      }
+
+      if (message.type === "connection_ack") {
+        safelySendRealtimeMessage(
+          socket,
+          createOnGameUpdatedSubscriptionStartMessage({
+            graphqlApiUrl: options.graphqlApiUrl,
+            idToken: options.idToken,
+            seed: options.seed,
+            subscriptionId
+          })
+        );
+        return;
+      }
+
+      if (message.type === "start_ack" && message.id === subscriptionId) {
+        registered = true;
+        void submitSeededAction();
+        return;
+      }
+
+      if (message.type === "data" && message.id === subscriptionId) {
+        settle(evaluateOnGameUpdatedSubscriptionPayload(
+          options.seed,
+          message.payload
+        ));
+        return;
+      }
+
+      if (message.type === "error" &&
+        (message.id === undefined || message.id === subscriptionId)) {
+        settle({
+          details: `AppSync realtime returned an error. ${summarizeRealtimePayload(message.payload)}`,
+          ok: false,
+          title: SEEDED_SUBSCRIPTION_TITLE
+        });
+      }
+    });
+    socket.addEventListener("error", () => {
+      settle({
+        details: "WebSocket reported an error before subscription data arrived.",
+        ok: false,
+        title: SEEDED_SUBSCRIPTION_TITLE
+      });
+    });
+    socket.addEventListener("close", () => {
+      if (!settled) {
+        settle({
+          details: "WebSocket closed before subscription data arrived.",
+          ok: false,
+          title: SEEDED_SUBSCRIPTION_TITLE
+        });
+      }
+    });
+  });
+}
+
+function createOnGameUpdatedSubscriptionRequest(
+  seed: Pick<DeployedSmokeGameSeed, "gameId">
+): SmokeGraphqlRequest {
+  return {
+    operationName: "SmokeOnGameUpdated",
+    query: `
+      subscription SmokeOnGameUpdated($gameId: ID!) {
+        onGameUpdated(gameId: $gameId) {
+          accepted
+          committed
+          duplicate
+          gameId
+          error {
+            code
+            message
+          }
+          events {
+            actionId
+            actorId
+            actorSeat
+            eventType
+            sequence
+          }
+          snapshot {
+            gameId
+            handCounts {
+              seat0
+              seat1
+              seat2
+              seat3
+            }
+            lastEventSequence
+            phase
+            redactedState
+            snapshotVersion
+          }
+        }
+      }
+    `,
+    variables: {
+      gameId: seed.gameId
+    }
+  };
+}
+
 function createSubmitGameActionSmokeRequest(gameId: string): SmokeGraphqlRequest {
   const action = {
     action: {
@@ -888,6 +1351,7 @@ function createSubmitGameActionSmokeRequest(gameId: string): SmokeGraphqlRequest
           accepted
           committed
           duplicate
+          gameId
           error {
             code
             message
@@ -915,6 +1379,7 @@ function createSeededSubmitGameActionSmokeRequest(
           accepted
           committed
           duplicate
+          gameId
           error {
             code
             message
@@ -949,6 +1414,76 @@ function createSeededSubmitGameActionSmokeRequest(
       }
     }
   };
+}
+
+function createDefaultRealtimeWebSocket(
+  url: string,
+  protocols: readonly string[]
+): RealtimeWebSocket {
+  const SocketCtor = (globalThis as {
+    readonly WebSocket?: new (
+      url: string,
+      protocols?: string | string[]
+    ) => RealtimeWebSocket;
+  }).WebSocket;
+
+  if (!SocketCtor) {
+    throw new DeployedSmokeError(
+      "Global WebSocket is unavailable; run deployed smoke with Node.js 22 or newer."
+    );
+  }
+
+  return new SocketCtor(url, [...protocols]);
+}
+
+function safelySendRealtimeMessage(
+  socket: RealtimeWebSocket | undefined,
+  message: unknown
+): void {
+  if (!socket) {
+    return;
+  }
+
+  try {
+    socket.send(JSON.stringify(message));
+  } catch {
+    // A close may already be in progress; the surrounding timeout/error path reports it.
+  }
+}
+
+function parseRealtimeMessageData(data: unknown): SmokePayload | null {
+  const text = readRealtimeMessageText(data);
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(text) as unknown;
+
+    return typeof parsed === "object" && parsed !== null
+      ? parsed as SmokePayload
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function readRealtimeMessageText(data: unknown): string | null {
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return Buffer.from(data).toString("utf8");
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    return Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+      .toString("utf8");
+  }
+
+  return null;
 }
 
 function parseGraphqlBody(text: string): GraphqlResponseBody | null {
@@ -1022,6 +1557,10 @@ function hasGraphqlErrors(body: GraphqlResponseBody | null): boolean {
 
 function summarizeSmokeHttpResult(result: SmokeHttpResult): string {
   return `HTTP ${result.httpStatus}; body ${JSON.stringify(result.body)}`;
+}
+
+function summarizeRealtimePayload(payload: unknown): string {
+  return `payload ${JSON.stringify(payload)}`;
 }
 
 function requireStackOutput(outputs: readonly Output[], key: string): string {
@@ -1151,7 +1690,8 @@ function isSmokeEnvironmentKey(key: string): key is keyof DeployedSmokeEnvironme
     "SHAKE2_SMOKE_SECONDARY_PASSWORD",
     "SHAKE2_SMOKE_SECONDARY_USERNAME",
     "SHAKE2_SMOKE_STACK_NAME",
-    "SHAKE2_SMOKE_USERNAME"
+    "SHAKE2_SMOKE_USERNAME",
+    "SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION"
   ].includes(key);
 }
 

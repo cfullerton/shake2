@@ -79,6 +79,7 @@ test("submitGameAction adapter preserves handler response status shape", () => {
   assert.equal(mapped.committed, handlerResponse.committed);
   assert.equal(mapped.duplicate, handlerResponse.duplicate);
   assert.equal(mapped.events.length, handlerResponse.events.length);
+  assert.equal(mapped.gameId, handlerResponse.snapshot.gameId);
   assert.equal(mapped.snapshot.gameId, handlerResponse.snapshot.gameId);
   assert.equal(mapped.snapshot.lastEventSequence, handlerResponse.snapshot.lastEventSequence);
 });
@@ -100,6 +101,7 @@ test("rejected submitGameAction adapter preserves error shape", () => {
   assert.equal(mapped.duplicate, handlerResponse.duplicate);
   assert.equal(mapped.error.code, "INVALID_ACTION");
   assert.deepEqual(mapped.events, []);
+  assert.equal(mapped.gameId, undefined);
 });
 
 test("public snapshot type and adapter do not expose full hands", () => {
@@ -239,11 +241,13 @@ test("subscription output matches submit mutation and remains public-safe", () =
     subscriptionType,
     /onGameUpdated\(gameId: ID!\): SubmitGameActionResult!/
   );
+  assert.match(submitResultType, /\bgameId: ID\b/);
   assert.deepEqual(Object.keys(result).sort(), [
     "accepted",
     "committed",
     "duplicate",
     "events",
+    "gameId",
     "snapshot"
   ]);
   assert.doesNotMatch(submitResultType, /\bGameUpdatedNotification\b/);

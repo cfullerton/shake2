@@ -74,6 +74,7 @@ type SubmitGameActionResult {
   accepted: Boolean!
   committed: Boolean!
   duplicate: Boolean!
+  gameId: ID
   error: BackendError
   events: [SafeGameEventSummary!]!
   snapshot: PublicGameSnapshot

@@ -3,9 +3,14 @@ import test from "node:test";
 
 import {
   DeployedSmokeError,
+  createAppSyncRealtimeAuthorization,
+  createAppSyncRealtimeConnectUrl,
+  createOnGameUpdatedSubscriptionStartMessage,
   createSeededNonMemberSmokeChecks,
   createSeededSmokeChecks,
   createSmokeChecks,
+  deriveAppSyncRealtimeUrl,
+  evaluateOnGameUpdatedSubscriptionPayload,
   evaluateSmokeCheck,
   loadDeployedSmokeEnvironment,
   parseMultiplayerStackOutputs,
@@ -78,7 +83,8 @@ test("resolves deployed smoke config from env without logging secrets", () => {
     seedGame: false,
     stackName: "shake2-dev-multiplayer-infra",
     userEmail: "smoke@example.com",
-    username: "smoke-user"
+    username: "smoke-user",
+    validateSubscription: false
   });
 });
 
@@ -96,6 +102,19 @@ test("resolves extended deployed smoke seed config from env", () => {
   assert.equal(config.seededGameId, "seeded-game-1");
   assert.equal(config.roomGameIdIndexName, "GameIdIndex");
   assert.equal(config.secondaryUser, undefined);
+  assert.equal(config.validateSubscription, false);
+});
+
+test("resolves live subscription validation smoke config", () => {
+  const config = resolveDeployedSmokeConfig({
+    SHAKE2_SMOKE_EMAIL: "smoke@example.com",
+    SHAKE2_SMOKE_PASSWORD: "test-password",
+    SHAKE2_SMOKE_SEED_GAME: "true",
+    SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION: "true"
+  });
+
+  assert.equal(config.seedGame, true);
+  assert.equal(config.validateSubscription, true);
 });
 
 test("resolves secondary non-member smoke user config for seeded create-user runs", () => {
@@ -147,6 +166,7 @@ test("loads deployed smoke config from dotenv-style contents", () => {
       SHAKE2_SMOKE_SECONDARY_EMAIL=smoke-other@example.com
       SHAKE2_SMOKE_SECONDARY_USERNAME=smoke-other-user
       SHAKE2_SMOKE_SECONDARY_PASSWORD='other temporary password'
+      SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION=true
       SHAKE2_ROOM_GAME_ID_INDEX_NAME=GameIdIndex
       UNRELATED_SECRET=do-not-read
     `),
@@ -162,7 +182,8 @@ test("loads deployed smoke config from dotenv-style contents", () => {
       SHAKE2_SMOKE_SECONDARY_PASSWORD: "other temporary password",
       SHAKE2_SMOKE_SECONDARY_USERNAME: "smoke-other-user",
       SHAKE2_SMOKE_STACK_NAME: "shake2-dev-multiplayer-infra",
-      SHAKE2_SMOKE_USERNAME: "smoke-user"
+      SHAKE2_SMOKE_USERNAME: "smoke-user",
+      SHAKE2_SMOKE_VALIDATE_SUBSCRIPTION: "true"
     }
   );
 });
@@ -257,6 +278,65 @@ test("submit smoke request sends action as AWSJSON-compatible string", () => {
 
   assert.doesNotThrow(() => JSON.parse(variables.action));
   assert.match(submitCheck?.request.query ?? "", /SubmitGameActionInput/u);
+});
+
+test("creates AppSync realtime URLs for deployed GraphQL endpoints", () => {
+  assert.equal(
+    deriveAppSyncRealtimeUrl(
+      "https://example123.appsync-api.us-east-1.amazonaws.com/graphql"
+    ),
+    "wss://example123.appsync-realtime-api.us-east-1.amazonaws.com/graphql"
+  );
+  assert.equal(
+    deriveAppSyncRealtimeUrl("https://api.example.com/graphql"),
+    "wss://api.example.com/graphql/realtime"
+  );
+});
+
+test("creates Cognito-authenticated AppSync realtime start messages", () => {
+  const graphqlApiUrl =
+    "https://example123.appsync-api.us-east-1.amazonaws.com/graphql";
+  const connectUrl = new URL(
+    createAppSyncRealtimeConnectUrl(graphqlApiUrl, "id-token")
+  );
+  const header = JSON.parse(
+    Buffer.from(connectUrl.searchParams.get("header") ?? "", "base64")
+      .toString("utf8")
+  ) as unknown;
+  const message = createOnGameUpdatedSubscriptionStartMessage({
+    graphqlApiUrl,
+    idToken: "id-token",
+    seed: createSeed(),
+    subscriptionId: "subscription-1"
+  });
+  const data = JSON.parse(message.payload.data) as {
+    readonly query: string;
+    readonly variables: Record<string, unknown>;
+  };
+
+  assert.equal(connectUrl.protocol, "wss:");
+  assert.deepEqual(header, {
+    Authorization: "id-token",
+    host: "example123.appsync-api.us-east-1.amazonaws.com"
+  });
+  assert.equal(connectUrl.searchParams.get("payload"), "e30=");
+  assert.deepEqual(
+    createAppSyncRealtimeAuthorization(graphqlApiUrl, "id-token"),
+    {
+      Authorization: "id-token",
+      host: "example123.appsync-api.us-east-1.amazonaws.com"
+    }
+  );
+  assert.equal(message.id, "subscription-1");
+  assert.equal(message.type, "start");
+  assert.match(data.query, /subscription SmokeOnGameUpdated/u);
+  assert.deepEqual(data.variables, {
+    gameId: "seeded-game"
+  });
+  assert.deepEqual(message.payload.extensions.authorization, {
+    Authorization: "id-token",
+    host: "example123.appsync-api.us-east-1.amazonaws.com"
+  });
 });
 
 test("parses Cognito subject from an ID token payload", () => {
@@ -404,6 +484,7 @@ test("evaluates expected seeded smoke GraphQL results", () => {
             accepted: true,
             committed: true,
             duplicate: false,
+            gameId: "seeded-game",
             events: [
               {
                 actorSeat: "SEAT_1",
@@ -466,6 +547,58 @@ test("evaluates expected seeded smoke GraphQL results", () => {
       httpStatus: 200
     }).ok,
     true
+  );
+});
+
+test("evaluates expected live subscription payloads", () => {
+  const seed = createSeed();
+
+  assert.equal(
+    evaluateOnGameUpdatedSubscriptionPayload(seed, {
+      data: {
+        onGameUpdated: {
+          accepted: true,
+          committed: true,
+          duplicate: false,
+          gameId: "seeded-game",
+          events: [
+            {
+              actorSeat: "SEAT_1",
+              eventType: "fortyTwo.bid.submitted"
+            }
+          ],
+          snapshot: {
+            gameId: "seeded-game",
+            phase: "bidding"
+          }
+        }
+      }
+    }).ok,
+    true
+  );
+  assert.equal(
+    evaluateOnGameUpdatedSubscriptionPayload(seed, {
+      data: {
+        onGameUpdated: {
+          accepted: true,
+          committed: true,
+          duplicate: false,
+          gameId: "seeded-game",
+          events: [
+            {
+              actorSeat: "SEAT_1",
+              eventType: "fortyTwo.bid.submitted"
+            }
+          ],
+          snapshot: {
+            gameId: "seeded-game",
+            phase: "bidding",
+            viewerHand: []
+          }
+        }
+      }
+    }).ok,
+    false
   );
 });
 

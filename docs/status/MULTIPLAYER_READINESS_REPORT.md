@@ -8,7 +8,7 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows. The mobile app now has a small multiplayer network/auth foundation for public Expo config, Cognito ID-token sign-in, authenticated AppSync GraphQL calls, and typed room/start operations. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring and the optional seeded gameplay/read/reconnect path. The largest remaining gaps are deployed room-flow smoke coverage, subscription delivery, client reconnect behavior, abuse handling, and mobile multiplayer UI.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows. The mobile app now has a small multiplayer network/auth foundation for public Expo config, Cognito ID-token sign-in, authenticated AppSync GraphQL calls, and typed room/start operations. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring and the optional seeded gameplay/read/reconnect path, and the smoke harness can now validate live `onGameUpdated` delivery in seeded mode. The largest remaining gaps are deployed room-flow smoke coverage, a recorded live subscription smoke run, client reconnect behavior, abuse handling, and mobile multiplayer UI.
 
 ## Current Multiplayer Architecture
 
@@ -31,7 +31,7 @@ Backend shell code now lives under `backend`.
 - `src/appsync/schema.graphql`: undeployed draft schema for submit action, public snapshot, private hand, reconnect, and game-update subscription operations.
 - `src/appsync/contracts.ts`: local AppSync contract adapters for safe submit-action results, reconnect views, private-hand ownership boundaries, and public update notifications.
 - `src/auth/identity.ts`: shared actor extraction boundary that prefers AppSync Cognito `sub` as the stable multiplayer `playerId` and preserves mock identity support for tests.
-- `src/smoke/deployed-smoke.ts`: deployed-stack smoke harness that loads CloudFormation outputs, authenticates Cognito smoke users, verifies unauthenticated rejection, confirms Cognito actor propagation, invokes current gameplay/read resolvers, and can optionally seed a live started game for accepted-action/read/reconnect plus secondary-user non-member denial checks.
+- `src/smoke/deployed-smoke.ts`: deployed-stack smoke harness that loads CloudFormation outputs, authenticates Cognito smoke users, verifies unauthenticated rejection, confirms Cognito actor propagation, invokes current gameplay/read resolvers, and can optionally seed a live started game for accepted-action/read/reconnect, live `onGameUpdated` subscription delivery, plus secondary-user non-member denial checks.
 - `src/types/index.ts`: backend-local request, response, actor, AppSync Cognito identity, resolver-context, and error types.
 
 Mobile multiplayer foundation now lives under `apps/mobile/src/multiplayer`.
@@ -84,7 +84,8 @@ Production multiplayer blockers:
    - A GraphQL schema, local contract tests, and CDK AppSync/Lambda resolver wiring now exist.
    - Room lifecycle fields now exist for create/join/take-seat/start and room lookups.
    - A deployed smoke script is available for the mutation and query resolvers, including a seeded happy-path action/read/reconnect check.
-   - Live subscription delivery has not been validated.
+   - The smoke harness can validate live AppSync `onGameUpdated` delivery after registering the subscription and before submitting the seeded action.
+   - Need to run and record the subscription smoke mode against the current deployed dev stack.
    - No subscription gap detection is wired into the app.
    - Basic and seeded deployed reconnect smoke checks have completed.
 
@@ -258,11 +259,12 @@ Current backend contract tests cover:
 - Room lifecycle resolver tests enforce safe room views, room-code lookup, conditional persistence, and seat assignment behavior.
 - Infrastructure tests assert AppSync uses Cognito authorization, Lambda resolvers, and native-app Cognito client settings.
 - Submit-action tests assert rejected actions persist idempotency results without writing public snapshots, trusted events, or private hand records.
-- Smoke harness tests assert the deployed smoke checks cover current gameplay/read resolvers without requiring seeded private hand data, and cover secondary-user non-member denial when seeded data is available.
+- Smoke harness tests assert the deployed smoke checks cover current gameplay/read resolvers without requiring seeded private hand data, cover secondary-user non-member denial when seeded data is available, and build/validate the AppSync realtime subscription handshake payload.
 
 Current subscription payload:
 
 - accepted/committed/duplicate action status
+- root `gameId` for AppSync subscription filtering
 - backend error for rejected actions
 - safe event summaries
 - latest public/redacted snapshot when an action is accepted
@@ -311,7 +313,7 @@ Rough effort for multiplayer v1, assuming one experienced engineer with this cod
 |---|---:|
 | Deployed dev stack smoke tests and AWS error mapping | 3-5 days |
 | Room authorization and lifecycle resolver hardening | 3-5 days |
-| AppSync subscription validation and reconnect gap behavior | 4-7 days |
+| Mobile subscription handling and reconnect gap behavior | 3-6 days |
 | Reconnect endpoint and client sync queue | 4-6 days |
 | Mobile multiplayer room/start/join UI | 4-7 days |
 | Mobile active-game multiplayer UX | 5-8 days |

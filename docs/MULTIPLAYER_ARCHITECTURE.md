@@ -66,7 +66,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, DynamoDB persistence for current room/action/read flows, and a mobile-side network client foundation. Realtime subscription validation and mobile multiplayer UI are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, and an optional deployed smoke path for live AppSync subscription validation. A recorded subscription smoke run, mobile subscription handling, and mobile multiplayer UI are still missing.
 
 ## Durable Record Shape
 
@@ -186,7 +186,7 @@ The current reconnect helper returns:
 
 - Schema migration/version-compatibility tooling for future payload changes.
 - Deployed smoke coverage for organic create/join/take-seat/start room flows.
-- Live AppSync subscription validation.
+- Recorded live AppSync subscription validation against the current dev stack.
 - Subscription gap detection.
 - Leave/rejoin/replacement behavior.
 - Mobile multiplayer screens.

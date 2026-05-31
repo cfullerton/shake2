@@ -159,6 +159,7 @@ export type AppSyncSubmitGameActionResult =
       readonly duplicate: boolean;
       readonly error?: undefined;
       readonly events: readonly AppSyncSafeGameEventSummary[];
+      readonly gameId: string;
       readonly snapshot: AppSyncPublicGameSnapshot;
     }
   | {
@@ -167,6 +168,7 @@ export type AppSyncSubmitGameActionResult =
       readonly duplicate: boolean;
       readonly error: BackendErrorResponse;
       readonly events: readonly AppSyncSafeGameEventSummary[];
+      readonly gameId?: undefined;
       readonly snapshot?: undefined;
     };
 
@@ -210,6 +212,7 @@ export function mapSubmitGameActionHandlerResponse(
       committed: response.committed,
       duplicate: response.duplicate,
       events: response.events.map(toSafeGameEventSummary),
+      gameId: response.snapshot.gameId,
       snapshot: toPublicGameSnapshot(response.snapshot)
     };
   }
