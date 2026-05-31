@@ -8,7 +8,7 @@ Multiplayer now has a deployable development infrastructure definition, but it i
 
 The strongest part of the system is now the pure TypeScript authority boundary in `packages/game-engine`. It can create rooms, start a multiplayer-mode game, validate player actions, protect idempotency, redact player views, serialize durable records, parse boundary payloads, validate accepted event replay, and produce backend-neutral write plans for future conditional persistence.
 
-The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring and the optional seeded gameplay/read/reconnect path. The largest remaining gaps are deployed room-flow smoke coverage, subscription delivery, client reconnect behavior, abuse handling, and mobile multiplayer UI.
+The first DynamoDB adapter contract slice converts backend-neutral multiplayer write plans into deterministic DynamoDB-style transaction intent shapes. A backend workspace, testable Lambda resolver shells, production-shaped Cognito identity parser, mocked-testable AWS SDK DynamoDB store implementation, and AppSync schema/contract adapter now exist. A CDK v2 infrastructure workspace now synthesizes Cognito, DynamoDB, AppSync, Lambda, and IAM for a development environment. Basic room lifecycle API fields now exist for create, join, seat, start-game, and room lookup flows. The mobile app now has a small multiplayer network/auth foundation for public Expo config, Cognito ID-token sign-in, authenticated AppSync GraphQL calls, and typed room/start operations. The dev stack has completed deployed smoke runs for Cognito/AppSync/Lambda wiring and the optional seeded gameplay/read/reconnect path. The largest remaining gaps are deployed room-flow smoke coverage, subscription delivery, client reconnect behavior, abuse handling, and mobile multiplayer UI.
 
 ## Current Multiplayer Architecture
 
@@ -33,6 +33,13 @@ Backend shell code now lives under `backend`.
 - `src/auth/identity.ts`: shared actor extraction boundary that prefers AppSync Cognito `sub` as the stable multiplayer `playerId` and preserves mock identity support for tests.
 - `src/smoke/deployed-smoke.ts`: deployed-stack smoke harness that loads CloudFormation outputs, authenticates Cognito smoke users, verifies unauthenticated rejection, confirms Cognito actor propagation, invokes current gameplay/read resolvers, and can optionally seed a live started game for accepted-action/read/reconnect plus secondary-user non-member denial checks.
 - `src/types/index.ts`: backend-local request, response, actor, AppSync Cognito identity, resolver-context, and error types.
+
+Mobile multiplayer foundation now lives under `apps/mobile/src/multiplayer`.
+
+- `config.ts`: reads public Expo multiplayer configuration and derives the AppSync realtime endpoint.
+- `auth.ts`: signs in to Cognito through the public app client and exposes an ID-token provider boundary.
+- `graphql.ts`: sends authenticated AppSync GraphQL requests without leaking token handling into UI code.
+- `rooms.ts`: wraps create/join/take-seat/start room GraphQL operations behind typed helpers.
 
 Infrastructure code now lives under `infra`.
 
@@ -88,7 +95,7 @@ Production multiplayer blockers:
    - Public subscriptions must never publish raw hand-dealt events.
 
 5. Mobile multiplayer UI
-   - No room creation/join/start screens, though backend room lifecycle fields now exist.
+   - No room creation/join/start screens, though backend room lifecycle fields and mobile network helpers now exist.
    - No multiplayer active-game screen.
    - No reconnect/offline/pending-action UX.
 
