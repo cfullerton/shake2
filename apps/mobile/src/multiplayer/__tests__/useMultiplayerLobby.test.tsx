@@ -10,6 +10,7 @@ import {
   type MultiplayerLobbyDependencies
 } from "../useMultiplayerLobby";
 import type { CognitoAuthSession } from "../auth";
+import { CognitoNewPasswordRequiredError } from "../auth";
 import type { MobileMultiplayerConfig } from "../config";
 import type {
   MultiplayerRoomView,
@@ -36,6 +37,7 @@ test("normalizes lobby form values before room requests", async () => {
     }
   };
   const authClient = {
+    completeNewPassword: jest.fn(async () => session),
     signIn: jest.fn(async () => session)
   };
   const roomClient: MultiplayerLobbyClient = {
@@ -122,6 +124,72 @@ test("reports missing multiplayer config without creating clients", async () => 
 
   expect(createAuthClient).not.toHaveBeenCalled();
   expect(harness.current.error).toBe("Multiplayer is not configured.");
+});
+
+test("completes Cognito new-password challenges", async () => {
+  const session = createSession();
+  const authClient = {
+    completeNewPassword: jest.fn(async () => session),
+    signIn: jest.fn(async () => {
+      throw new CognitoNewPasswordRequiredError({
+        challengeName: "NEW_PASSWORD_REQUIRED",
+        session: "challenge-session",
+        username: "canonical-user"
+      });
+    })
+  };
+  const roomClient: MultiplayerLobbyClient = {
+    createRoom: jest.fn(async () => createRoomView()),
+    joinRoom: jest.fn(async () => createRoomView()),
+    startGame: jest.fn(async () => ({
+      room: createRoomView(),
+      snapshot: {
+        gameId: "game-1",
+        generatedAt: "2026-05-31T00:00:00.000Z",
+        lastEventSequence: 2,
+        phase: "dealt",
+        redactedState: {},
+        schemaVersion: 1,
+        snapshotVersion: 2
+      }
+    })),
+    takeSeat: jest.fn(async () => createRoomView())
+  };
+  const dependencies: MultiplayerLobbyDependencies = {
+    createAuthClient: () => authClient,
+    createRoomClient: () => roomClient,
+    readConfig: () => createConfig()
+  };
+  const harness = renderHookHarness(dependencies);
+
+  await act(async () => {
+    await harness.current.signIn({
+      password: "temporary-password",
+      username: "smoke-user"
+    });
+  });
+
+  expect(harness.current.error).toBeNull();
+  expect(harness.current.session).toBeNull();
+  expect(harness.current.newPasswordChallenge).toEqual({
+    challengeName: "NEW_PASSWORD_REQUIRED",
+    session: "challenge-session",
+    username: "canonical-user"
+  });
+
+  await act(async () => {
+    await harness.current.completeNewPassword({
+      newPassword: "permanent-password"
+    });
+  });
+
+  expect(authClient.completeNewPassword).toHaveBeenCalledWith({
+    newPassword: "permanent-password",
+    session: "challenge-session",
+    username: "canonical-user"
+  });
+  expect(harness.current.newPasswordChallenge).toBeNull();
+  expect(harness.current.session).toBe(session);
 });
 
 test("normalizes lobby strings", () => {

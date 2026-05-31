@@ -1,8 +1,11 @@
 import { useState } from "react";
 
 import {
+  CognitoNewPasswordRequiredError,
   CognitoPasswordAuthClient,
   type CognitoAuthSession,
+  type CognitoCompleteNewPasswordInput,
+  type CognitoNewPasswordChallenge,
   type CognitoPasswordSignInInput,
   StaticAuthSessionProvider
 } from "./auth";
@@ -26,6 +29,7 @@ import type {
 } from "./types";
 
 export type MultiplayerLobbyAction =
+  | "completeNewPassword"
   | "createRoom"
   | "joinRoom"
   | "signIn"
@@ -40,7 +44,14 @@ export interface MultiplayerLobbyClient {
 }
 
 export interface MultiplayerLobbyAuthClient {
+  completeNewPassword(
+    input: CognitoCompleteNewPasswordInput
+  ): Promise<CognitoAuthSession>;
   signIn(input: CognitoPasswordSignInInput): Promise<CognitoAuthSession>;
+}
+
+export interface MultiplayerLobbyCompleteNewPasswordInput {
+  readonly newPassword: string;
 }
 
 export interface MultiplayerLobbyDependencies {
@@ -59,6 +70,7 @@ export interface MultiplayerLobbyState {
   readonly configError: string | null;
   readonly configured: boolean;
   readonly error: string | null;
+  readonly newPasswordChallenge: CognitoNewPasswordChallenge | null;
   readonly room: MultiplayerRoomView | null;
   readonly session: CognitoAuthSession | null;
   readonly startedGame: MultiplayerStartGameResult | null;
@@ -66,6 +78,9 @@ export interface MultiplayerLobbyState {
 
 export interface MultiplayerLobbyController extends MultiplayerLobbyState {
   clearError(): void;
+  completeNewPassword(
+    input: MultiplayerLobbyCompleteNewPasswordInput
+  ): Promise<void>;
   createRoom(input: CreateRoomInput): Promise<void>;
   joinRoom(input: JoinRoomInput): Promise<void>;
   signIn(input: CognitoPasswordSignInInput): Promise<void>;
@@ -106,6 +121,8 @@ export function useMultiplayerLobby(
   const [busyAction, setBusyAction] = useState<MultiplayerLobbyAction | null>(null);
   const [client, setClient] = useState<MultiplayerLobbyClient | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [newPasswordChallenge, setNewPasswordChallenge] =
+    useState<CognitoNewPasswordChallenge | null>(null);
   const [room, setRoom] = useState<MultiplayerRoomView | null>(null);
   const [session, setSession] = useState<CognitoAuthSession | null>(null);
   const [startedGame, setStartedGame] =
@@ -119,16 +136,42 @@ export function useMultiplayerLobby(
       const authClient = (dependencies.createAuthClient ?? createDefaultAuthClient)(
         config
       );
-      const nextSession = await authClient.signIn(input);
-      const nextClient = (dependencies.createRoomClient ?? createDefaultRoomClient)(
-        config,
-        nextSession
-      );
 
-      setClient(nextClient);
-      setRoom(null);
-      setSession(nextSession);
-      setStartedGame(null);
+      try {
+        const nextSession = await authClient.signIn(input);
+
+        completeSignIn(config, nextSession);
+      } catch (caught) {
+        if (caught instanceof CognitoNewPasswordRequiredError) {
+          setClient(null);
+          setNewPasswordChallenge(caught.challenge);
+          setRoom(null);
+          setSession(null);
+          setStartedGame(null);
+          return;
+        }
+
+        throw caught;
+      }
+    });
+  }
+
+  async function completeNewPassword(
+    input: MultiplayerLobbyCompleteNewPasswordInput
+  ): Promise<void> {
+    await runAction("completeNewPassword", async () => {
+      const config = requireResolvedConfig(configState);
+      const challenge = requireNewPasswordChallenge(newPasswordChallenge);
+      const authClient = (dependencies.createAuthClient ?? createDefaultAuthClient)(
+        config
+      );
+      const nextSession = await authClient.completeNewPassword({
+        newPassword: input.newPassword,
+        session: challenge.session,
+        username: challenge.username
+      });
+
+      completeSignIn(config, nextSession);
     });
   }
 
@@ -189,14 +232,32 @@ export function useMultiplayerLobby(
     }
   }
 
+  function completeSignIn(
+    config: MobileMultiplayerConfig,
+    nextSession: CognitoAuthSession
+  ): void {
+    const nextClient = (dependencies.createRoomClient ?? createDefaultRoomClient)(
+      config,
+      nextSession
+    );
+
+    setClient(nextClient);
+    setNewPasswordChallenge(null);
+    setRoom(null);
+    setSession(nextSession);
+    setStartedGame(null);
+  }
+
   return {
     busyAction,
     clearError: () => setError(null),
+    completeNewPassword,
     configError: configState.error,
     configured,
     createRoom,
     error,
     joinRoom,
+    newPasswordChallenge,
     room,
     session,
     signIn,
@@ -263,6 +324,16 @@ function requireClient(
   }
 
   return client;
+}
+
+function requireNewPasswordChallenge(
+  challenge: CognitoNewPasswordChallenge | null
+): CognitoNewPasswordChallenge {
+  if (!challenge) {
+    throw new Error("Sign in before setting a new password.");
+  }
+
+  return challenge;
 }
 
 function toLobbyErrorMessage(error: unknown): string {

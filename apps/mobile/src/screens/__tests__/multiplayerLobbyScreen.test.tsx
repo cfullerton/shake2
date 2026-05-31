@@ -49,6 +49,35 @@ test("lobby screen signs in without exposing the password", async () => {
   expect(view.queryByText("temporary-password")).toBeNull();
 });
 
+test("lobby screen completes new password challenges", async () => {
+  const completeNewPassword = jest.fn(async () => undefined);
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        completeNewPassword,
+        newPasswordChallenge: {
+          challengeName: "NEW_PASSWORD_REQUIRED",
+          session: "challenge-session",
+          username: "canonical-user"
+        },
+        session: null
+      })}
+    />
+  );
+
+  expect(view.getByText("New Password Required")).toBeTruthy();
+
+  fireEvent.changeText(view.getByLabelText("New Password"), "permanent-password");
+  fireEvent.press(view.getByText("Set Password"));
+
+  await waitFor(() => {
+    expect(completeNewPassword).toHaveBeenCalledWith({
+      newPassword: "permanent-password"
+    });
+  });
+  expect(view.queryByText("permanent-password")).toBeNull();
+});
+
 test("lobby screen renders seats and starts ready host rooms", async () => {
   const room = createRoomView({
     status: "ready"
@@ -109,11 +138,13 @@ function createLobbyController(
   return {
     busyAction: null,
     clearError: jest.fn(),
+    completeNewPassword: jest.fn(async () => undefined),
     configError: null,
     configured: true,
     createRoom: jest.fn(async () => undefined),
     error: null,
     joinRoom: jest.fn(async () => undefined),
+    newPasswordChallenge: null,
     room: null,
     session: createSession(),
     signIn: jest.fn(async () => undefined),

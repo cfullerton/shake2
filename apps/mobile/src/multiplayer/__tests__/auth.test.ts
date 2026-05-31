@@ -1,5 +1,6 @@
 import {
   CognitoAuthError,
+  CognitoNewPasswordRequiredError,
   CognitoPasswordAuthClient,
   StaticAuthSessionProvider
 } from "../auth";
@@ -95,6 +96,135 @@ test("CognitoPasswordAuthClient maps Cognito errors without echoing passwords", 
       username: "smoke-user"
     })
   ).rejects.not.toThrow(/do-not-print/u);
+});
+
+test("CognitoPasswordAuthClient reports password-change challenges", async () => {
+  const fetcher: FetchLike = async () =>
+    createJsonResponse({
+      ChallengeParameters: {
+        USER_ID_FOR_SRP: "canonical-user"
+      },
+      ChallengeName: "NEW_PASSWORD_REQUIRED",
+      Session: "do-not-print-session"
+    });
+  const client = new CognitoPasswordAuthClient(
+    {
+      awsRegion: "us-east-1",
+      cognitoUserPoolClientId: "client-id"
+    },
+    fetcher
+  );
+
+  await expect(
+    client.signIn({
+      password: "do-not-print-password",
+      username: "smoke-user"
+    })
+  ).rejects.toMatchObject({
+    challenge: {
+      challengeName: "NEW_PASSWORD_REQUIRED",
+      session: "do-not-print-session",
+      username: "canonical-user"
+    },
+    name: "CognitoNewPasswordRequiredError"
+  });
+  await expect(
+    client.signIn({
+      password: "do-not-print-password",
+      username: "smoke-user"
+    })
+  ).rejects.not.toThrow(/do-not-print/u);
+});
+
+test("CognitoPasswordAuthClient completes NEW_PASSWORD_REQUIRED challenges", async () => {
+  const calls: Array<{
+    readonly body?: string;
+    readonly headers?: Readonly<Record<string, string>>;
+  }> = [];
+  const fetcher: FetchLike = async (_input, init) => {
+    calls.push({
+      body: init?.body,
+      headers: init?.headers
+    });
+
+    return createJsonResponse({
+      AuthenticationResult: {
+        AccessToken: "access-token",
+        IdToken: "id-token"
+      }
+    });
+  };
+  const client = new CognitoPasswordAuthClient(
+    {
+      awsRegion: "us-east-1",
+      cognitoUserPoolClientId: "client-id"
+    },
+    fetcher
+  );
+
+  const session = await client.completeNewPassword({
+    newPassword: "permanent-password",
+    session: "challenge-session",
+    username: "canonical-user"
+  });
+
+  expect(session).toMatchObject({
+    accessToken: "access-token",
+    idToken: "id-token",
+    username: "canonical-user"
+  });
+  expect(calls[0]?.headers?.["X-Amz-Target"]).toBe(
+    "AWSCognitoIdentityProviderService.RespondToAuthChallenge"
+  );
+  expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({
+    ChallengeName: "NEW_PASSWORD_REQUIRED",
+    ChallengeResponses: {
+      NEW_PASSWORD: "permanent-password",
+      USERNAME: "canonical-user"
+    },
+    ClientId: "client-id",
+    Session: "challenge-session"
+  });
+});
+
+test("CognitoPasswordAuthClient exposes a typed password challenge error", async () => {
+  const fetcher: FetchLike = async () =>
+    createJsonResponse({
+      ChallengeName: "NEW_PASSWORD_REQUIRED",
+      Session: "challenge-session"
+    });
+  const client = new CognitoPasswordAuthClient(
+    {
+      awsRegion: "us-east-1",
+      cognitoUserPoolClientId: "client-id"
+    },
+    fetcher
+  );
+
+  await expect(
+    client.signIn({
+      password: "temporary-password",
+      username: "smoke-user"
+    })
+  ).rejects.toBeInstanceOf(CognitoNewPasswordRequiredError);
+});
+
+test("CognitoPasswordAuthClient reports successful responses without tokens", async () => {
+  const fetcher: FetchLike = async () => createJsonResponse({});
+  const client = new CognitoPasswordAuthClient(
+    {
+      awsRegion: "us-east-1",
+      cognitoUserPoolClientId: "client-id"
+    },
+    fetcher
+  );
+
+  await expect(
+    client.signIn({
+      password: "temporary-password",
+      username: "smoke-user"
+    })
+  ).rejects.toThrow("Cognito sign-in did not return tokens.");
 });
 
 test("StaticAuthSessionProvider returns an ID token", async () => {

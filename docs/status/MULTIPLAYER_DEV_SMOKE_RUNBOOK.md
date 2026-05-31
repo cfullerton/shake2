@@ -43,6 +43,11 @@ export SHAKE2_SMOKE_PASSWORD='temporary-password'
 
 Use a non-email smoke username. The Cognito pool stores email as a required verified attribute/alias; the username itself is only a sign-in handle. The backend uses Cognito `sub` as the multiplayer `playerId`, so changing the username format has no gameplay or ownership implication.
 
+The web lobby currently expects `USER_PASSWORD_AUTH` to complete without a
+Cognito challenge. If a test user was created manually in the AWS console or by
+an admin script, set a permanent password before using it in the lobby. The
+smoke runner's create-user path does this automatically.
+
 The smoke mutation sends the action envelope as a JSON-encoded string because AppSync validates `AWSJSON` variables before invoking Lambda. The deployed Lambda handler accepts both this encoded form and already-parsed action objects.
 
 If the script should create or reset the smoke Cognito user:

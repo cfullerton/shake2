@@ -42,11 +42,13 @@ export function MultiplayerLobbyContent({
   readonly lobby: MultiplayerLobbyController;
 }) {
   const [displayName, setDisplayName] = useState("Player");
+  const [newPassword, setNewPassword] = useState("");
   const [password, setPassword] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [targetMarks, setTargetMarks] = useState("7");
   const [username, setUsername] = useState("");
   const signedIn = lobby.session !== null;
+  const needsNewPassword = lobby.newPasswordChallenge !== null;
   const canStart = canStartMultiplayerRoom(lobby.room);
 
   async function handleSignIn() {
@@ -54,6 +56,13 @@ export function MultiplayerLobbyContent({
       password,
       username
     });
+  }
+
+  async function handleCompleteNewPassword() {
+    await lobby.completeNewPassword({
+      newPassword
+    });
+    setNewPassword("");
   }
 
   async function handleCreateRoom() {
@@ -117,7 +126,33 @@ export function MultiplayerLobbyContent({
               ) : null}
             </View>
 
-            {!signedIn ? (
+            {!signedIn && needsNewPassword ? (
+              <>
+                <StatusPanel
+                  icon={<AlertCircle color={palette.goldDark} size={20} />}
+                  tone="gold"
+                  title="New Password Required"
+                  value="Set a permanent password for this account."
+                />
+                <TextField
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  label="New Password"
+                  onChangeText={setNewPassword}
+                  returnKeyType="done"
+                  secureTextEntry
+                  value={newPassword}
+                />
+                <Button
+                  disabled={newPassword.length === 0}
+                  icon={<Check color={palette.surface} size={18} />}
+                  loading={lobby.busyAction === "completeNewPassword"}
+                  onPress={handleCompleteNewPassword}
+                >
+                  Set Password
+                </Button>
+              </>
+            ) : !signedIn ? (
               <>
                 <TextField
                   autoCapitalize="none"
