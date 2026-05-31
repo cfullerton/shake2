@@ -31,8 +31,17 @@ export interface DeployedSmokeEnvironment {
   readonly SHAKE2_SMOKE_PASSWORD?: string;
   readonly SHAKE2_SMOKE_SEED_GAME?: string;
   readonly SHAKE2_SMOKE_SEEDED_GAME_ID?: string;
+  readonly SHAKE2_SMOKE_SECONDARY_EMAIL?: string;
+  readonly SHAKE2_SMOKE_SECONDARY_PASSWORD?: string;
+  readonly SHAKE2_SMOKE_SECONDARY_USERNAME?: string;
   readonly SHAKE2_SMOKE_STACK_NAME?: string;
   readonly SHAKE2_SMOKE_USERNAME?: string;
+}
+
+export interface DeployedSmokeUserConfig {
+  readonly password: string;
+  readonly userEmail: string;
+  readonly username: string;
 }
 
 export interface DeployedSmokeConfig {
@@ -41,6 +50,7 @@ export interface DeployedSmokeConfig {
   readonly password: string;
   readonly region: string;
   readonly roomGameIdIndexName: string;
+  readonly secondaryUser?: DeployedSmokeUserConfig;
   readonly seedGame: boolean;
   readonly seededGameId?: string;
   readonly stackName: string;
@@ -67,13 +77,17 @@ export type SmokeExpectation =
   | "invalidActorResponse"
   | "graphqlError"
   | "seededPublicSnapshot"
+  | "seededNonMemberDenied"
   | "seededPrivateHand"
   | "seededPrivateHandDenied"
   | "acceptedAction"
   | "duplicateAction"
   | "reconnectAcceptedPending";
 
+export type SmokeAuthUser = "primary" | "secondary";
+
 export interface SmokeCheck {
+  readonly authUser?: SmokeAuthUser;
   readonly expectation: SmokeExpectation;
   readonly request: SmokeGraphqlRequest;
   readonly requiresAuth: boolean;
@@ -127,9 +141,16 @@ export async function runDeployedSmoke(
 
   if (config.createUser) {
     await ensureSmokeUser(cognito, outputs, config);
+
+    if (config.secondaryUser) {
+      await ensureSmokeUser(cognito, outputs, config.secondaryUser);
+    }
   }
 
   const idToken = await authenticateSmokeUser(cognito, outputs, config);
+  const secondaryIdToken = config.secondaryUser
+    ? await authenticateSmokeUser(cognito, outputs, config.secondaryUser)
+    : undefined;
   const checks = [
     ...createSmokeChecks(config.gameId)
   ];
@@ -150,6 +171,10 @@ export async function runDeployedSmoke(
     });
 
     checks.push(...createSeededSmokeChecks(seed));
+
+    if (secondaryIdToken) {
+      checks.push(...createSeededNonMemberSmokeChecks(seed));
+    }
   }
 
   const evaluations: SmokeCheckEvaluation[] = [];
@@ -158,7 +183,10 @@ export async function runDeployedSmoke(
     const result = await executeGraphqlRequest(
       outputs.graphqlApiUrl,
       check.request,
-      check.requiresAuth ? idToken : undefined
+      getSmokeCheckIdToken(check, {
+        primary: idToken,
+        secondary: secondaryIdToken
+      })
     );
 
     evaluations.push(evaluateSmokeCheck(check, result));
@@ -223,19 +251,32 @@ export function resolveDeployedSmokeConfig(
   env: DeployedSmokeEnvironment
 ): DeployedSmokeConfig {
   const userEmail = requireEnv(env.SHAKE2_SMOKE_EMAIL, "SHAKE2_SMOKE_EMAIL");
+  const createUser = env.SHAKE2_SMOKE_CREATE_USER === "true";
+  const password = requireEnv(env.SHAKE2_SMOKE_PASSWORD, "SHAKE2_SMOKE_PASSWORD");
+  const seedGame = env.SHAKE2_SMOKE_SEED_GAME === "true";
   const seededGameId = readOptionalEnv(env.SHAKE2_SMOKE_SEEDED_GAME_ID);
+  const username = env.SHAKE2_SMOKE_USERNAME ?? userEmail;
+  const secondaryUser = resolveSecondarySmokeUser(env, {
+    password,
+    userEmail,
+    username
+  }, {
+    createUser,
+    seedGame
+  });
 
   return {
-    createUser: env.SHAKE2_SMOKE_CREATE_USER === "true",
+    createUser,
     gameId: env.SHAKE2_SMOKE_GAME_ID ?? "smoke-missing-game",
-    password: requireEnv(env.SHAKE2_SMOKE_PASSWORD, "SHAKE2_SMOKE_PASSWORD"),
+    password,
     region: env.AWS_REGION ?? "us-east-1",
     roomGameIdIndexName: env.SHAKE2_ROOM_GAME_ID_INDEX_NAME ?? "GameIdIndex",
-    seedGame: env.SHAKE2_SMOKE_SEED_GAME === "true",
+    ...(secondaryUser ? { secondaryUser } : {}),
+    seedGame,
     ...(seededGameId !== undefined ? { seededGameId } : {}),
     stackName: env.SHAKE2_SMOKE_STACK_NAME ?? "shake2-dev-multiplayer-infra",
     userEmail,
-    username: env.SHAKE2_SMOKE_USERNAME ?? userEmail
+    username
   };
 }
 
@@ -563,6 +604,56 @@ export function createSeededSmokeChecks(
   ];
 }
 
+export function createSeededNonMemberSmokeChecks(
+  seed: DeployedSmokeGameSeed
+): readonly SmokeCheck[] {
+  return [
+    {
+      authUser: "secondary",
+      expectation: "seededNonMemberDenied",
+      request: {
+        operationName: "SmokeSeededRejectNonMemberSnapshot",
+        query: `
+          query SmokeSeededRejectNonMemberSnapshot($gameId: ID!) {
+            getGameSnapshot(gameId: $gameId) {
+              gameId
+              snapshotVersion
+            }
+          }
+        `,
+        variables: {
+          gameId: seed.gameId
+        }
+      },
+      requiresAuth: true,
+      title: "seeded getGameSnapshot rejects non-member"
+    },
+    {
+      authUser: "secondary",
+      expectation: "seededNonMemberDenied",
+      request: {
+        operationName: "SmokeSeededRejectNonMemberPrivateHand",
+        query: `
+          query SmokeSeededRejectNonMemberPrivateHand($input: GetMyPrivateHandInput!) {
+            getMyPrivateHand(input: $input) {
+              gameId
+              seatIndex
+            }
+          }
+        `,
+        variables: {
+          input: {
+            gameId: seed.gameId,
+            seatIndex: seed.actorSeatEnum
+          }
+        }
+      },
+      requiresAuth: true,
+      title: "seeded getMyPrivateHand rejects non-member"
+    }
+  ];
+}
+
 export function evaluateSmokeCheck(
   check: SmokeCheck,
   result: SmokeHttpResult
@@ -616,6 +707,23 @@ export function evaluateSmokeCheck(
       details: ok
         ? "Seeded public snapshot returned hand counts without private hands."
         : `Expected redacted seeded public snapshot. ${summarizeSmokeHttpResult(result)}`,
+      ok,
+      title: check.title
+    };
+  }
+
+  if (check.expectation === "seededNonMemberDenied") {
+    const summary = summarizeSmokeHttpResult(result);
+    const ok = result.httpStatus === 200 &&
+      hasGraphqlErrors(result.body) &&
+      (summary.includes("INVALID_ACTOR") ||
+        summary.includes("not a member") ||
+        summary.includes("requires ownership"));
+
+    return {
+      details: ok
+        ? "Seeded query rejected an authenticated non-member."
+        : `Expected non-member authorization rejection. ${summary}`,
       ok,
       title: check.title
     };
@@ -890,6 +998,24 @@ function readSeatHandCount(
     : null;
 }
 
+function getSmokeCheckIdToken(
+  check: SmokeCheck,
+  tokens: {
+    readonly primary: string;
+    readonly secondary: string | undefined;
+  }
+): string | undefined {
+  if (!check.requiresAuth) {
+    return undefined;
+  }
+
+  if (check.authUser === "secondary") {
+    return tokens.secondary;
+  }
+
+  return tokens.primary;
+}
+
 function hasGraphqlErrors(body: GraphqlResponseBody | null): boolean {
   return Array.isArray(body?.errors) && body.errors.length > 0;
 }
@@ -916,6 +1042,46 @@ function readOptionalEnv(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
 
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function resolveSecondarySmokeUser(
+  env: DeployedSmokeEnvironment,
+  primary: DeployedSmokeUserConfig,
+  options: {
+    readonly createUser: boolean;
+    readonly seedGame: boolean;
+  }
+): DeployedSmokeUserConfig | undefined {
+  if (!options.seedGame) {
+    return undefined;
+  }
+
+  const secondaryEmail = readOptionalEnv(env.SHAKE2_SMOKE_SECONDARY_EMAIL);
+  const secondaryPassword = readOptionalEnv(env.SHAKE2_SMOKE_SECONDARY_PASSWORD);
+  const secondaryUsername = readOptionalEnv(env.SHAKE2_SMOKE_SECONDARY_USERNAME);
+  const hasSecondaryConfig = secondaryEmail !== undefined ||
+    secondaryPassword !== undefined ||
+    secondaryUsername !== undefined;
+
+  if (!options.createUser && !hasSecondaryConfig) {
+    return undefined;
+  }
+
+  return {
+    password: secondaryPassword ?? primary.password,
+    userEmail: secondaryEmail ?? deriveSecondaryEmail(primary.userEmail),
+    username: secondaryUsername ?? `${primary.username}-nonmember`
+  };
+}
+
+function deriveSecondaryEmail(primaryEmail: string): string {
+  const atIndex = primaryEmail.indexOf("@");
+
+  if (atIndex > 0) {
+    return `${primaryEmail.slice(0, atIndex)}+nonmember${primaryEmail.slice(atIndex)}`;
+  }
+
+  return `nonmember-${primaryEmail}`;
 }
 
 export function parseJwtSubject(idToken: string): string {
@@ -981,6 +1147,9 @@ function isSmokeEnvironmentKey(key: string): key is keyof DeployedSmokeEnvironme
     "SHAKE2_SMOKE_PASSWORD",
     "SHAKE2_SMOKE_SEED_GAME",
     "SHAKE2_SMOKE_SEEDED_GAME_ID",
+    "SHAKE2_SMOKE_SECONDARY_EMAIL",
+    "SHAKE2_SMOKE_SECONDARY_PASSWORD",
+    "SHAKE2_SMOKE_SECONDARY_USERNAME",
     "SHAKE2_SMOKE_STACK_NAME",
     "SHAKE2_SMOKE_USERNAME"
   ].includes(key);

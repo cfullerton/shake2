@@ -30,7 +30,7 @@ Backend shell code now lives under `backend`.
 - `src/appsync/schema.graphql`: undeployed draft schema for submit action, public snapshot, private hand, reconnect, and game-update subscription operations.
 - `src/appsync/contracts.ts`: local AppSync contract adapters for safe submit-action results, reconnect views, private-hand ownership boundaries, and public update notifications.
 - `src/auth/identity.ts`: shared actor extraction boundary that prefers AppSync Cognito `sub` as the stable multiplayer `playerId` and preserves mock identity support for tests.
-- `src/smoke/deployed-smoke.ts`: deployed-stack smoke harness that loads CloudFormation outputs, authenticates a Cognito smoke user, verifies unauthenticated rejection, confirms Cognito actor propagation, invokes all current AppSync resolvers, and can optionally seed a live started game for accepted-action/read/reconnect checks.
+- `src/smoke/deployed-smoke.ts`: deployed-stack smoke harness that loads CloudFormation outputs, authenticates Cognito smoke users, verifies unauthenticated rejection, confirms Cognito actor propagation, invokes all current AppSync resolvers, and can optionally seed a live started game for accepted-action/read/reconnect plus secondary-user non-member denial checks.
 - `src/types/index.ts`: backend-local request, response, actor, AppSync Cognito identity, resolver-context, and error types.
 
 Infrastructure code now lives under `infra`.
@@ -60,7 +60,7 @@ Production multiplayer blockers:
    - A production-shaped AppSync Cognito parser now maps authenticated `sub` values to backend `playerId`.
    - CDK now defines Cognito resources and AppSync user-pool authorization.
    - A smoke script validates real sign-in and AppSync identity payloads after deployment.
-   - Seeded smoke has run against the deployed stack; add a second-user smoke path for negative room-membership checks.
+   - Seeded smoke has run against the deployed stack, and the smoke harness now includes a secondary-user path for negative room-membership checks.
    - Need guest/anonymous account decision.
 
 2. Physical persistence adapter
@@ -68,7 +68,7 @@ Production multiplayer blockers:
    - A Lambda-style resolver shell can delegate transaction intents to `MultiplayerStore` mocks.
    - An AWS SDK v3 DynamoDB store implementation exists behind the interface and is tested with mocked clients.
    - CDK now defines a DynamoDB table, Lambda functions, and IAM grants.
-   - No DynamoDB table or Lambda has been deployed yet.
+   - Disposable dev-stack DynamoDB/Lambda deployment has been smoke-tested; no production persistence deployment exists yet.
    - Mocked AWS SDK tests cover transaction cancellation mapping to duplicate-action, stale-action, and persistence-conflict errors.
    - Need DynamoDB Local or equivalent integration tests for partial failures and retry handling.
 
@@ -248,7 +248,7 @@ Current backend contract tests cover:
 - Query resolver shell tests enforce public/private separation, public snapshot room membership, and private-hand ownership.
 - Infrastructure tests assert AppSync uses Cognito authorization, Lambda resolvers, and native-app Cognito client settings.
 - Submit-action tests assert rejected actions persist idempotency results without writing public snapshots, trusted events, or private hand records.
-- Smoke harness tests assert the deployed smoke checks cover all current AppSync resolvers without requiring seeded private hand data.
+- Smoke harness tests assert the deployed smoke checks cover all current AppSync resolvers without requiring seeded private hand data, and cover secondary-user non-member denial when seeded data is available.
 
 Current subscription payload:
 
@@ -320,24 +320,19 @@ Production-quality casual multiplayer:
 
 ## Recommended Next Slices
 
-1. Add second-user deployed authorization smoke
-   - Create or reset a second Cognito smoke user.
-   - Seed a game as the primary smoke user.
-   - Prove the second user cannot read the public snapshot or private hand before joining the room.
-
-2. DynamoDB local integration test harness
+1. DynamoDB local integration test harness
    - Add DynamoDB Local or equivalent integration tests for conditional failures.
    - Keep AWS SDK dependencies isolated inside `backend`.
 
-3. Read-side authorization hardening
+2. Read-side authorization hardening
    - Keep room membership enforcement on `getGameSnapshot`.
    - Keep seat ownership enforcement on `getMyPrivateHand`.
    - Add abuse/rate-limit behavior for reconnect and snapshot reads.
 
-4. Reconnect client model
+3. Reconnect client model
    - Add pending action queue and gap detection in the app without real network transport.
 
-5. Security test matrix
+4. Security test matrix
    - Actor not in room.
    - Actor claiming wrong seat.
    - Private hand access by wrong player.

@@ -65,6 +65,9 @@ SHAKE2_SMOKE_EMAIL
 SHAKE2_SMOKE_USERNAME
 SHAKE2_SMOKE_PASSWORD
 SHAKE2_SMOKE_CREATE_USER
+SHAKE2_SMOKE_SECONDARY_EMAIL
+SHAKE2_SMOKE_SECONDARY_USERNAME
+SHAKE2_SMOKE_SECONDARY_PASSWORD
 ```
 
 `docs/status/MULTIPLAYER_DEV_SMOKE_RUNBOOK.md` has the full smoke-test flow.
@@ -87,7 +90,7 @@ Current tests verify:
 - Cognito `sub` is propagated as the backend multiplayer `playerId`.
 - Rejected player actions persist idempotency results without game-state mutations.
 - DynamoDB transaction cancellation reasons are mapped to stable backend errors for duplicate action, stale action, and persistence conflicts.
-- The deployed smoke script can validate AppSync auth, Cognito ID-token flow, Lambda resolver invocation, and the optional seeded gameplay/read/reconnect path once a dev stack exists.
+- The deployed smoke script can validate AppSync auth, Cognito ID-token flow, Lambda resolver invocation, the optional seeded gameplay/read/reconnect path, and secondary-user non-member read denial once a dev stack exists.
 
 Required before production:
 

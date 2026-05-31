@@ -1,6 +1,6 @@
 # Multiplayer Dev Smoke Runbook
 
-Last reviewed: 2026-05-30
+Last reviewed: 2026-05-31
 
 ## Purpose
 
@@ -65,6 +65,14 @@ export SHAKE2_SMOKE_SEED_GAME=true
 
 That path writes a disposable started game into DynamoDB, submits one legal pass bid through AppSync as the authenticated Cognito user, submits the same action again to prove idempotency, reads the public snapshot, reads the actor private hand, verifies another seat's private hand is rejected, and checks reconnect pending-action classification. `SHAKE2_SMOKE_SEEDED_GAME_ID` is optional; omit it for a generated one-time game ID.
 
+If `SHAKE2_SMOKE_CREATE_USER=true`, seeded mode also creates or resets a derived second user and proves that authenticated non-members cannot read the seeded public snapshot or private hand. To use a pre-existing second user instead, set:
+
+```text
+export SHAKE2_SMOKE_SECONDARY_EMAIL=smoke-nonmember@example.com
+export SHAKE2_SMOKE_SECONDARY_USERNAME=smoke-nonmember-user
+export SHAKE2_SMOKE_SECONDARY_PASSWORD='temporary-password'
+```
+
 ## What The Smoke Test Proves
 
 - AppSync rejects unauthenticated `submitGameAction` calls.
@@ -73,6 +81,7 @@ That path writes a disposable started game into DynamoDB, submits one legal pass
 - `getGameSnapshot`, `getMyPrivateHand`, and `getReconnectView` invoke their Lambda resolvers.
 - Missing smoke game data returns controlled GraphQL errors instead of exposing private records.
 - With `SHAKE2_SMOKE_SEED_GAME=true`, the deployed stack can persist and read a real started game, accept a legal action, return an idempotent duplicate result, enforce private-hand ownership, and classify accepted/unknown pending actions during reconnect.
+- With a secondary smoke user, the deployed stack rejects authenticated non-members from seeded public snapshot and private-hand reads.
 
 ## Expected Result
 

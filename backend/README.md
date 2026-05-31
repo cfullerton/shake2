@@ -59,6 +59,7 @@ This workspace is the backend boundary for multiplayer Texas 42. It contains tes
   - Optionally creates/resets a temporary Cognito smoke user.
   - Authenticates through Cognito and calls the deployed AppSync API.
   - Verifies unauthenticated rejection, Cognito actor propagation, and invocation of each deployed resolver.
+  - In seeded mode, can authenticate a second Cognito smoke user and verify non-members cannot read public snapshots or private hands.
 
 - `src/dynamodb/store.ts`
   - Defines `MultiplayerStore`.
@@ -169,11 +170,14 @@ SHAKE2_SMOKE_CREATE_USER
 SHAKE2_SMOKE_GAME_ID
 SHAKE2_SMOKE_SEED_GAME
 SHAKE2_SMOKE_SEEDED_GAME_ID
+SHAKE2_SMOKE_SECONDARY_EMAIL
+SHAKE2_SMOKE_SECONDARY_USERNAME
+SHAKE2_SMOKE_SECONDARY_PASSWORD
 ```
 
 The deployed smoke runner automatically loads `backend/.env` when present, then lets explicit shell environment variables override those values. Keep real `.env` files local only.
 
-Set `SHAKE2_SMOKE_SEED_GAME=true` to run the extended smoke path. That path writes a disposable room/game into DynamoDB through the engine storage records, submits one legal bid through AppSync, verifies duplicate action idempotency, checks public/private hand separation, and verifies reconnect pending-action classification. If `SHAKE2_SMOKE_SEEDED_GAME_ID` is omitted, the runner generates a unique smoke game ID.
+Set `SHAKE2_SMOKE_SEED_GAME=true` to run the extended smoke path. That path writes a disposable room/game into DynamoDB through the engine storage records, submits one legal bid through AppSync, verifies duplicate action idempotency, checks public/private hand separation, and verifies reconnect pending-action classification. If `SHAKE2_SMOKE_CREATE_USER=true`, the runner also creates/resets a derived secondary user by default and verifies that authenticated non-members cannot read the seeded public snapshot or private hand. You can provide the `SHAKE2_SMOKE_SECONDARY_*` values to use an existing second user or override the derived one. If `SHAKE2_SMOKE_SEEDED_GAME_ID` is omitted, the runner generates a unique smoke game ID.
 
 The room game ID index must allow lookup of room metadata by `gameId`. Tests inject a mocked DynamoDB DocumentClient, so no AWS credentials are needed for local verification.
 
@@ -196,8 +200,7 @@ npm test
 
 ## Next Steps
 
-1. Add a deployed non-member smoke check with a second Cognito test user for public snapshot denial.
-2. Add DynamoDB Local or equivalent integration tests for conditional transaction failures and retry behavior.
-3. Validate AppSync subscription delivery and client-side sequence-gap recovery.
-4. Add frontend multiplayer configuration and session UI behind a feature flag.
-5. Add production hardening: rate limits, alarms, log review, and retention policies.
+1. Add DynamoDB Local or equivalent integration tests for conditional transaction failures and retry behavior.
+2. Validate AppSync subscription delivery and client-side sequence-gap recovery.
+3. Add frontend multiplayer configuration and session UI behind a feature flag.
+4. Add production hardening: rate limits, alarms, log review, and retention policies.

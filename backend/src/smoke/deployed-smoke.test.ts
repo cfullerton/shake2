@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   DeployedSmokeError,
+  createSeededNonMemberSmokeChecks,
   createSeededSmokeChecks,
   createSmokeChecks,
   evaluateSmokeCheck,
@@ -94,6 +95,41 @@ test("resolves extended deployed smoke seed config from env", () => {
   assert.equal(config.seedGame, true);
   assert.equal(config.seededGameId, "seeded-game-1");
   assert.equal(config.roomGameIdIndexName, "GameIdIndex");
+  assert.equal(config.secondaryUser, undefined);
+});
+
+test("resolves secondary non-member smoke user config for seeded create-user runs", () => {
+  const config = resolveDeployedSmokeConfig({
+    SHAKE2_SMOKE_CREATE_USER: "true",
+    SHAKE2_SMOKE_EMAIL: "smoke@example.com",
+    SHAKE2_SMOKE_PASSWORD: "test-password",
+    SHAKE2_SMOKE_SEED_GAME: "true",
+    SHAKE2_SMOKE_USERNAME: "smoke-user"
+  });
+
+  assert.deepEqual(config.secondaryUser, {
+    password: "test-password",
+    userEmail: "smoke+nonmember@example.com",
+    username: "smoke-user-nonmember"
+  });
+});
+
+test("resolves explicit secondary non-member smoke user config", () => {
+  const config = resolveDeployedSmokeConfig({
+    SHAKE2_SMOKE_EMAIL: "smoke@example.com",
+    SHAKE2_SMOKE_PASSWORD: "test-password",
+    SHAKE2_SMOKE_SECONDARY_EMAIL: "smoke-other@example.com",
+    SHAKE2_SMOKE_SECONDARY_PASSWORD: "other-password",
+    SHAKE2_SMOKE_SECONDARY_USERNAME: "smoke-other-user",
+    SHAKE2_SMOKE_SEED_GAME: "true",
+    SHAKE2_SMOKE_USERNAME: "smoke-user"
+  });
+
+  assert.deepEqual(config.secondaryUser, {
+    password: "other-password",
+    userEmail: "smoke-other@example.com",
+    username: "smoke-other-user"
+  });
 });
 
 test("loads deployed smoke config from dotenv-style contents", () => {
@@ -108,6 +144,9 @@ test("loads deployed smoke config from dotenv-style contents", () => {
       SHAKE2_SMOKE_CREATE_USER=true
       SHAKE2_SMOKE_SEED_GAME=true
       SHAKE2_SMOKE_SEEDED_GAME_ID=seeded-game-1
+      SHAKE2_SMOKE_SECONDARY_EMAIL=smoke-other@example.com
+      SHAKE2_SMOKE_SECONDARY_USERNAME=smoke-other-user
+      SHAKE2_SMOKE_SECONDARY_PASSWORD='other temporary password'
       SHAKE2_ROOM_GAME_ID_INDEX_NAME=GameIdIndex
       UNRELATED_SECRET=do-not-read
     `),
@@ -119,6 +158,9 @@ test("loads deployed smoke config from dotenv-style contents", () => {
       SHAKE2_SMOKE_PASSWORD: "temporary password",
       SHAKE2_SMOKE_SEED_GAME: "true",
       SHAKE2_SMOKE_SEEDED_GAME_ID: "seeded-game-1",
+      SHAKE2_SMOKE_SECONDARY_EMAIL: "smoke-other@example.com",
+      SHAKE2_SMOKE_SECONDARY_PASSWORD: "other temporary password",
+      SHAKE2_SMOKE_SECONDARY_USERNAME: "smoke-other-user",
       SHAKE2_SMOKE_STACK_NAME: "shake2-dev-multiplayer-infra",
       SHAKE2_SMOKE_USERNAME: "smoke-user"
     }
@@ -162,6 +204,17 @@ test("creates extended seeded smoke checks for live gameplay data", () => {
     "seeded getReconnectView classifies pending actions"
   ]);
   assert.equal(checks.every((check) => check.requiresAuth), true);
+});
+
+test("creates secondary-user seeded smoke checks for non-member denial", () => {
+  const checks = createSeededNonMemberSmokeChecks(createSeed());
+
+  assert.deepEqual(checks.map((check) => check.title), [
+    "seeded getGameSnapshot rejects non-member",
+    "seeded getMyPrivateHand rejects non-member"
+  ]);
+  assert.equal(checks.every((check) => check.requiresAuth), true);
+  assert.equal(checks.every((check) => check.authUser === "secondary"), true);
 });
 
 test("submit smoke request proves Cognito sub wins over client actor", () => {
@@ -409,6 +462,38 @@ test("evaluates expected seeded smoke GraphQL results", () => {
             unknownPendingActionIds: ["unknown-action"]
           }
         }
+      },
+      httpStatus: 200
+    }).ok,
+    true
+  );
+});
+
+test("evaluates secondary-user seeded smoke denials", () => {
+  const [snapshotDenied, privateHandDenied] =
+    createSeededNonMemberSmokeChecks(createSeed());
+
+  assert.equal(
+    evaluateSmokeCheck(snapshotDenied!, {
+      body: {
+        errors: [
+          {
+            message: "INVALID_ACTOR: Player is not a member of this room."
+          }
+        ]
+      },
+      httpStatus: 200
+    }).ok,
+    true
+  );
+  assert.equal(
+    evaluateSmokeCheck(privateHandDenied!, {
+      body: {
+        errors: [
+          {
+            message: "INVALID_ACTOR: Private hand access requires ownership."
+          }
+        ]
       },
       httpStatus: 200
     }).ok,
