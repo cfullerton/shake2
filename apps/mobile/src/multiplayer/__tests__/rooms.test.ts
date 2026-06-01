@@ -89,6 +89,7 @@ test("MultiplayerRoomClient joins, seats, and starts rooms through AppSync", asy
   await expect(client.listPublicRooms()).resolves.toEqual([room]);
   await expect(
     client.startGame({
+      markBids: true,
       noTrump: true,
       roomId: "room-1",
       targetMarks: 5
@@ -111,6 +112,7 @@ test("MultiplayerRoomClient joins, seats, and starts rooms through AppSync", asy
   });
   expect(graphql.requests[5]?.variables).toEqual({
     input: {
+      markBids: true,
       noTrump: true,
       roomId: "room-1",
       targetMarks: 5

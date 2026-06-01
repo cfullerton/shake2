@@ -9,6 +9,7 @@ import {
 } from "@shake2/game-engine";
 
 import { multiplayerTrumpSuits } from "./types";
+import type { MultiplayerBid } from "./game";
 import type {
   AppSyncSeatIndex,
   MultiplayerCompletedHandSummary,
@@ -53,6 +54,11 @@ export interface MultiplayerActiveTeamSummary {
   readonly id: TeamId;
   readonly marks: number;
   readonly name: string;
+}
+
+export interface MultiplayerActiveBidOption {
+  readonly bid: MultiplayerBid;
+  readonly label: string;
 }
 
 export interface MultiplayerActiveTrumpCall {
@@ -105,6 +111,7 @@ export interface MultiplayerActiveGameView {
   readonly gameOverMessage: string | null;
   readonly handNumber: number;
   readonly lastCompletedHand: MultiplayerActiveCompletedHandSummary | null;
+  readonly legalBidOptions: readonly MultiplayerActiveBidOption[];
   readonly legalDominoPlays: readonly MultiplayerActiveDominoPlay[];
   readonly legalBidAmounts: readonly number[];
   readonly legalTrumpCalls: readonly MultiplayerActiveTrumpCall[];
@@ -154,8 +161,9 @@ export function createMultiplayerActiveGameView(input: {
   const handCounts = readHandCounts(input.snapshot, state);
   const bidding = readRecord(state.bidding);
   const trump = readRecord(state.trump);
-  const currentBidAmount = readHighestBidAmount(bidding) ??
-    readWinningBidAmount(trump?.winningBid);
+  const currentBid = readHighestBid(bidding) ??
+    readWinningBid(trump?.winningBid);
+  const currentBidLabel = currentBid ? formatMultiplayerBid(currentBid) : "No bid yet";
   const currentTrick = readRecord(state.currentTrick);
   const currentTrickPlays = readCurrentTrickPlays(currentTrick, viewerSeat);
   const completedTricks = readCompletedTricks(state);
@@ -174,11 +182,14 @@ export function createMultiplayerActiveGameView(input: {
   const canCallTrump = viewerSeat !== null &&
     currentTurnSeat === toSeatNumber(viewerSeat) &&
     input.snapshot.phase === "trump";
-  const legalBidAmounts = viewerSeat !== null &&
+  const legalBidOptions = viewerSeat !== null &&
     currentTurnSeat === toSeatNumber(viewerSeat) &&
     isBiddingPhase(input.snapshot.phase)
-      ? createLegalBidAmounts(state, currentBidAmount)
+      ? createLegalBidOptions(state, currentBid)
       : [];
+  const legalBidAmounts = legalBidOptions.flatMap((option) =>
+    option.bid.kind === "numeric" ? [option.bid.amount] : []
+  );
   const legalDominoPlays = createLegalDominoPlays({
     currentTrick,
     currentTurnSeat,
@@ -198,8 +209,8 @@ export function createMultiplayerActiveGameView(input: {
     canStartNextHand: input.room.isHost &&
       input.room.status === "inGame" &&
       input.snapshot.phase === "setup",
-    canSubmitBid: legalBidAmounts.length > 0,
-    currentBidLabel: currentBidAmount === null ? "No bid yet" : String(currentBidAmount),
+    canSubmitBid: legalBidOptions.some((option) => option.bid.kind !== "pass"),
+    currentBidLabel,
     currentScoreLabel: createCurrentScoreLabel(completedTricks, teams),
     currentTrickLeadLabel: createCurrentTrickLeadLabel(
       currentTrick,
@@ -219,6 +230,7 @@ export function createMultiplayerActiveGameView(input: {
       viewerSeat,
       teams
     ),
+    legalBidOptions,
     legalDominoPlays,
     legalBidAmounts,
     legalTrumpCalls,
@@ -387,26 +399,54 @@ function readCurrentTurnSeat(
   return null;
 }
 
-function createLegalBidAmounts(
+function createLegalBidOptions(
   state: Readonly<Record<string, unknown>>,
-  currentBidAmount: number | null
-): readonly number[] {
+  currentBid: MultiplayerBid | null
+): readonly MultiplayerActiveBidOption[] {
   const rules = readRecord(state.rules);
   const bidding = readRecord(rules?.bidding);
   const minimumBid = readNumber(bidding?.minimumBid, 30);
   const maximumBid = readNumber(bidding?.maximumNumericBid, 42);
-  const start = Math.max(minimumBid, (currentBidAmount ?? minimumBid - 1) + 1);
+  const options: MultiplayerActiveBidOption[] = [
+    {
+      bid: {
+        kind: "pass"
+      },
+      label: "Pass"
+    }
+  ];
 
-  if (start > maximumBid) {
-    return [];
+  if (currentBid?.kind !== "marks") {
+    const currentNumericAmount = currentBid?.kind === "numeric"
+      ? currentBid.amount
+      : null;
+    const start = Math.max(
+      minimumBid,
+      (currentNumericAmount ?? minimumBid - 1) + 1
+    );
+
+    for (let amount = start; amount <= maximumBid; amount += 1) {
+      options.push({
+        bid: {
+          amount,
+          kind: "numeric"
+        },
+        label: String(amount)
+      });
+    }
   }
 
-  return Array.from(
-    {
-      length: maximumBid - start + 1
-    },
-    (_value, index) => start + index
-  );
+  for (const marks of createLegalMarkBidValues(state, currentBid)) {
+    options.push({
+      bid: {
+        kind: "marks",
+        marks
+      },
+      label: formatMarkBidLabel(marks)
+    });
+  }
+
+  return options;
 }
 
 function readHandCounts(
@@ -434,18 +474,86 @@ function readHandCounts(
   };
 }
 
-function readHighestBidAmount(
+function readHighestBid(
   bidding: Readonly<Record<string, unknown>> | undefined
-): number | null {
-  return readWinningBidAmount(bidding?.highestBid);
+): MultiplayerBid | null {
+  return readWinningBid(bidding?.highestBid);
 }
 
-function readWinningBidAmount(value: unknown): number | null {
+function readWinningBid(value: unknown): MultiplayerBid | null {
   const highestBid = readRecord(value);
   const bid = readRecord(highestBid?.bid);
-  const amount = bid?.amount;
 
-  return typeof amount === "number" && Number.isFinite(amount) ? amount : null;
+  return readBid(bid);
+}
+
+function readBid(
+  bid: Readonly<Record<string | number, unknown>> | undefined
+): MultiplayerBid | null {
+  if (bid?.kind === "numeric") {
+    const amount = bid.amount;
+
+    return typeof amount === "number" && Number.isFinite(amount)
+      ? {
+          amount,
+          kind: "numeric"
+        }
+      : null;
+  }
+
+  if (bid?.kind === "marks") {
+    const marks = bid.marks;
+
+    return typeof marks === "number" && Number.isFinite(marks)
+      ? {
+          kind: "marks",
+          marks
+        }
+      : null;
+  }
+
+  return null;
+}
+
+function createLegalMarkBidValues(
+  state: Readonly<Record<string, unknown>>,
+  currentBid: MultiplayerBid | null
+): readonly number[] {
+  if (!readMarkBidsEnabled(state)) {
+    return [];
+  }
+
+  const maxMarks = Math.max(1, readNumber(readRecord(state.rules)?.targetMarks, 7));
+
+  if (currentBid?.kind === "marks") {
+    const nextMarks = currentBid.marks + 1;
+
+    return nextMarks <= maxMarks ? [nextMarks] : [];
+  }
+
+  const openingMax = Math.min(2, maxMarks);
+
+  return Array.from(
+    {
+      length: openingMax
+    },
+    (_value, index) => index + 1
+  );
+}
+
+function formatMultiplayerBid(bid: MultiplayerBid): string {
+  switch (bid.kind) {
+    case "marks":
+      return formatMarkBidLabel(bid.marks);
+    case "numeric":
+      return String(bid.amount);
+    case "pass":
+      return "Pass";
+  }
+}
+
+function formatMarkBidLabel(marks: number): string {
+  return `${marks} ${marks === 1 ? "mark" : "marks"}`;
 }
 
 function readTrumpLabel(state: Readonly<Record<string, unknown>>): string {
@@ -707,8 +815,8 @@ function createCompletedHandSummary(
       ? `${awardedTeam.name} +${awardedMarks} ${formatMarkNoun(awardedMarks)}`
       : "No marks awarded",
     outcomeLabel: summary.outcome === "made"
-      ? `Made ${summary.bidAmount}`
-      : `Set on ${summary.bidAmount}`,
+      ? `Made ${summary.bidLabel}`
+      : `Set on ${summary.bidLabel}`,
     teamPointsLabel:
       `${teams[0].name} ${summary.teamPoints.teamA} · ${teams[1].name} ${summary.teamPoints.teamB}`,
     tricksLabel:
@@ -826,6 +934,13 @@ function readNoTrumpEnabled(state: Readonly<Record<string, unknown>>): boolean {
   const enabledContracts = readRecord(rules?.enabledContracts);
 
   return enabledContracts?.noTrump === true;
+}
+
+function readMarkBidsEnabled(state: Readonly<Record<string, unknown>>): boolean {
+  const rules = readRecord(state.rules);
+  const enabledContracts = readRecord(rules?.enabledContracts);
+
+  return enabledContracts?.markBids === true;
 }
 
 function formatSeatLabel(

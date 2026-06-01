@@ -5,11 +5,21 @@ import {
   MAX_NUMERIC_BID,
   MIN_NUMERIC_BID,
   createBiddingState,
+  createMarkBid,
   createNumericBid,
   createPassBid,
   isEngineError,
+  standardRules,
   submitBid
 } from "../index.ts";
+
+const markBidRules = {
+  ...standardRules,
+  enabledContracts: {
+    ...standardRules.enabledContracts,
+    markBids: true
+  }
+};
 
 test("starts bidding left of dealer", () => {
   const state = createBiddingState(2);
@@ -34,9 +44,58 @@ test("completes normal numeric bidding with highest bidder as declarer", () => {
   assert.equal(state.currentSeat, null);
   assert.equal(state.bids.length, 4);
   assert.equal(state.highestBid?.seat, 3);
-  assert.equal(state.highestBid?.bid.amount, MAX_NUMERIC_BID);
+  assert.deepEqual(state.highestBid?.bid, createNumericBid(MAX_NUMERIC_BID));
   assert.equal(state.highestBid?.forced, false);
   assert.equal(state.declarer, 3);
+});
+
+test("rejects mark bids unless the variant is enabled", () => {
+  const state = createBiddingState(0);
+
+  assert.throws(
+    () => submitBid(state, 1, createMarkBid(1)),
+    (error) => isEngineError(error) && error.code === "INVALID_BID"
+  );
+});
+
+test("allows an opening mark bidder to bid one or two marks", () => {
+  const state = createBiddingState(0);
+  const oneMark = submitBid(state, 1, createMarkBid(1), markBidRules);
+  const twoMarks = submitBid(state, 1, createMarkBid(2), markBidRules);
+
+  assert.deepEqual(oneMark.highestBid?.bid, createMarkBid(1));
+  assert.deepEqual(twoMarks.highestBid?.bid, createMarkBid(2));
+  assert.throws(
+    () => submitBid(state, 1, createMarkBid(3), markBidRules),
+    (error) => isEngineError(error) && error.code === "INVALID_BID"
+  );
+});
+
+test("requires later mark bids to climb exactly one mark", () => {
+  let state = createBiddingState(0);
+
+  state = submitBid(state, 1, createMarkBid(2), markBidRules);
+  state = submitBid(state, 2, createMarkBid(3), markBidRules);
+
+  assert.deepEqual(state.highestBid?.bid, createMarkBid(3));
+  assert.throws(
+    () => submitBid(state, 3, createMarkBid(5), markBidRules),
+    (error) => isEngineError(error) && error.code === "INVALID_BID"
+  );
+});
+
+test("rejects numeric bids after a mark bid", () => {
+  const state = submitBid(
+    createBiddingState(0),
+    1,
+    createMarkBid(2),
+    markBidRules
+  );
+
+  assert.throws(
+    () => submitBid(state, 2, createNumericBid(MAX_NUMERIC_BID), markBidRules),
+    (error) => isEngineError(error) && error.code === "INVALID_BID"
+  );
 });
 
 test("forces dealer to bid 30 when all players pass", () => {
@@ -49,7 +108,7 @@ test("forces dealer to bid 30 when all players pass", () => {
 
   assert.equal(state.status, "complete");
   assert.equal(state.highestBid?.seat, 0);
-  assert.equal(state.highestBid?.bid.amount, MIN_NUMERIC_BID);
+  assert.deepEqual(state.highestBid?.bid, createNumericBid(MIN_NUMERIC_BID));
   assert.equal(state.highestBid?.forced, true);
   assert.equal(state.declarer, 0);
 });

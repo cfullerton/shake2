@@ -66,6 +66,7 @@ export interface AppSyncAddBotInput {
 }
 
 export interface AppSyncStartGameInput {
+  readonly markBids?: boolean;
   readonly noTrump?: boolean;
   readonly roomId: string;
   readonly targetMarks?: number;
@@ -103,6 +104,8 @@ export interface AppSyncTeamTotals {
 export interface AppSyncCompletedHandSummary {
   readonly awardedTeamId?: FortyTwoTeamId;
   readonly bidAmount: number;
+  readonly bidLabel: string;
+  readonly bidMarks?: number;
   readonly biddingTeamId: FortyTwoTeamId;
   readonly biddingTeamPoints: number;
   readonly completedAt: string;
@@ -437,6 +440,8 @@ function toAppSyncCompletedHandSummary(
   return {
     ...(summary.awardedTeamId ? { awardedTeamId: summary.awardedTeamId } : {}),
     bidAmount: summary.bidAmount,
+    bidLabel: summary.bidLabel,
+    ...(summary.bidMarks !== undefined ? { bidMarks: summary.bidMarks } : {}),
     biddingTeamId: summary.biddingTeamId,
     biddingTeamPoints: summary.biddingTeamPoints,
     completedAt: summary.completedAt,

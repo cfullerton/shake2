@@ -64,6 +64,7 @@ input AddBotInput {
 }
 
 input StartGameInput {
+  markBids: Boolean
   noTrump: Boolean
   roomId: ID!
   targetMarks: Int
@@ -123,6 +124,8 @@ type CompletedHandSummary {
   handNumber: Int!
   completedAt: AWSDateTime!
   bidAmount: Int!
+  bidLabel: String!
+  bidMarks: Int
   biddingTeamId: String!
   declarer: SeatIndex!
   biddingTeamPoints: Int!

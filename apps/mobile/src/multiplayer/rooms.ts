@@ -30,6 +30,7 @@ export interface AddBotInput {
 }
 
 export interface StartGameInput {
+  readonly markBids?: boolean;
   readonly noTrump?: boolean;
   readonly roomId: string;
   readonly targetMarks?: number;
@@ -178,6 +179,7 @@ export class MultiplayerRoomClient {
       `,
       variables: {
         input: {
+          ...(input.markBids !== undefined ? { markBids: input.markBids } : {}),
           ...(input.noTrump !== undefined ? { noTrump: input.noTrump } : {}),
           roomId: input.roomId,
           ...(input.targetMarks !== undefined
@@ -242,6 +244,8 @@ const PUBLIC_SNAPSHOT_SELECTION = `
   lastCompletedHand {
     awardedTeamId
     bidAmount
+    bidLabel
+    bidMarks
     biddingTeamId
     biddingTeamPoints
     completedAt

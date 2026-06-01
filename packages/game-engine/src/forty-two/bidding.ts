@@ -4,10 +4,15 @@ import {
   getBidOrder,
   type SeatIndex
 } from "./seats.ts";
-import { standardRules } from "./rules-config.ts";
+import {
+  standardRules,
+  type RuleConfig
+} from "./rules-config.ts";
 
 export const MIN_NUMERIC_BID = standardRules.bidding.minimumBid;
 export const MAX_NUMERIC_BID = standardRules.bidding.maximumNumericBid;
+export const MIN_MARK_BID = 1;
+export const OPENING_MAX_MARK_BID = 2;
 
 export interface PassBid {
   readonly kind: "pass";
@@ -18,7 +23,13 @@ export interface NumericBid {
   readonly kind: "numeric";
 }
 
-export type BidCall = PassBid | NumericBid;
+export interface MarkBid {
+  readonly kind: "marks";
+  readonly marks: number;
+}
+
+export type NonPassBid = MarkBid | NumericBid;
+export type BidCall = MarkBid | NumericBid | PassBid;
 
 export interface BidRecord {
   readonly bid: BidCall;
@@ -26,7 +37,7 @@ export interface BidRecord {
 }
 
 export interface WinningBid {
-  readonly bid: NumericBid;
+  readonly bid: NonPassBid;
   readonly forced: boolean;
   readonly seat: SeatIndex;
 }
@@ -56,6 +67,13 @@ export function createNumericBid(amount: number): NumericBid {
   };
 }
 
+export function createMarkBid(marks: number): MarkBid {
+  return {
+    kind: "marks",
+    marks
+  };
+}
+
 export function createBiddingState(dealer: SeatIndex): BiddingState {
   assertSeatIndex(dealer);
   const order = getBidOrder(dealer);
@@ -74,7 +92,8 @@ export function createBiddingState(dealer: SeatIndex): BiddingState {
 export function submitBid(
   state: BiddingState,
   seat: SeatIndex,
-  bid: BidCall
+  bid: BidCall,
+  rules: RuleConfig = standardRules
 ): BiddingState {
   if (state.status === "complete") {
     throw new EngineError("INVALID_BID", "Bidding is already complete.");
@@ -94,8 +113,8 @@ export function submitBid(
     );
   }
 
-  assertBidCall(bid);
-  assertIncreasingBid(bid, state.highestBid);
+  assertBidCall(bid, rules);
+  assertIncreasingBid(bid, state.highestBid, rules);
 
   const bids = [
     ...state.bids,
@@ -134,37 +153,112 @@ export function submitBid(
   };
 }
 
-function assertBidCall(value: BidCall): void {
+export function formatBidLabel(bid: BidCall): string {
+  switch (bid.kind) {
+    case "marks":
+      return `${bid.marks} ${bid.marks === 1 ? "mark" : "marks"}`;
+    case "numeric":
+      return String(bid.amount);
+    case "pass":
+      return "Pass";
+  }
+}
+
+export function getLegalMarkBidValues(
+  highestBid: WinningBid | null,
+  rules: RuleConfig
+): readonly number[] {
+  if (!rules.enabledContracts.markBids) {
+    return [];
+  }
+
+  const maxMarks = Math.max(MIN_MARK_BID, rules.targetMarks);
+
+  if (highestBid?.bid.kind === "marks") {
+    const nextMarks = highestBid.bid.marks + 1;
+
+    return nextMarks <= maxMarks ? [nextMarks] : [];
+  }
+
+  const openingMax = Math.min(OPENING_MAX_MARK_BID, maxMarks);
+
+  return Array.from(
+    {
+      length: openingMax
+    },
+    (_value, index) => index + MIN_MARK_BID
+  );
+}
+
+function assertBidCall(value: BidCall, rules: RuleConfig): void {
   if (value.kind === "pass") {
     return;
   }
 
-  if (value.kind !== "numeric") {
-    throw new EngineError("INVALID_BID", "Bid must be pass or numeric.");
+  if (value.kind === "numeric") {
+    if (
+      !Number.isInteger(value.amount) ||
+      value.amount < MIN_NUMERIC_BID ||
+      value.amount > MAX_NUMERIC_BID
+    ) {
+      throw new EngineError(
+        "INVALID_BID",
+        `Numeric bids must be an integer from ${MIN_NUMERIC_BID} to ${MAX_NUMERIC_BID}.`
+      );
+    }
+
+    return;
   }
 
-  if (
-    !Number.isInteger(value.amount) ||
-    value.amount < MIN_NUMERIC_BID ||
-    value.amount > MAX_NUMERIC_BID
-  ) {
-    throw new EngineError(
-      "INVALID_BID",
-      `Numeric bids must be an integer from ${MIN_NUMERIC_BID} to ${MAX_NUMERIC_BID}.`
-    );
+  if (value.kind === "marks") {
+    if (!rules.enabledContracts.markBids) {
+      throw new EngineError("INVALID_BID", "Mark bids are not enabled for this game.");
+    }
+
+    if (
+      !Number.isInteger(value.marks) ||
+      value.marks < MIN_MARK_BID ||
+      value.marks > Math.max(MIN_MARK_BID, rules.targetMarks)
+    ) {
+      throw new EngineError(
+        "INVALID_BID",
+        `Mark bids must be an integer from ${MIN_MARK_BID} to ${rules.targetMarks}.`
+      );
+    }
+
+    return;
   }
+
+  throw new EngineError("INVALID_BID", "Bid must be pass, numeric, or marks.");
 }
 
 function assertIncreasingBid(
   bid: BidCall,
-  highestBid: WinningBid | null
+  highestBid: WinningBid | null,
+  rules: RuleConfig
 ): void {
-  if (bid.kind === "pass" || highestBid === null) {
+  if (bid.kind === "pass") {
     return;
   }
 
-  if (bid.amount <= highestBid.bid.amount) {
-    throw new EngineError("INVALID_BID", "Numeric bids must increase.");
+  if (highestBid === null && bid.kind === "numeric") {
+    return;
+  }
+
+  if (bid.kind === "numeric") {
+    if (highestBid === null) {
+      return;
+    }
+
+    if (highestBid.bid.kind === "marks" || bid.amount <= highestBid.bid.amount) {
+      throw new EngineError("INVALID_BID", "Numeric bids must increase.");
+    }
+
+    return;
+  }
+
+  if (!getLegalMarkBidValues(highestBid, rules).includes(bid.marks)) {
+    throw new EngineError("INVALID_BID", "Mark bids must follow the mark-bid ladder.");
   }
 }
 

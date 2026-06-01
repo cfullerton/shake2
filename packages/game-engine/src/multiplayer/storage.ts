@@ -98,6 +98,8 @@ export interface MultiplayerTeamTotals {
 export interface MultiplayerCompletedHandSummary {
   readonly awardedTeamId?: FortyTwoTeamId;
   readonly bidAmount: number;
+  readonly bidLabel: string;
+  readonly bidMarks?: number;
   readonly biddingTeamId: FortyTwoTeamId;
   readonly biddingTeamPoints: number;
   readonly completedAt: string;
@@ -347,6 +349,8 @@ export function createMultiplayerCompletedHandSummary(
   return {
     ...(awardedTeamId ? { awardedTeamId } : {}),
     bidAmount: handScore.bidAmount,
+    bidLabel: handScore.bidLabel,
+    ...(handScore.bidMarks !== undefined ? { bidMarks: handScore.bidMarks } : {}),
     biddingTeamId: handScore.biddingTeamId,
     biddingTeamPoints: handScore.biddingTeamPoints,
     completedAt: completedHandEvent.serverCreatedAt,

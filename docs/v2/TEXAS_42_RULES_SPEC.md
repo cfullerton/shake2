@@ -111,9 +111,14 @@ type MarkBid = {
 type BidCall = NumericBid | MarkBid | { kind: "pass" };
 ```
 
-For M2/M3, implement numeric bids only.
+Default games implement numeric bids only. When `enabledContracts.markBids` is true, mark bids are a variant extension:
 
-Mark bids, 84, plunge, splash, sevens, and nello should be variant extensions.
+- With no previous mark bid, a player may bid 1 or 2 marks.
+- After a mark bid, the next mark bid must be exactly one mark higher.
+- Numeric bids cannot follow a mark bid.
+- Mark bids are capped by the game's target marks.
+
+84, plunge, splash, sevens, and nello should remain separate future variant extensions.
 
 ## Declarer
 
@@ -192,8 +197,10 @@ Default mark behavior:
 
 - Successful numeric bid: bidding team earns 1 mark.
 - Failed numeric bid: opposing team earns 1 mark.
+- Successful mark bid: bidding team earns the bid mark count.
+- Failed mark bid: opposing team earns the bid mark count.
 
-Future config may support point scoring or mark values based on bid type.
+Mark bids require the bidding team to capture all 42 hand points. Future config may support point scoring or additional mark values based on bid type.
 
 ## Rule Variants
 
@@ -214,6 +221,7 @@ type RuleConfig = {
     plunge: boolean;
     markBids: boolean;
     eightyFour: boolean;
+    noTrump: boolean;
   };
   trumpBehavior: {
     doublesHigh: boolean;
@@ -238,7 +246,8 @@ const standardRules: RuleConfig = {
     splash: false,
     plunge: false,
     markBids: false,
-    eightyFour: false
+    eightyFour: false,
+    noTrump: false
   },
   trumpBehavior: {
     doublesHigh: true,
@@ -259,6 +268,9 @@ const standardRules: RuleConfig = {
 - All-pass dealer-forced bid.
 - Made bid exactly.
 - Set by one point.
+- Opening mark bid can be one or two marks.
+- Later mark bids climb exactly one mark.
+- Mark bids require all 42 hand points and award the bid mark count.
 - Trump beats led suit.
 - Highest led suit wins when no trump.
 - Player cannot slough when holding led suit.

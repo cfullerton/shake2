@@ -8,7 +8,10 @@ import {
   type Domino
 } from "../dominoes/domino.ts";
 import { EngineError } from "../errors.ts";
-import { type BidCall } from "../forty-two/bidding.ts";
+import {
+  formatBidLabel,
+  type BidCall
+} from "../forty-two/bidding.ts";
 import {
   FORTY_TWO_ACTION_SCHEMA_VERSION,
   type CallFortyTwoTrumpAction,
@@ -129,7 +132,7 @@ export interface CreateLocalGameSessionInput {
   readonly playerNames?: Partial<Record<SeatIndex, string>>;
   readonly rules?: RuleConfig;
   readonly targetMarks?: number;
-  readonly variants?: Partial<Pick<FortyTwoEnabledContracts, "noTrump">>;
+  readonly variants?: Partial<Pick<FortyTwoEnabledContracts, "markBids" | "noTrump">>;
   readonly teamNames?: {
     readonly teamA?: string;
     readonly teamB?: string;
@@ -820,8 +823,8 @@ function createActivityLogEntries(
           id: eventEnvelope.eventId,
           seat: winningBid.seat,
           text: winningBid.forced
-            ? `All passed; ${getSeatName(session, winningBid.seat)} ${winningBid.seat === session.humanSeat ? "were" : "was"} forced to bid ${winningBid.bid.amount}.`
-            : `Bidding closed at ${winningBid.bid.amount} for ${getSeatName(session, winningBid.seat)}.`,
+            ? `All passed; ${getSeatName(session, winningBid.seat)} ${winningBid.seat === session.humanSeat ? "were" : "was"} forced to bid ${formatBidLabel(winningBid.bid)}.`
+            : `Bidding closed at ${formatBidLabel(winningBid.bid)} for ${getSeatName(session, winningBid.seat)}.`,
           type: event.type
         }
       ];
@@ -868,8 +871,8 @@ function createActivityLogEntries(
         {
           id: eventEnvelope.eventId,
           text: handScore.outcome === "made"
-            ? `${biddingTeamName} made the ${handScore.bidAmount} bid with ${handScore.biddingTeamPoints} points.`
-            : `${biddingTeamName} was set on the ${handScore.bidAmount} bid with ${handScore.biddingTeamPoints} points.`,
+            ? `${biddingTeamName} made the ${handScore.bidLabel} bid with ${handScore.biddingTeamPoints} points.`
+            : `${biddingTeamName} was set on the ${handScore.bidLabel} bid with ${handScore.biddingTeamPoints} points.`,
           type: event.type
         }
       ];
@@ -894,7 +897,7 @@ function getSeatName(session: LocalGameSession, seat: SeatIndex): string {
 }
 
 function formatActivityBid(bid: BidCall): string {
-  return bid.kind === "numeric" ? `bid ${bid.amount}` : "passed";
+  return bid.kind === "pass" ? "passed" : `bid ${formatBidLabel(bid)}`;
 }
 
 function formatActivityTrumpSuit(trumpSuit: TrumpSuit): string {
@@ -915,6 +918,7 @@ function createLocalPracticeRules(input: CreateLocalGameSessionInput): RuleConfi
     ...standardRules,
     enabledContracts: {
       ...standardRules.enabledContracts,
+      markBids: input.variants?.markBids ?? false,
       noTrump: input.variants?.noTrump ?? false
     },
     ...(input.targetMarks !== undefined ? { targetMarks: input.targetMarks } : {})

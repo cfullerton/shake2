@@ -15,6 +15,7 @@ type LocalGameStartScreenProps = NativeStackScreenProps<
 >;
 
 export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) {
+  const [markBids, setMarkBids] = useState(false);
   const [noTrump, setNoTrump] = useState(false);
   const [targetMarks, setTargetMarks] = useState("7");
 
@@ -27,6 +28,7 @@ export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) 
     }
 
     navigation.navigate("LocalGame", {
+      markBids,
       noTrump,
       targetMarks: parsedTarget
     });
@@ -79,6 +81,27 @@ export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) 
               true: palette.crimson
             }}
             value={noTrump}
+          />
+        </Pressable>
+        <Pressable
+          accessibilityLabel="Mark Bids"
+          accessibilityRole="switch"
+          accessibilityState={{ checked: markBids }}
+          onPress={() => setMarkBids((current) => !current)}
+          style={styles.optionRow}
+        >
+          <View style={styles.optionText}>
+            <Text style={styles.optionLabel}>Mark Bids</Text>
+            <Text style={styles.optionMeta}>Bidding variant</Text>
+          </View>
+          <Switch
+            onValueChange={setMarkBids}
+            thumbColor={markBids ? palette.goldSoft : palette.paper}
+            trackColor={{
+              false: palette.paperMuted,
+              true: palette.crimson
+            }}
+            value={markBids}
           />
         </Pressable>
       </View>

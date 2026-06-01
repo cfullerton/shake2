@@ -260,6 +260,32 @@ test("lobby screen starts host rooms with no-trump enabled", async () => {
   });
 });
 
+test("lobby screen starts host rooms with mark bids enabled", async () => {
+  const room = createRoomView({
+    status: "ready"
+  });
+  const startGame = jest.fn(async () => undefined);
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        room,
+        startGame
+      })}
+    />
+  );
+
+  fireEvent.press(view.getByLabelText("Mark Bids"));
+  fireEvent.press(view.getByText("Start Game"));
+
+  await waitFor(() => {
+    expect(startGame).toHaveBeenCalledWith({
+      markBids: true,
+      roomId: "room-1",
+      targetMarks: 7
+    });
+  });
+});
+
 test("lobby screen creates public rooms and joins public listings", async () => {
   const publicRoom = createRoomView({
     participantCount: 1,
@@ -499,6 +525,7 @@ function createGameCompleteSnapshot(): MultiplayerPublicGameSnapshot {
     lastCompletedHand: {
       awardedTeamId: "teamB",
       bidAmount: 32,
+      bidLabel: "32",
       biddingTeamId: "teamA",
       biddingTeamPoints: 29,
       completedAt: "2026-05-31T00:00:00.000Z",

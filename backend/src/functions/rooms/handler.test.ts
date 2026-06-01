@@ -223,6 +223,7 @@ test("startGame commits a game-start write plan and returns public state", async
   const response = await handler({
     arguments: {
       input: {
+        markBids: true,
         noTrump: true,
         roomId: "room-1",
         targetMarks: 5
@@ -238,6 +239,10 @@ test("startGame commits a game-start write plan and returns public state", async
   assert.equal(response.room.isHost, true);
   assert.equal(response.snapshot.gameId, "id-1");
   assert.equal(response.snapshot.phase, "dealt");
+  assert.equal(
+    (response.snapshot.redactedState as any).rules.enabledContracts.markBids,
+    true
+  );
   assert.equal(
     (response.snapshot.redactedState as any).rules.enabledContracts.noTrump,
     true
@@ -256,7 +261,7 @@ test("startGame commits a game-start write plan and returns public state", async
   assert.equal(mock.commitWritePlanCalls[0]?.transaction.tableName, "Shake2Multiplayer");
 });
 
-test("startGame rejects malformed no-trump input before persistence", async () => {
+test("startGame rejects malformed variant input before persistence", async () => {
   const context = createTestContext();
   const readyRoom = createRoomWithPlayersAndSeats(context, [0, 1, 2, 3]);
   const mock = createMockStore([readyRoom]);
@@ -273,7 +278,7 @@ test("startGame rejects malformed no-trump input before persistence", async () =
     () => handler({
       arguments: {
         input: {
-          noTrump: "true",
+          markBids: "true",
           roomId: "room-1"
         }
       },

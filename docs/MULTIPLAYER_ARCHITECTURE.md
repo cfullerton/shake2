@@ -35,6 +35,7 @@ Implemented now:
 - Mobile multiplayer lobby UI for account sign-in, private/public room creation, join by room code, public room listing, room/seat display, seat taking, and host-only start-game.
 - Mobile multiplayer active-game UI for the started-room handoff, public table/score/turn rendering, private-hand loading, manual snapshot refresh, live game-update subscription sync with background snapshot catch-up, pass/numeric bid submission, declarer trump selection, current-trick rendering, legal domino-play submission, host next-hand dealing, compact post-hand recap, and game-over banner.
 - Multiplayer no-trump exposure through a host start-game variant flag, sanitized backend rule construction, generalized trump-call actions, No Trump declarer UI, and no-trump client-side legal play hints.
+- Multiplayer mark-bid exposure through a host start-game variant flag, sanitized backend rule construction, mark-bid action parsing, legal mark-bid buttons, and completed-hand summaries that carry bid labels and optional bid-mark counts.
 
 ## Authority Model
 
@@ -46,7 +47,7 @@ Clients may request actions:
 - take seat
 - add a bot to an empty seat as host before the game starts
 - start game as host once the room is ready
-- submit bid
+- submit bid, including mark bids when the room was started with that variant enabled
 - call trump, including No Trump when the room was started with that variant enabled
 - play domino
 
@@ -74,7 +75,7 @@ Client action
   -> Realtime notification
 ```
 
-The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, host-added bot seats, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh and host bot filling, active-game bidding/trump/trick-play UI, server-side online bot advancement, host-triggered next-hand dealing after completed hands, compact post-hand/game-over recap, mobile AppSync realtime subscription handling for game updates, mobile gap-triggered reconnect refresh, mobile active-game polling catch-up, and an optional deployed smoke path for live AppSync subscription validation. Full reconnect UX and pending-action retry are still missing.
+The current modules cover the middle authority/command layer, the backend-neutral durable record shape, validated accepted-event restore, runtime boundary parsing, conditional write planning, Cognito identity mapping, AppSync resolver shells, safe room invite-code generation/lookup, public-room listing, host-added bot seats, DynamoDB persistence for current room/action/read flows, a mobile-side network client foundation, a mobile lobby UI with polling-based room/public-list refresh and host bot filling, active-game bidding/trump/trick-play UI, no-trump and mark-bid variant flags, server-side online bot advancement, host-triggered next-hand dealing after completed hands, compact post-hand/game-over recap, mobile AppSync realtime subscription handling for game updates, mobile gap-triggered reconnect refresh, mobile active-game polling catch-up, and an optional deployed smoke path for live AppSync subscription validation. Full reconnect UX and pending-action retry are still missing.
 
 ## Durable Record Shape
 
@@ -88,7 +89,7 @@ It produces records shaped for a future DynamoDB adapter:
 - `GAME#<gameId> / PRIVATE_HAND#<seatIndex>`
 - `ACTION#<actionId> / RESULT`
 
-The latest snapshot record is public/redacted. It stores hand counts, not full hands. After a hand completes it may also carry a compact `lastCompletedHand` summary with bid, team point totals, trick counts, mark awards, declarer, and outcome. That summary is stored outside the canonical snapshot payload so validated replay still compares only game truth, and it does not include completed tricks, played dominoes, raw hands, or viewer hands. Current private hands are stored in seat-specific private-hand records.
+The latest snapshot record is public/redacted. It stores hand counts, not full hands. After a hand completes it may also carry a compact `lastCompletedHand` summary with bid amount, bid label, optional bid-mark count, team point totals, trick counts, mark awards, declarer, and outcome. That summary is stored outside the canonical snapshot payload so validated replay still compares only game truth, and it does not include completed tricks, played dominoes, raw hands, or viewer hands. Current private hands are stored in seat-specific private-hand records.
 
 ## Accepted Event Validation
 

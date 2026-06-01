@@ -4,7 +4,7 @@ Last reviewed: 2026-06-01
 
 ## Scope
 
-This file lists rules and product decisions missing from the current engine compared with broad Texas 42 expectations. It does not mean these are required for the current local standard numeric slice. The current supported rules are intentionally narrow: four-player partnership Texas 42, double-six dominoes, numeric bids from 30 to 42, one pip trump selection, standard trick play, marks scoring, and dealer-forced 30 on all-pass hands.
+This file lists rules and product decisions missing from the current engine compared with broad Texas 42 expectations. It does not mean these are required for the current local standard numeric slice. The default supported rules are intentionally narrow: four-player partnership Texas 42, double-six dominoes, numeric bids from 30 to 42, one pip trump selection, standard trick play, marks scoring, and dealer-forced 30 on all-pass hands. Variant-gated support now exists for no-trump and mark bids.
 
 ## Implemented Standard Rules
 
@@ -38,7 +38,7 @@ This file lists rules and product decisions missing from the current engine comp
 
 | Rule | Status | Notes |
 |---|---|---|
-| Mark bids | Missing | `RuleConfig.enabledContracts.markBids` exists, but no bid type or scoring behavior is implemented for production use. |
+| Mark bids | Partial | Engine, local practice UI, and multiplayer UI/API exposure exist behind `RuleConfig.enabledContracts.markBids`. Opening mark bidders may bid one or two marks; later mark bids climb exactly one; made/set scoring awards the bid mark count. Broader fixture and deployed smoke coverage are still missing. |
 | 84 bids | Missing | Config flag exists only. Requires doubled hand value/scoring behavior and likely distinct contract semantics. |
 | Plunge | Missing | Config flag exists only. Needs eligibility rules and scoring/mark awards. |
 | Splash | Missing | Config flag exists only. Needs eligibility rules and scoring/mark awards. |
@@ -48,7 +48,7 @@ This file lists rules and product decisions missing from the current engine comp
 | No-trump | Partial | Engine foundation, local practice UI, and multiplayer UI/API exposure exist behind `RuleConfig.enabledContracts.noTrump`: contract member, call action selection, no-trump trick winner behavior, standard one-mark made/set scoring, local setup toggle, multiplayer start-game toggle, and local/multiplayer trump-selection tiles. Broader no-trump full-hand fixtures and deployed smoke coverage are still missing. |
 | Low/no-low variants | Missing | Not represented. Product decision needed. |
 | Dealer redeal on all-pass | Missing | `RuleConfig.bidding.allPassBehavior` includes `"redeal"`, but the bidding implementation always forces dealer 30. |
-| Multiple-mark awards | Missing | Current numeric bids award exactly one mark. Higher-risk bids and variants may require more. |
+| Multiple-mark awards | Partial | Mark bids award the bid mark count. Other high-risk variants such as 84, plunge, and splash still need their own award semantics. |
 
 ## Missing Table And Match Rules
 
