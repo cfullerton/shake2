@@ -137,6 +137,8 @@ type Subscription {
 }
 ```
 
+`StartGameInput` accepts `targetMarks` and a sanitized `noTrump` boolean. The resolver maps those into engine-owned `RuleConfig`; clients do not submit arbitrary rule objects.
+
 The subscription output intentionally matches the `submitGameAction` mutation result because AppSync mutation-backed subscriptions require a compatible output type. The subscription field itself is nullable so AppSync can represent filtered or missing published payloads without turning that condition into a top-level non-null GraphQL protocol error; smoke validation still requires a non-null accepted-action payload. That result contains only safe event summaries and public/redacted snapshots. Private hand data is only represented through `getMyPrivateHand` and the reconnect player's own `privateHand` field after resolver-level ownership checks.
 
 `addBot` is host-only and only valid before a room starts. It fills an empty seat with a server-owned legal-random bot participant, returns the same safe `RoomView` shape as human seating, and exposes bot state as booleans instead of raw bot IDs. Once a game is active, start-game, next-hand, and accepted human-action resolvers advance bot turns on the backend before committing the write plan.

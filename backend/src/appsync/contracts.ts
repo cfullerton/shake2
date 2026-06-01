@@ -66,6 +66,7 @@ export interface AppSyncAddBotInput {
 }
 
 export interface AppSyncStartGameInput {
+  readonly noTrump?: boolean;
   readonly roomId: string;
   readonly targetMarks?: number;
 }

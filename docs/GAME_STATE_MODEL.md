@@ -57,7 +57,7 @@ type StandardNumericContract = {
 };
 ```
 
-Only the `standardNumeric` contract member is currently implemented. The discriminated union shape is in place to support future variants without rewriting core state/event boundaries.
+The `standardNumeric` and `noTrump` contract members are currently implemented. The discriminated union shape is in place to support future variants without rewriting core state/event boundaries.
 
 ## Behavioral Notes
 

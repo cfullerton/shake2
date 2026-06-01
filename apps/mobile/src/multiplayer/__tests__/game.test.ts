@@ -356,6 +356,74 @@ test("MultiplayerGameClient submits trump calls as AppSync AWSJSON actions", asy
   });
 });
 
+test("MultiplayerGameClient submits no-trump calls as AppSync AWSJSON actions", async () => {
+  const graphql = new MockGraphqlClient({
+    submitGameAction: {
+      accepted: true,
+      committed: true,
+      duplicate: false,
+      events: [],
+      gameId: "game-1",
+      snapshot: createSnapshot({
+        phase: "trickPlay",
+        redactedState: {
+          contract: {
+            declarer: 1,
+            kind: "noTrump",
+            trump: {
+              kind: "none"
+            }
+          },
+          dealer: 0,
+          phase: "trickPlay"
+        }
+      })
+    } satisfies MultiplayerSubmitGameActionResult
+  });
+  const client = new MultiplayerGameClient(graphql);
+
+  await expect(
+    client.submitTrump({
+      actorId: "actor-sub",
+      actorSeat: "SEAT_1",
+      gameId: "game-1",
+      knownLastEventSequence: 6,
+      knownSnapshotVersion: 6,
+      trump: {
+        kind: "none"
+      }
+    })
+  ).resolves.toMatchObject({
+    accepted: true,
+    snapshot: {
+      redactedState: {
+        contract: {
+          kind: "noTrump"
+        }
+      }
+    }
+  });
+
+  const variables = graphql.requests[0]?.variables as {
+    readonly input?: {
+      readonly action?: string;
+    };
+  };
+  const action = JSON.parse(variables.input?.action ?? "{}") as {
+    readonly action?: {
+      readonly payload?: {
+        readonly trump?: {
+          readonly kind?: string;
+        };
+      };
+    };
+  };
+
+  expect(action.action?.payload?.trump).toEqual({
+    kind: "none"
+  });
+});
+
 test("MultiplayerGameClient submits domino plays as AppSync AWSJSON actions", async () => {
   const graphql = new MockGraphqlClient({
     submitGameAction: {

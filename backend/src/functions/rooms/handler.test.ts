@@ -223,6 +223,7 @@ test("startGame commits a game-start write plan and returns public state", async
   const response = await handler({
     arguments: {
       input: {
+        noTrump: true,
         roomId: "room-1",
         targetMarks: 5
       }
@@ -237,6 +238,11 @@ test("startGame commits a game-start write plan and returns public state", async
   assert.equal(response.room.isHost, true);
   assert.equal(response.snapshot.gameId, "id-1");
   assert.equal(response.snapshot.phase, "dealt");
+  assert.equal(
+    (response.snapshot.redactedState as any).rules.enabledContracts.noTrump,
+    true
+  );
+  assert.equal((response.snapshot.redactedState as any).rules.targetMarks, 5);
   assert.deepEqual(response.snapshot.handCounts, {
     seat0: 7,
     seat1: 7,
@@ -248,6 +254,38 @@ test("startGame commits a game-start write plan and returns public state", async
   assert.equal(mock.commitWritePlanCalls.length, 1);
   assert.equal(mock.commitWritePlanCalls[0]?.writePlan.kind, "gameStart");
   assert.equal(mock.commitWritePlanCalls[0]?.transaction.tableName, "Shake2Multiplayer");
+});
+
+test("startGame rejects malformed no-trump input before persistence", async () => {
+  const context = createTestContext();
+  const readyRoom = createRoomWithPlayersAndSeats(context, [0, 1, 2, 3]);
+  const mock = createMockStore([readyRoom]);
+  const handler = createStartGameHandler({
+    engineContext: context,
+    resolverContext: {
+      requestId: "test-request",
+      tableName: "Shake2Multiplayer"
+    },
+    store: mock.store
+  });
+
+  await assert.rejects(
+    () => handler({
+      arguments: {
+        input: {
+          noTrump: "true",
+          roomId: "room-1"
+        }
+      },
+      identity: {
+        playerId: "player-0"
+      }
+    }),
+    (error: unknown) =>
+      error instanceof BackendResolverError &&
+      error.code === "MALFORMED_REQUEST"
+  );
+  assert.equal(mock.commitWritePlanCalls.length, 0);
 });
 
 test("startGame advances bot seats before committing the game start", async () => {

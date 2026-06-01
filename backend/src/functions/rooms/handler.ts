@@ -231,6 +231,9 @@ export function createStartGameHandler(
         previousRoom.room,
         {
           actorId: actor.playerId,
+          ...(input.noTrump !== undefined
+            ? { variants: { noTrump: input.noTrump } }
+            : {}),
           ...(input.targetMarks !== undefined
             ? { targetMarks: input.targetMarks }
             : {})
@@ -521,8 +524,10 @@ function parseStartGameInput(
     input.targetMarks,
     "startGame.targetMarks"
   );
+  const noTrump = parseOptionalBoolean(input.noTrump, "startGame.noTrump");
 
   return {
+    ...(noTrump !== undefined ? { noTrump } : {}),
     roomId: parseNonEmptyString(input.roomId, "startGame.roomId").trim(),
     ...(targetMarks !== undefined ? { targetMarks } : {})
   };
@@ -559,6 +564,24 @@ function parseOptionalPositiveInteger(
   }
 
   return value;
+}
+
+function parseOptionalBoolean(
+  value: unknown,
+  label: string
+): boolean | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  throw new BackendResolverError(
+    "MALFORMED_REQUEST",
+    `${label} must be a boolean.`
+  );
 }
 
 function parseRoomVisibility(

@@ -58,6 +58,28 @@ test("multiplayer room seats four players and starts a dealt authoritative game"
   );
 });
 
+test("multiplayer game start can enable no-trump rules", () => {
+  const context = createTestContext();
+  const room = createReadyRoom(context);
+  const session = unwrapResult(
+    startMultiplayerGame(
+      room,
+      {
+        actorId: "player-0",
+        gameId: "game-1",
+        targetMarks: 5,
+        variants: {
+          noTrump: true
+        }
+      },
+      context
+    )
+  );
+
+  assert.equal(session.snapshot.snapshot.rules.enabledContracts.noTrump, true);
+  assert.equal(session.snapshot.snapshot.rules.targetMarks, 5);
+});
+
 test("multiplayer game start requires the room host", () => {
   const context = createTestContext();
   const room = createReadyRoom(context);

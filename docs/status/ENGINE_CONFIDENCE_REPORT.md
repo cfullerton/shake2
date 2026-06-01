@@ -17,8 +17,8 @@ Confidence is not yet high enough for server-authoritative multiplayer. Accepted
 | Seats and teams | High | Seat `0-3`, teams `0/2` vs `1/3`, dealer and bid-order tests. | No player identity/seat-claiming model yet. |
 | Shuffle and deal | High | Deterministic shuffle uses `EngineContext.random`; tests prove 7 dominoes to 4 seats and all 28 dealt once. | No persisted shuffle seed or server-verifiable shuffle protocol yet. |
 | Numeric bidding | High | Tests cover minimum 30, maximum 42, increasing bids, turn order, all-pass dealer-forced bid, and declarer selection. | `RuleConfig.bidding.allPassBehavior: "redeal"` exists as a type but behavior is not implemented. |
-| Trump model | High for standard pip trump | Tests cover each suit, declarer-only calls, phase validation, trump identity, and double-high ranking. | No no-trump, follow-me, nello, sevens, splash, plunge, 84, or mark-bid contract behavior. |
-| Trick legality | High for standard rules | Tests cover invalid turn, missing domino, led suit legality, must-follow, sloughing, trump winners, and led-suit winners. | Legal play relies on current default trump behavior; variant behavior is not parameterized through commands yet. |
+| Trump model | High for standard pip trump and early no-trump | Tests cover each suit, declarer-only calls, phase validation, trump identity, double-high ranking, and no-trump contract calls. | Follow-me, nello, sevens, splash, plunge, 84, and mark-bid contract behavior are not implemented. |
+| Trick legality | High for standard rules, medium for no-trump | Tests cover invalid turn, missing domino, led suit legality, must-follow, sloughing, trump winners, led-suit winners, and no-trump led-suit behavior. | No-trump needs broader fixture coverage; other variant behavior is not implemented yet. |
 | Hand scoring | High for command-emitted hands | Tests cover made exact, made over target, set by one, count capture extremes, and total 42 points. | `scoreCompletedHand` trusts supplied completed trick winners; command path derives them, but forged accepted events can bypass that derivation. |
 | Mark scoring and game completion | High locally | Tests cover mark awards, dealer rotation, target marks, and game-complete event emission. | No standalone adjudication/correction command and no multiplayer authority layer. |
 | Event replay | High for accepted, command-emitted streams | Replay tests prove deterministic state for command-emitted event streams through full hands and games. | Reducer intentionally trusts accepted events; it does not prove that accepted events were valid. |
@@ -54,9 +54,9 @@ Confidence is not yet high enough for server-authoritative multiplayer. Accepted
 
    The legal-random bot chooses actions from legal selectors, but its input includes the full snapshot, including all hands. That is acceptable for V1 tests, but not acceptable as a hard architecture boundary.
 
-5. Variant behavior is modeled but not implemented.
+5. Variant behavior is partially modeled and no-trump is implemented behind explicit rules.
 
-   `RuleConfig` exposes future switches such as redeal all-pass behavior and variant contracts, but command logic currently implements the standard numeric path only.
+   `RuleConfig` exposes future switches such as redeal all-pass behavior and variant contracts. Command logic currently implements standard numeric and no-trump contracts; other variant flags remain placeholders.
 
 6. UI confidence lags engine confidence.
 
@@ -73,4 +73,3 @@ Before multiplayer or durable full-rules persistence:
 5. Extract shared full-hand fixtures and deterministic simulation helpers into `packages/game-engine/src/test-utils`.
 6. Add mobile UI integration tests for the local playable flow.
 7. Document the automatic hand-completion decision in an ADR if it remains the intended architecture.
-

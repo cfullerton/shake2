@@ -115,7 +115,7 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Target-mark detection and `GAME_COMPLETED` event emission.
 - Terminal game state records the winning team and completion timestamp.
 - Legal-action selectors for bids, trump calls, and domino plays.
-- Local no-trump setup and trump-selection exposure through engine-owned rules and legal contract calls.
+- Local and multiplayer no-trump setup/start-game and trump-selection exposure through engine-owned rules and legal contract calls.
 - Legal-random bot that only chooses actions exposed as legal by the engine.
 - Local game-session layer that creates games, manages human/bot seats, advances bot turns, dispatches engine commands, exposes session views, supports hand continuation, and supports restart.
 - Minimal mobile local-practice screens for start, bidding, trump selection, trick play, hand summary, and game summary.
@@ -234,7 +234,7 @@ This means the repository has implemented and tested the core local hand lifecyc
 - A multiplayer-safe authority, storage, schema, and write-plan model has started in code, but it is backend-neutral only.
 - No AWS, AppSync, DynamoDB, Cognito, physical durable room state, or deployed reconnect endpoint exists.
 - Only legal-random bots exist; no heuristic or advanced strategy exists.
-- No multiplayer product UI/API exposure yet for no-trump, even though the engine and local practice exposure exist.
+- No-trump multiplayer exposure exists, but still needs deployed smoke coverage and broader fixture-backed full-hand outcomes before it should be considered hardened.
 - No non-`standardNumeric`/`noTrump` variant contracts such as mark bids, 84, plunge, splash, nello, sevens, or follow-me.
 - Runtime validation now exists for accepted Forty Two event replay, multiplayer action/storage/reconnect boundary payloads, and accepted-event write planning. Version migrations and physical adapter compatibility tests are still missing.
 - No package-local test utilities for deterministic hands; integration tests currently build fixtures inline.

@@ -17,6 +17,7 @@ import type {
   MultiplayerPublicGameSnapshot,
   MultiplayerRoomSeat,
   MultiplayerRoomView,
+  MultiplayerTrumpSelection,
   MultiplayerTrumpSuit
 } from "./types";
 
@@ -52,6 +53,11 @@ export interface MultiplayerActiveTeamSummary {
   readonly id: TeamId;
   readonly marks: number;
   readonly name: string;
+}
+
+export interface MultiplayerActiveTrumpCall {
+  readonly label: string;
+  readonly selection: MultiplayerTrumpSelection;
 }
 
 export interface MultiplayerActiveTrickPlay {
@@ -101,6 +107,7 @@ export interface MultiplayerActiveGameView {
   readonly lastCompletedHand: MultiplayerActiveCompletedHandSummary | null;
   readonly legalDominoPlays: readonly MultiplayerActiveDominoPlay[];
   readonly legalBidAmounts: readonly number[];
+  readonly legalTrumpCalls: readonly MultiplayerActiveTrumpCall[];
   readonly legalTrumpSuits: readonly MultiplayerTrumpSuit[];
   readonly phase: string;
   readonly phaseTitle: string;
@@ -180,6 +187,7 @@ export function createMultiplayerActiveGameView(input: {
     state,
     viewerSeat
   });
+  const legalTrumpCalls = canCallTrump ? createLegalTrumpCalls(state) : [];
 
   return {
     canCallTrump,
@@ -213,7 +221,10 @@ export function createMultiplayerActiveGameView(input: {
     ),
     legalDominoPlays,
     legalBidAmounts,
-    legalTrumpSuits: canCallTrump ? multiplayerTrumpSuits : [],
+    legalTrumpCalls,
+    legalTrumpSuits: legalTrumpCalls.flatMap((call) =>
+      call.selection.kind === "pip" ? [call.selection.suit] : []
+    ),
     phase: input.snapshot.phase,
     phaseTitle: formatPhaseTitle(input.snapshot.phase),
     privateHand: input.privateHand?.dominoes ?? [],
@@ -257,9 +268,9 @@ function createLegalDominoPlays({
     return [];
   }
 
-  const trumpSuit = readContractTrumpSuit(state);
+  const trickMode = readContractTrickMode(state);
 
-  if (!trumpSuit) {
+  if (!trickMode) {
     return [];
   }
 
@@ -270,7 +281,7 @@ function createLegalDominoPlays({
   if (playedDominoes.length === 0) {
     return privateHand.map((domino) => ({
       domino,
-      ledSuit: getLegalLedSuit(domino, trumpSuit)
+      ledSuit: getLegalLedSuit(domino, trickMode)
     }));
   }
 
@@ -281,13 +292,13 @@ function createLegalDominoPlays({
   }
 
   const canFollowLedSuit = privateHand.some((domino) =>
-    doesDominoFollowSuit(domino, ledSuit, trumpSuit)
+    doesDominoFollowSuit(domino, ledSuit, trickMode)
   );
 
   return privateHand
     .filter((domino) =>
       canFollowLedSuit
-        ? doesDominoFollowSuit(domino, ledSuit, trumpSuit)
+        ? doesDominoFollowSuit(domino, ledSuit, trickMode)
         : true
     )
     .map((domino) => ({
@@ -438,20 +449,49 @@ function readWinningBidAmount(value: unknown): number | null {
 }
 
 function readTrumpLabel(state: Readonly<Record<string, unknown>>): string {
-  const suit = readContractTrumpSuit(state);
+  const trickMode = readContractTrickMode(state);
 
-  return suit ? multiplayerTrumpSuitLabels[suit] : "Not called";
+  if (!trickMode) {
+    return "Not called";
+  }
+
+  return trickMode.kind === "none"
+    ? "No Trump"
+    : multiplayerTrumpSuitLabels[trickMode.trumpSuit];
 }
 
-function readContractTrumpSuit(
+type MultiplayerActiveTrickMode =
+  | {
+      readonly kind: "none";
+    }
+  | {
+      readonly kind: "pip";
+      readonly trumpSuit: MultiplayerTrumpSuit;
+    };
+
+function readContractTrickMode(
   state: Readonly<Record<string, unknown>>
-): MultiplayerTrumpSuit | null {
+): MultiplayerActiveTrickMode | null {
   const contract = readRecord(state.contract) ??
     readRecord(readRecord(state.trump)?.contract);
   const selection = readRecord(contract?.trump);
+  const contractKind = contract?.kind;
 
-  return readTrumpSuit(selection?.suit) ??
+  if (selection?.kind === "none" || contractKind === "noTrump") {
+    return {
+      kind: "none"
+    };
+  }
+
+  const trumpSuit = readTrumpSuit(selection?.suit) ??
     readTrumpSuit(contract?.trumpSuit);
+
+  return trumpSuit
+    ? {
+        kind: "pip",
+        trumpSuit
+      }
+    : null;
 }
 
 function readCurrentTrickPlays(
@@ -758,6 +798,36 @@ function createWaitingMessage(
   return `Waiting for ${multiplayerSeatLabels[currentTurn]}.`;
 }
 
+function createLegalTrumpCalls(
+  state: Readonly<Record<string, unknown>>
+): readonly MultiplayerActiveTrumpCall[] {
+  const calls: MultiplayerActiveTrumpCall[] = multiplayerTrumpSuits.map((suit) => ({
+    label: multiplayerTrumpSuitLabels[suit],
+    selection: {
+      kind: "pip",
+      suit
+    }
+  }));
+
+  if (readNoTrumpEnabled(state)) {
+    calls.push({
+      label: "No Trump",
+      selection: {
+        kind: "none"
+      }
+    });
+  }
+
+  return calls;
+}
+
+function readNoTrumpEnabled(state: Readonly<Record<string, unknown>>): boolean {
+  const rules = readRecord(state.rules);
+  const enabledContracts = readRecord(rules?.enabledContracts);
+
+  return enabledContracts?.noTrump === true;
+}
+
 function formatSeatLabel(
   seat: AppSyncSeatIndex,
   viewerSeat: AppSyncSeatIndex | null
@@ -842,10 +912,10 @@ function readDomino(value: unknown): MultiplayerDomino | null {
 
 function getLegalLedSuit(
   domino: MultiplayerDomino,
-  trumpSuit: MultiplayerTrumpSuit
+  trickMode: MultiplayerActiveTrickMode
 ): MultiplayerTrumpSuit {
-  if (isDominoTrump(domino, trumpSuit)) {
-    return trumpSuit;
+  if (trickMode.kind === "pip" && isDominoTrump(domino, trickMode.trumpSuit)) {
+    return trickMode.trumpSuit;
   }
 
   return dominoSuitByPip[domino.high] ?? "blanks";
@@ -854,13 +924,17 @@ function getLegalLedSuit(
 function doesDominoFollowSuit(
   domino: MultiplayerDomino,
   ledSuit: MultiplayerTrumpSuit,
-  trumpSuit: MultiplayerTrumpSuit
+  trickMode: MultiplayerActiveTrickMode
 ): boolean {
-  if (ledSuit === trumpSuit) {
-    return isDominoTrump(domino, trumpSuit);
+  if (trickMode.kind === "none") {
+    return dominoContainsPip(domino, trumpSuitPipBySuit[ledSuit]);
   }
 
-  return !isDominoTrump(domino, trumpSuit) &&
+  if (ledSuit === trickMode.trumpSuit) {
+    return isDominoTrump(domino, trickMode.trumpSuit);
+  }
+
+  return !isDominoTrump(domino, trickMode.trumpSuit) &&
     dominoContainsPip(domino, trumpSuitPipBySuit[ledSuit]);
 }
 

@@ -30,6 +30,7 @@ export interface AddBotInput {
 }
 
 export interface StartGameInput {
+  readonly noTrump?: boolean;
   readonly roomId: string;
   readonly targetMarks?: number;
 }
@@ -177,6 +178,7 @@ export class MultiplayerRoomClient {
       `,
       variables: {
         input: {
+          ...(input.noTrump !== undefined ? { noTrump: input.noTrump } : {}),
           roomId: input.roomId,
           ...(input.targetMarks !== undefined
             ? { targetMarks: input.targetMarks }

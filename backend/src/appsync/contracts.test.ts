@@ -41,6 +41,10 @@ test("schema file exists and includes required operations", () => {
   assertTypeField(schema, "Mutation", "startGame");
   assertTypeField(schema, "Mutation", "startNextHand");
   assertTypeField(schema, "Mutation", "submitGameAction");
+  assert.match(
+    schema,
+    /input StartGameInput \{[\s\S]*?\bnoTrump\b[\s\S]*?\n\}/u
+  );
   assertTypeField(schema, "Query", "getRoom");
   assertTypeField(schema, "Query", "getRoomByCode");
   assertTypeField(schema, "Query", "listPublicRooms");

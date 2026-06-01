@@ -114,7 +114,7 @@ Shake 2 is currently an Expo React Native TypeScript app in an npm workspace mon
 
 ## Features Partially Implemented
 
-- Game engine: full local Texas 42 play now exists for standard numeric bids and pip-suit trump, but does not implement variants or advanced bot strategy.
+- Game engine: full local Texas 42 play now exists for standard numeric bids, pip-suit trump, and the first no-trump variant path behind explicit rules, but does not implement other regional variants or advanced bot strategy.
 - Multiplayer: engine-level authority, durable record primitives, runtime schemas, write plans, deployed AppSync/Lambda/DynamoDB wiring, mobile auth/network helpers, lobby UI with public rooms and room polling, active-game bidding/trump/trick-play/next-hand UI, compact post-hand/game-over recap, baseline mobile game-update subscriptions, active-game polling catch-up, and gap-triggered reconnect refresh exist, but there is still no pending-action retry queue, reconnect UX, full hand-history review, or production lifecycle/abuse handling.
 - Game state model: current scorekeeper shape is serializable, but the app does not yet apply shared actions/events or replay an event log.
 - Persistence: local JSON persistence has schema versioning and legacy migration for scorekeeper games, but local practice games are currently in-memory only.

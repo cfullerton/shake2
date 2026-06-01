@@ -13,7 +13,6 @@ import { EventFeed } from "../components/EventFeed";
 import { GameText } from "../components/GameText";
 import {
   multiplayerSeatLabels,
-  multiplayerTrumpSuitLabels,
   useMultiplayerActiveGame,
   type AppSyncSeatIndex,
   type MultiplayerActiveGameView,
@@ -26,6 +25,7 @@ import type {
   MultiplayerDomino,
   MultiplayerPublicGameSnapshot,
   MultiplayerRoomView,
+  MultiplayerTrumpSelection,
   MultiplayerTrumpSuit
 } from "../multiplayer";
 import { palette, radius, spacing } from "../theme";
@@ -280,12 +280,12 @@ export function MultiplayerActiveGamePanel({
           <>
             <Text style={styles.copy}>Call trump for this hand.</Text>
             <View style={styles.trumpGrid}>
-              {view.legalTrumpSuits.map((trumpSuit) => (
-                <TrumpSuitButton
+              {view.legalTrumpCalls.map((call) => (
+                <TrumpCallButton
+                  call={call}
                   disabled={!canSubmitActions || game.busyAction === "submitTrump"}
-                  key={trumpSuit}
-                  onPress={() => game.submitTrump(trumpSuit)}
-                  trumpSuit={trumpSuit}
+                  key={getTrumpSelectionKey(call.selection)}
+                  onPress={() => game.submitTrump(call.selection)}
                 />
               ))}
             </View>
@@ -687,20 +687,20 @@ function DominoHalf({
   );
 }
 
-function TrumpSuitButton({
+function TrumpCallButton({
+  call,
   disabled,
-  onPress,
-  trumpSuit
+  onPress
 }: {
+  readonly call: MultiplayerActiveGameView["legalTrumpCalls"][number];
   readonly disabled: boolean;
   readonly onPress: () => void;
-  readonly trumpSuit: MultiplayerTrumpSuit;
 }) {
-  const label = multiplayerTrumpSuitLabels[trumpSuit];
+  const isNoTrump = call.selection.kind === "none";
 
   return (
     <Pressable
-      accessibilityLabel={`Call ${label} trump`}
+      accessibilityLabel={isNoTrump ? "Call No Trump" : `Call ${call.label} trump`}
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
@@ -710,8 +710,12 @@ function TrumpSuitButton({
         pressed && !disabled ? styles.pressedTile : null
       ]}
     >
-      <TrumpSuitPips trumpSuit={trumpSuit} />
-      <Text style={styles.trumpTileLabel}>{label}</Text>
+      {call.selection.kind === "pip" ? (
+        <TrumpSuitPips trumpSuit={call.selection.suit} />
+      ) : (
+        <Text style={styles.noTrumpSymbol}>NT</Text>
+      )}
+      <Text style={styles.trumpTileLabel}>{call.label}</Text>
     </Pressable>
   );
 }
@@ -730,6 +734,10 @@ function TrumpSuitPips({
       ))}
     </View>
   );
+}
+
+function getTrumpSelectionKey(selection: MultiplayerTrumpSelection): string {
+  return selection.kind === "pip" ? `pip-${selection.suit}` : "no-trump";
 }
 
 const pipCellsByValue: Record<number, readonly number[]> = {
@@ -910,6 +918,12 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 13,
     fontWeight: "700"
+  },
+  noTrumpSymbol: {
+    color: palette.ink,
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 30
   },
   panelTitle: {
     color: palette.ink,

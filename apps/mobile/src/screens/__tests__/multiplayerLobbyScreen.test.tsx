@@ -234,6 +234,32 @@ test("lobby screen renders seats and starts ready host rooms", async () => {
   expect(view.queryByText("Game starting")).toBeNull();
 });
 
+test("lobby screen starts host rooms with no-trump enabled", async () => {
+  const room = createRoomView({
+    status: "ready"
+  });
+  const startGame = jest.fn(async () => undefined);
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        room,
+        startGame
+      })}
+    />
+  );
+
+  fireEvent.press(view.getByLabelText("No Trump"));
+  fireEvent.press(view.getByText("Start Game"));
+
+  await waitFor(() => {
+    expect(startGame).toHaveBeenCalledWith({
+      noTrump: true,
+      roomId: "room-1",
+      targetMarks: 7
+    });
+  });
+});
+
 test("lobby screen creates public rooms and joins public listings", async () => {
   const publicRoom = createRoomView({
     participantCount: 1,

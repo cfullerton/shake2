@@ -35,6 +35,7 @@ import {
 } from "../forty-two/events.ts";
 import {
   standardRules,
+  type FortyTwoEnabledContracts,
   type RuleConfig
 } from "../forty-two/rules-config.ts";
 import {
@@ -144,6 +145,7 @@ export interface StartMultiplayerGameInput {
   readonly rules?: RuleConfig;
   readonly targetMarks?: number;
   readonly teamNames?: Partial<Record<FortyTwoTeamId, string>>;
+  readonly variants?: Partial<Pick<FortyTwoEnabledContracts, "noTrump">>;
 }
 
 export interface StartNextMultiplayerHandInput {
@@ -440,11 +442,7 @@ export function startMultiplayerGame(
     const gameId = input.gameId ?? getEngineId(context);
     const dealer = input.dealer ?? 0;
     const playerNames = createPlayerNamesFromSeats(room);
-    const rules = input.rules
-      ? input.rules
-      : input.targetMarks !== undefined
-        ? { ...standardRules, targetMarks: input.targetMarks }
-        : undefined;
+    const rules = createMultiplayerRules(input);
     const initialSnapshot = createInitialFortyTwoSnapshot(
       {
         dealer,
@@ -518,6 +516,29 @@ export function startMultiplayerGame(
       snapshot: dealt.snapshot
     };
   });
+}
+
+function createMultiplayerRules(
+  input: StartMultiplayerGameInput
+): RuleConfig | undefined {
+  if (input.rules) {
+    return input.rules;
+  }
+
+  const noTrump = input.variants?.noTrump === true;
+
+  if (!noTrump && input.targetMarks === undefined) {
+    return undefined;
+  }
+
+  return {
+    ...standardRules,
+    enabledContracts: {
+      ...standardRules.enabledContracts,
+      noTrump
+    },
+    ...(input.targetMarks !== undefined ? { targetMarks: input.targetMarks } : {})
+  };
 }
 
 export function startNextMultiplayerHand(
