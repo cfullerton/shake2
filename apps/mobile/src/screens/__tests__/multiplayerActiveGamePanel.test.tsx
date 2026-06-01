@@ -408,6 +408,42 @@ test("active game panel lets the host deal the next multiplayer hand", async () 
   expect(view.getByText("Hand 2: Bidding.")).toBeTruthy();
 });
 
+test("active game panel offers a new-game action after game completion", async () => {
+  const snapshot = createGameCompleteSnapshot();
+  const onStartNewGame = jest.fn();
+  const client = {
+    getGameSnapshot: jest.fn(async () => snapshot),
+    getMyPrivateHand: jest.fn(),
+    submitBid: jest.fn(),
+    submitDomino: jest.fn(),
+    submitTrump: jest.fn()
+  } as unknown as MultiplayerLobbyGameClient;
+  const view = render(
+    <MultiplayerActiveGamePanel
+      actorId="actor-sub"
+      client={client}
+      initialRoom={createRoomView()}
+      initialSnapshot={snapshot}
+      onStartNewGame={onStartNewGame}
+      session={createSession()}
+    />
+  );
+
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(view.getAllByText("Game Complete").length).toBeGreaterThan(0);
+  expect(view.getByText("East/West wins the game.")).toBeTruthy();
+  expect(view.getByText("Start New Game")).toBeTruthy();
+
+  fireEvent.press(view.getByText("Start New Game"));
+
+  expect(onStartNewGame).toHaveBeenCalledTimes(1);
+  expect(client.getMyPrivateHand).not.toHaveBeenCalled();
+});
+
 test("active game panel applies live game update snapshots", async () => {
   const hand = createPrivateHand();
   let observer: MultiplayerGameUpdateObserver | null = null;
@@ -849,6 +885,26 @@ function createPostHandSetupSnapshot(): MultiplayerPublicGameSnapshot {
       phase: "setup"
     },
     snapshotVersion: 31
+  });
+}
+
+function createGameCompleteSnapshot(): MultiplayerPublicGameSnapshot {
+  return createSnapshot({
+    handCounts: null,
+    lastCompletedHand: createCompletedHandSummary(),
+    lastEventSequence: 35,
+    phase: "gameComplete",
+    redactedState: {
+      dealer: 1,
+      handNumber: 2,
+      marks: {
+        teamA: 0,
+        teamB: 7
+      },
+      phase: "gameComplete",
+      winningTeamId: "teamB"
+    },
+    snapshotVersion: 35
   });
 }
 

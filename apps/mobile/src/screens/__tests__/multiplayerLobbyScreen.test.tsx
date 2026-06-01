@@ -1,8 +1,12 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
-import type { MultiplayerLobbyController } from "../../multiplayer";
+import type {
+  MultiplayerLobbyController,
+  MultiplayerLobbyGameClient
+} from "../../multiplayer";
 import type { CognitoAuthSession } from "../../multiplayer/auth";
 import type {
+  MultiplayerPublicGameSnapshot,
   MultiplayerRoomView,
   MultiplayerStartGameResult
 } from "../../multiplayer/types";
@@ -231,6 +235,36 @@ test("lobby screen hands started games to the active-game surface", () => {
   expect(view.queryByText("Start Game")).toBeNull();
 });
 
+test("lobby screen routes completed games back to new-room setup", async () => {
+  const room = createRoomView({
+    status: "ready"
+  });
+  const snapshot = createGameCompleteSnapshot();
+  const gameClient = createGameClient(snapshot);
+  const startNewGame = jest.fn();
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        gameClient,
+        room,
+        startedGame: createStartedGame(room, snapshot),
+        startNewGame
+      })}
+    />
+  );
+
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(view.getAllByText("Game Complete").length).toBeGreaterThan(0);
+
+  fireEvent.press(view.getByText("Start New Game"));
+
+  expect(startNewGame).toHaveBeenCalledTimes(1);
+});
+
 function createLobbyController(
   overrides: Partial<MultiplayerLobbyController> = {}
 ): MultiplayerLobbyController {
@@ -254,6 +288,7 @@ function createLobbyController(
     signIn: jest.fn(async () => undefined),
     signUp: jest.fn(async () => undefined),
     startGame: jest.fn(async () => undefined),
+    startNewGame: jest.fn(),
     startedGame: null,
     takeSeat: jest.fn(async () => undefined),
     ...overrides
@@ -265,28 +300,36 @@ function createSession(): CognitoAuthSession {
     accessToken: "access-token",
     expiresAt: Date.now() + 60_000,
     idToken: "id-token",
+    subject: "actor-sub",
     tokenType: "Bearer",
     username: "smoke-user"
   };
 }
 
-function createStartedGame(room: MultiplayerRoomView): MultiplayerStartGameResult {
+function createStartedGame(
+  room: MultiplayerRoomView,
+  snapshot: MultiplayerPublicGameSnapshot = createSnapshot()
+): MultiplayerStartGameResult {
   return {
     room: {
       ...room,
       gameId: "game-1",
       status: "inGame"
     },
-    snapshot: {
-      gameId: "game-1",
-      generatedAt: "2026-05-31T00:00:00.000Z",
-      lastEventSequence: 2,
-      phase: "dealt",
-      redactedState: {},
-      schemaVersion: 1,
-      snapshotVersion: 2
-    }
+    snapshot
   };
+}
+
+function createGameClient(
+  snapshot: MultiplayerPublicGameSnapshot = createSnapshot()
+): MultiplayerLobbyGameClient {
+  return {
+    getGameSnapshot: jest.fn(async () => snapshot),
+    getMyPrivateHand: jest.fn(),
+    submitBid: jest.fn(),
+    submitDomino: jest.fn(),
+    submitTrump: jest.fn()
+  } as unknown as MultiplayerLobbyGameClient;
 }
 
 function createRoomView(
@@ -343,4 +386,61 @@ function createRoomView(
     visibility: "private",
     ...overrides
   };
+}
+
+function createSnapshot(
+  overrides: Partial<MultiplayerPublicGameSnapshot> = {}
+): MultiplayerPublicGameSnapshot {
+  return {
+    gameId: "game-1",
+    generatedAt: "2026-05-31T00:00:00.000Z",
+    lastEventSequence: 2,
+    phase: "dealt",
+    redactedState: {},
+    schemaVersion: 1,
+    snapshotVersion: 2,
+    ...overrides
+  };
+}
+
+function createGameCompleteSnapshot(): MultiplayerPublicGameSnapshot {
+  return createSnapshot({
+    handCounts: null,
+    lastCompletedHand: {
+      awardedTeamId: "teamB",
+      bidAmount: 32,
+      biddingTeamId: "teamA",
+      biddingTeamPoints: 29,
+      completedAt: "2026-05-31T00:00:00.000Z",
+      declarer: "SEAT_0",
+      handNumber: 1,
+      markAwards: {
+        teamA: 0,
+        teamB: 1
+      },
+      outcome: "set",
+      teamPoints: {
+        teamA: 29,
+        teamB: 13
+      },
+      teamTrickCounts: {
+        teamA: 3,
+        teamB: 4
+      },
+      totalPoints: 42
+    },
+    lastEventSequence: 35,
+    phase: "gameComplete",
+    redactedState: {
+      dealer: 1,
+      handNumber: 2,
+      marks: {
+        teamA: 0,
+        teamB: 7
+      },
+      phase: "gameComplete",
+      winningTeamId: "teamB"
+    },
+    snapshotVersion: 35
+  });
 }

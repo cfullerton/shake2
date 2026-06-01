@@ -35,12 +35,14 @@ export function MultiplayerActiveGamePanel({
   client,
   initialRoom,
   initialSnapshot,
+  onStartNewGame,
   session
 }: {
   readonly actorId: string | null;
   readonly client: MultiplayerLobbyGameClient;
   readonly initialRoom: MultiplayerRoomView;
   readonly initialSnapshot: MultiplayerPublicGameSnapshot;
+  readonly onStartNewGame?: () => void;
   readonly session: CognitoAuthSession;
 }) {
   const game = useMultiplayerActiveGame({
@@ -164,6 +166,14 @@ export function MultiplayerActiveGamePanel({
             />
           </View>
           <Text style={styles.copy}>{view.lastCompletedHand.marksAwardLabel}</Text>
+          {view.gameOverMessage && onStartNewGame ? (
+            <Button
+              icon={<Play color={palette.surface} size={16} />}
+              onPress={onStartNewGame}
+            >
+              Start New Game
+            </Button>
+          ) : null}
         </View>
       ) : null}
 

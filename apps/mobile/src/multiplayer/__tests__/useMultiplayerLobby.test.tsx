@@ -241,6 +241,70 @@ test("refreshes public room listings", async () => {
   });
 });
 
+test("startNewGame keeps the session and clears the completed game", async () => {
+  const session = createSession();
+  const room = createRoomView();
+  const started: MultiplayerStartGameResult = {
+    room: {
+      ...room,
+      gameId: "game-1",
+      status: "inGame"
+    },
+    snapshot: createSnapshot({
+      handCounts: null,
+      phase: "gameComplete",
+      redactedState: {
+        phase: "gameComplete",
+        winningTeamId: "teamA"
+      }
+    })
+  };
+  const authClient = {
+    completeNewPassword: jest.fn(async () => session),
+    signIn: jest.fn(async () => session),
+    signUp: jest.fn(async () => undefined)
+  };
+  const roomClient: MultiplayerLobbyClient = {
+    addBot: jest.fn(async () => room),
+    createRoom: jest.fn(async () => room),
+    getRoom: jest.fn(async () => room),
+    joinRoom: jest.fn(async () => room),
+    listPublicRooms: jest.fn(async () => []),
+    startGame: jest.fn(async () => started),
+    takeSeat: jest.fn(async () => room)
+  };
+  const harness = renderHookHarness({
+    createAuthClient: () => authClient,
+    createRoomClient: () => roomClient,
+    readConfig: () => createConfig()
+  });
+
+  await act(async () => {
+    await harness.current.signIn({
+      password: "temporary-password",
+      username: "smoke-user"
+    });
+  });
+  await act(async () => {
+    await harness.current.startGame({
+      roomId: "room-1",
+      targetMarks: 7
+    });
+  });
+
+  expect(harness.current.startedGame).toBe(started);
+
+  await act(async () => {
+    harness.current.startNewGame();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(harness.current.session).toBe(session);
+  expect(harness.current.room).toBeNull();
+  expect(harness.current.startedGame).toBeNull();
+});
+
 test("reports missing multiplayer config without creating clients", async () => {
   const createAuthClient = jest.fn();
   const harness = renderHookHarness({
@@ -434,7 +498,9 @@ function createRoomView(
   };
 }
 
-function createSnapshot(): MultiplayerStartGameResult["snapshot"] {
+function createSnapshot(
+  overrides: Partial<MultiplayerStartGameResult["snapshot"]> = {}
+): MultiplayerStartGameResult["snapshot"] {
   return {
     gameId: "game-1",
     generatedAt: "2026-05-31T00:00:00.000Z",
@@ -442,6 +508,7 @@ function createSnapshot(): MultiplayerStartGameResult["snapshot"] {
     phase: "dealt",
     redactedState: {},
     schemaVersion: 1,
-    snapshotVersion: 2
+    snapshotVersion: 2,
+    ...overrides
   };
 }

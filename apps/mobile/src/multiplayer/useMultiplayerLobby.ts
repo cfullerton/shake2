@@ -116,6 +116,7 @@ export interface MultiplayerLobbyController extends MultiplayerLobbyState {
   signIn(input: CognitoPasswordSignInInput): Promise<void>;
   signUp(input: MultiplayerLobbySignUpInput): Promise<void>;
   startGame(input: StartGameInput): Promise<void>;
+  startNewGame(): void;
   takeSeat(input: TakeSeatInput): Promise<void>;
 }
 
@@ -319,6 +320,13 @@ export function useMultiplayerLobby(
     });
   }
 
+  function startNewGame(): void {
+    setError(null);
+    setPublicRooms([]);
+    setRoom(null);
+    setStartedGame(null);
+  }
+
   async function refreshRoom(): Promise<void> {
     await runAction("refreshRoom", async () => {
       await refreshCurrentRoom({
@@ -480,6 +488,7 @@ export function useMultiplayerLobby(
     signIn,
     signUp,
     startGame,
+    startNewGame,
     startedGame,
     takeSeat
   };

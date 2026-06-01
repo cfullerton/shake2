@@ -472,6 +472,7 @@ export function MultiplayerLobbyContent({
                 client={lobby.gameClient}
                 initialRoom={lobby.startedGame.room}
                 initialSnapshot={lobby.startedGame.snapshot}
+                onStartNewGame={lobby.startNewGame}
                 session={lobby.session}
               />
             ) : (
