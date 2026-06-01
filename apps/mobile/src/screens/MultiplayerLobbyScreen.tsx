@@ -46,6 +46,7 @@ export function MultiplayerLobbyContent({
 }: {
   readonly lobby: MultiplayerLobbyController;
 }) {
+  const [authMode, setAuthMode] = useState<"signIn" | "signUp">("signIn");
   const [displayName, setDisplayName] = useState(
     lobby.session?.username ?? ""
   );
@@ -60,6 +61,7 @@ export function MultiplayerLobbyContent({
   const [username, setUsername] = useState("");
   const signedIn = lobby.session !== null;
   const needsNewPassword = lobby.newPasswordChallenge !== null;
+  const creatingAccount = authMode === "signUp";
   const passwordsMatch = password === confirmPassword;
   const canCreateAccount = username.trim().length > 0 &&
     email.trim().length > 0 &&
@@ -228,40 +230,60 @@ export function MultiplayerLobbyContent({
                   secureTextEntry
                   value={password}
                 />
-                <Button
-                  disabled={username.trim().length === 0 || password.length === 0}
-                  icon={<Wifi color={palette.surface} size={18} />}
-                  loading={lobby.busyAction === "signIn"}
-                  onPress={handleSignIn}
-                >
-                  Sign In
-                </Button>
-                <TextField
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  label="Email"
-                  onChangeText={setEmail}
-                  value={email}
-                />
-                <TextField
-                  label="Confirm Password"
-                  onChangeText={setConfirmPassword}
-                  returnKeyType="done"
-                  secureTextEntry
-                  value={confirmPassword}
-                />
-                {!passwordsMatch && confirmPassword.length > 0 ? (
-                  <Text style={styles.validationText}>Passwords must match.</Text>
-                ) : null}
-                <Button
-                  disabled={!canCreateAccount}
-                  icon={<Plus color={palette.surface} size={18} />}
-                  loading={lobby.busyAction === "signUp"}
-                  onPress={handleCreateAccount}
-                >
-                  Create Account
-                </Button>
+                {creatingAccount ? (
+                  <>
+                    <TextField
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      label="Email"
+                      onChangeText={setEmail}
+                      value={email}
+                    />
+                    <TextField
+                      label="Confirm Password"
+                      onChangeText={setConfirmPassword}
+                      returnKeyType="done"
+                      secureTextEntry
+                      value={confirmPassword}
+                    />
+                    {!passwordsMatch && confirmPassword.length > 0 ? (
+                      <Text style={styles.validationText}>Passwords must match.</Text>
+                    ) : null}
+                    <Button
+                      disabled={!canCreateAccount}
+                      icon={<Plus color={palette.surface} size={18} />}
+                      loading={lobby.busyAction === "signUp"}
+                      onPress={handleCreateAccount}
+                    >
+                      Create Account
+                    </Button>
+                    <Button
+                      onPress={() => setAuthMode("signIn")}
+                      variant="ghost"
+                    >
+                      Sign In Instead
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      disabled={username.trim().length === 0 || password.length === 0}
+                      icon={<Wifi color={palette.surface} size={18} />}
+                      loading={lobby.busyAction === "signIn"}
+                      onPress={handleSignIn}
+                    >
+                      Sign In
+                    </Button>
+                    <Button
+                      icon={<Plus color={palette.crimson} size={18} />}
+                      onPress={() => setAuthMode("signUp")}
+                      variant="secondary"
+                    >
+                      Create Account
+                    </Button>
+                  </>
+                )}
               </>
             ) : (
               <Text style={styles.signedInName}>{lobby.session?.username}</Text>
