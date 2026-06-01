@@ -82,14 +82,15 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Deal model that gives exactly 7 dominoes to each of 4 seats.
 - Numeric bidding with pass, 30-42 bids, increasing bid validation, one bid per player, all-pass forced dealer bid, and declarer selection.
 - Trump suit model for blanks, ones, twos, threes, fours, fives, and sixes.
-- Contract model uses a discriminated `Contract` union (currently `standardNumeric` only) after declarer calls trump.
+- Contract model uses a discriminated `Contract` union after declarer calls trump.
 - Standard numeric contracts store trump as nested selection: `trump: { kind: "pip"; suit: TrumpSuit }`.
+- No-trump contracts store trump as nested selection: `trump: { kind: "none" }`, gated by `RuleConfig.enabledContracts.noTrump`.
 - Trump identity and trump ranking with double highest.
 - Trick model with leader, led domino, led suit, and played dominoes.
 - Canonical led-suit selection for local play: a non-trump domino always leads its higher pip suit.
 - Legal play validation for turn order, hand ownership, led-suit legality, and follow-suit.
-- Contract-aware trick winner determination (`determineTrickWinnerForContract`) currently preserving highest-trump then highest-led-suit behavior for `standardNumeric`.
-- Contract-aware hand scoring (`scoreCompletedHand(completedTricks, contract, rules)`) for `standardNumeric`.
+- Contract-aware trick winner determination (`determineTrickWinnerForContract`) preserving highest-trump then highest-led-suit behavior for `standardNumeric`, and highest-led-suit behavior for `noTrump`.
+- Contract-aware hand scoring (`scoreCompletedHand(completedTricks, contract, rules)`) for `standardNumeric` and `noTrump`.
 - One point per completed trick.
 - Captured count-domino points per trick.
 - Total hand-point invariant of 42.
@@ -172,6 +173,7 @@ Important covered invariants:
 - Game completion at target marks.
 - Replay coverage for post-hand state.
 - Standard numeric contract JSON round-trip coverage through replay/snapshot surfaces.
+- No-trump engine coverage for rule gating, command routing, trump absence, follow-suit behavior, and trick winner behavior.
 - Validated replay rejection coverage for unsupported/unknown contract kinds.
 - End-to-end command-layer full-hand integration coverage from game creation and deal through bidding, trump, all 28 plays, hand completion, mark awards, dealer rotation, game completion, and replay.
 - Full-hand integration cases for normal made bids, exact 42 bids, set-by-one bids, trump-heavy hands, no-trump-played led-suit tricks, all-pass dealer-forced bidding, multiple dealer rotations, and target-mark game completion.
@@ -231,7 +233,8 @@ This means the repository has implemented and tested the core local hand lifecyc
 - A multiplayer-safe authority, storage, schema, and write-plan model has started in code, but it is backend-neutral only.
 - No AWS, AppSync, DynamoDB, Cognito, physical durable room state, or deployed reconnect endpoint exists.
 - Only legal-random bots exist; no heuristic or advanced strategy exists.
-- No non-`standardNumeric` variant contracts such as mark bids, 84, plunge, splash, nello, sevens, follow-me, or no-trump.
+- No product UI/API exposure yet for no-trump in local practice or multiplayer, even though the engine foundation exists.
+- No non-`standardNumeric`/`noTrump` variant contracts such as mark bids, 84, plunge, splash, nello, sevens, or follow-me.
 - Runtime validation now exists for accepted Forty Two event replay, multiplayer action/storage/reconnect boundary payloads, and accepted-event write planning. Version migrations and physical adapter compatibility tests are still missing.
 - No package-local test utilities for deterministic hands; integration tests currently build fixtures inline.
 - No physical persistence adapter exists for full-rules snapshots/events.

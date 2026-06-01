@@ -46,6 +46,7 @@ import {
 } from "../forty-two/tricks.ts";
 import {
   isTrumpSuit,
+  type TrumpSelection,
   type TrumpSuit
 } from "../forty-two/trump.ts";
 import {
@@ -686,6 +687,15 @@ function parseCallTrumpPayload(
 ): CallFortyTwoTrumpActionPayload {
   const payload = parseRecord(value, "callTrump.payload");
 
+  if (payload.trump !== undefined) {
+    return {
+      trump: parseTrumpSelection(payload.trump, "callTrump.trump"),
+      ...(payload.trumpSuit !== undefined
+        ? { trumpSuit: parseTrumpSuit(payload.trumpSuit, "callTrump.trumpSuit") }
+        : {})
+    };
+  }
+
   return {
     trumpSuit: parseTrumpSuit(payload.trumpSuit, "callTrump.trumpSuit")
   };
@@ -936,6 +946,10 @@ function parseRuleConfig(value: unknown): RuleConfig {
         enabledContracts.nello,
         "rules.enabledContracts.nello"
       ),
+      noTrump: parseBoolean(
+        enabledContracts.noTrump ?? false,
+        "rules.enabledContracts.noTrump"
+      ),
       plunge: parseBoolean(
         enabledContracts.plunge,
         "rules.enabledContracts.plunge"
@@ -993,6 +1007,28 @@ function parseRuleConfig(value: unknown): RuleConfig {
       )
     }
   };
+}
+
+function parseTrumpSelection(value: unknown, label: string): TrumpSelection {
+  const selection = parseRecord(value, label);
+
+  if (selection.kind === "none") {
+    return {
+      kind: "none"
+    };
+  }
+
+  if (selection.kind === "pip") {
+    return {
+      kind: "pip",
+      suit: parseTrumpSuit(selection.suit, `${label}.suit`)
+    };
+  }
+
+  throw new EngineError(
+    "INVALID_TRUMP",
+    `${label}.kind must be pip or none.`
+  );
 }
 
 function parseParticipants(

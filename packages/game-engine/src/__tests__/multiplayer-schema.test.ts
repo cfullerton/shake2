@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  FORTY_TWO_ACTION_SCHEMA_VERSION,
   createMultiplayerActionEnvelope,
   createMultiplayerRoom,
   createMultiplayerStorageRecords,
@@ -140,6 +141,33 @@ test("multiplayer schema rejects unsupported action schema versions", () => {
       code: "SCHEMA_VERSION_UNSUPPORTED"
     }
   );
+});
+
+test("multiplayer schema parses no-trump call actions", () => {
+  const parsed = parseFortyTwoActionEnvelope({
+    action: {
+      payload: {
+        trump: {
+          kind: "none"
+        }
+      },
+      type: "fortyTwo.trump.call"
+    },
+    actionId: "action-no-trump",
+    actorId: "player-1",
+    actorSeat: 1,
+    clientCreatedAt: "2026-05-30T12:00:00.000Z",
+    gameId: "game-1",
+    knownLastEventSequence: 8,
+    knownSnapshotVersion: 8,
+    schemaVersion: FORTY_TWO_ACTION_SCHEMA_VERSION
+  });
+
+  assert.deepEqual(parsed.action.payload, {
+    trump: {
+      kind: "none"
+    }
+  });
 });
 
 test("multiplayer schema rejects malformed action idempotency records", () => {

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   TRUMP_SUITS,
   callTrump,
+  callTrumpSelection,
   compareTrumpDominoes,
   createBiddingState,
   createDomino,
@@ -11,14 +12,17 @@ import {
   createPassBid,
   createTrumpCallState,
   formatDomino,
+  getContractTrumpSuit,
   getTrumpDominoRank,
   getTrumpDominoesHighToLow,
   getTrumpSuitPip,
   isDominoTrumpForContract,
   isDominoTrump,
   isEngineError,
+  standardRules,
   submitBid,
   type BiddingState,
+  type RuleConfig,
   type TrumpSuit
 } from "../index.ts";
 
@@ -78,6 +82,57 @@ test("standard numeric contract serializes and round-trips", () => {
   assert.deepEqual(roundTripped, contract);
   assert.equal(isDominoTrumpForContract(createDomino(4, 1), contract), true);
   assert.equal(isDominoTrumpForContract(createDomino(6, 6), contract), false);
+});
+
+test("creates a no-trump contract only when no-trump is enabled", () => {
+  const bidding = completeBiddingWithDeclarerTwo();
+  const noTrumpRules = createNoTrumpRules();
+  const called = callTrumpSelection(
+    createTrumpCallState(bidding),
+    2,
+    {
+      kind: "none"
+    },
+    noTrumpRules
+  );
+
+  assert.deepEqual(called.contract, {
+    bid: {
+      amount: 31,
+      kind: "numeric"
+    },
+    declarer: 2,
+    kind: "noTrump",
+    trump: {
+      kind: "none"
+    }
+  });
+
+  if (!called.contract) {
+    throw new Error("Expected contract to be created.");
+  }
+
+  const contract = called.contract;
+
+  assert.equal(isDominoTrumpForContract(createDomino(6, 6), contract), false);
+  assert.throws(
+    () => getContractTrumpSuit(contract),
+    (error) => isEngineError(error) && error.code === "INVALID_TRUMP"
+  );
+});
+
+test("rejects no-trump calls when no-trump is disabled", () => {
+  assert.throws(
+    () => callTrumpSelection(
+      createTrumpCallState(completeBiddingWithDeclarerTwo()),
+      2,
+      {
+        kind: "none"
+      },
+      standardRules
+    ),
+    (error) => isEngineError(error) && error.code === "INVALID_TRUMP"
+  );
 });
 
 test("ranks trump dominoes high-to-low with double highest", () => {
@@ -159,4 +214,14 @@ function completeBiddingWithDeclarerTwo(): BiddingState {
   bidding = submitBid(bidding, 3, createPassBid());
   bidding = submitBid(bidding, 0, createPassBid());
   return bidding;
+}
+
+function createNoTrumpRules(): RuleConfig {
+  return {
+    ...standardRules,
+    enabledContracts: {
+      ...standardRules.enabledContracts,
+      noTrump: true
+    }
+  };
 }

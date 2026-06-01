@@ -107,6 +107,42 @@ test("contract helpers preserve standard numeric led-suit and winner behavior", 
   assert.equal(determineTrickWinnerForContract(trick, contract), 1);
 });
 
+test("no-trump contracts have no trump override", () => {
+  const contract = createNoTrumpContract();
+  let trick = startTrick(0);
+  let hands = createHands({
+    0: [createDomino(5, 2)],
+    1: [createDomino(6, 0)],
+    2: [createDomino(5, 5)],
+    3: [createDomino(4, 4)]
+  });
+
+  assert.deepEqual(getLegalLedSuitsForContract(createDomino(6, 4), contract), ["sixes"]);
+
+  ({ trick, hands } = playForContract(trick, hands, 0, createDomino(5, 2), contract, "fives"));
+  ({ trick, hands } = playForContract(trick, hands, 1, createDomino(6, 0), contract));
+  ({ trick, hands } = playForContract(trick, hands, 2, createDomino(5, 5), contract));
+  ({ trick, hands } = playForContract(trick, hands, 3, createDomino(4, 4), contract));
+
+  assert.equal(determineTrickWinnerForContract(trick, contract), 2);
+});
+
+test("no-trump contracts require following the led pip when able", () => {
+  const contract = createNoTrumpContract();
+  let trick = startTrick(0);
+  let hands = createHands({
+    0: [createDomino(5, 2)],
+    1: [createDomino(5, 5), createDomino(6, 0)]
+  });
+
+  ({ trick, hands } = playForContract(trick, hands, 0, createDomino(5, 2), contract, "fives"));
+
+  assert.throws(
+    () => playForContract(trick, hands, 1, createDomino(6, 0), contract),
+    (error) => isEngineError(error) && error.code === "MUST_FOLLOW_SUIT"
+  );
+});
+
 test("rejects play out of turn", () => {
   const trick = startTrick(0);
   const hands = createHands({
@@ -160,6 +196,24 @@ function play(
   });
 }
 
+function playForContract(
+  trick: Trick,
+  hands: FortyTwoHands,
+  seat: SeatIndex,
+  domino: Domino,
+  contract: ReturnType<typeof createNoTrumpContract>,
+  ledSuit?: DominoSuit
+) {
+  return playDominoToTrick({
+    contract,
+    domino,
+    hands,
+    ...(ledSuit ? { ledSuit } : {}),
+    seat,
+    trick
+  });
+}
+
 function createHands(
   cardsBySeat: Partial<Record<SeatIndex, readonly Domino[]>>
 ): FortyTwoHands {
@@ -183,5 +237,16 @@ function createStandardNumericContract(
       suit: trumpSuit
     },
     trumpSuit
+  };
+}
+
+function createNoTrumpContract() {
+  return {
+    bid: { amount: 30, kind: "numeric" as const },
+    declarer: 0 as SeatIndex,
+    kind: "noTrump" as const,
+    trump: {
+      kind: "none" as const
+    }
   };
 }

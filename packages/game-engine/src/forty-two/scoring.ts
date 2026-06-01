@@ -170,6 +170,7 @@ export function getContractMarkAwards(
   outcome: BidOutcome
 ): TeamMarkAwards {
   switch (contract.kind) {
+    case "noTrump":
     case "standardNumeric":
       return getStandardNumericMarkAwards(biddingTeamId, outcome);
   }
@@ -270,6 +271,7 @@ function getStandardNumericMarkAwards(
 
 function getContractBidAmount(contract: Contract): number {
   switch (contract.kind) {
+    case "noTrump":
     case "standardNumeric":
       return contract.bid.amount;
   }

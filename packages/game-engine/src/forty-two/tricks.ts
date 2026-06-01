@@ -15,7 +15,6 @@ import {
   assertSeatIndex
 } from "./seats.ts";
 import {
-  getContractTrumpSuit,
   getTrumpDominoRank,
   getTrumpSuitPip,
   isDominoTrump,
@@ -40,12 +39,13 @@ export interface Trick {
 }
 
 export interface PlayDominoInput {
+  readonly contract?: Contract;
   readonly domino: Domino;
   readonly hands: FortyTwoHands;
   readonly ledSuit?: DominoSuit;
   readonly seat: SeatIndex;
   readonly trick: Trick;
-  readonly trumpSuit: TrumpSuit;
+  readonly trumpSuit?: TrumpSuit;
 }
 
 export interface PlayDominoResult {
@@ -75,6 +75,7 @@ export function startTrick(leader: SeatIndex): Trick {
 }
 
 export function playDominoToTrick(input: PlayDominoInput): PlayDominoResult {
+  const trickMode = getTrickMode(input);
   const expectedSeat = getExpectedTrickSeat(input.trick);
 
   if (input.seat !== expectedSeat) {
@@ -97,7 +98,7 @@ export function playDominoToTrick(input: PlayDominoInput): PlayDominoResult {
       throw new EngineError("INVALID_TRUMP", "Leader must choose a led suit.");
     }
 
-    assertLedSuitForDomino(input.domino, ledSuit, input.trumpSuit);
+    assertLedSuitForDomino(input.domino, ledSuit, trickMode);
 
     return {
       hands: handsAfterPlay,
@@ -121,7 +122,7 @@ export function playDominoToTrick(input: PlayDominoInput): PlayDominoResult {
     throw new EngineError("INVALID_PHASE", "Trick is missing a led suit.");
   }
 
-  assertFollowSuit(input.hands[input.seat], input.domino, ledSuit, input.trumpSuit);
+  assertFollowSuit(input.hands[input.seat], input.domino, ledSuit, trickMode);
 
   return {
     hands: handsAfterPlay,
@@ -142,21 +143,33 @@ export function determineTrickWinner(
   trick: Trick,
   trumpSuit: TrumpSuit
 ): SeatIndex {
+  return determineTrickWinnerWithMode(trick, {
+    kind: "pip",
+    trumpSuit
+  });
+}
+
+function determineTrickWinnerWithMode(
+  trick: Trick,
+  trickMode: TrickMode
+): SeatIndex {
   if (trick.playedDominoes.length === 0) {
     throw new EngineError("INVALID_PHASE", "Cannot determine an empty trick winner.");
   }
 
-  const trumpPlays = trick.playedDominoes.filter((play) =>
-    isDominoTrump(play.domino, trumpSuit)
-  );
+  if (trickMode.kind === "pip") {
+    const trumpPlays = trick.playedDominoes.filter((play) =>
+      isDominoTrump(play.domino, trickMode.trumpSuit)
+    );
 
-  if (trumpPlays.length > 0) {
-    return trumpPlays.reduce((winner, play) =>
-      getTrumpDominoRank(play.domino, trumpSuit) >
-      getTrumpDominoRank(winner.domino, trumpSuit)
-        ? play
-        : winner
-    ).seat;
+    if (trumpPlays.length > 0) {
+      return trumpPlays.reduce((winner, play) =>
+        getTrumpDominoRank(play.domino, trickMode.trumpSuit) >
+        getTrumpDominoRank(winner.domino, trickMode.trumpSuit)
+          ? play
+          : winner
+      ).seat;
+    }
   }
 
   const ledSuit = trick.ledSuit;
@@ -166,7 +179,7 @@ export function determineTrickWinner(
   }
 
   const ledSuitPlays = trick.playedDominoes.filter((play) =>
-    doesDominoFollowSuit(play.domino, ledSuit, trumpSuit)
+    doesDominoFollowSuit(play.domino, ledSuit, trickMode)
   );
 
   if (ledSuitPlays.length === 0) {
@@ -174,8 +187,8 @@ export function determineTrickWinner(
   }
 
   return ledSuitPlays.reduce((winner, play) =>
-    getNonTrumpSuitRank(play.domino, ledSuit, trumpSuit) >
-    getNonTrumpSuitRank(winner.domino, ledSuit, trumpSuit)
+    getNonTrumpSuitRank(play.domino, ledSuit, trickMode) >
+    getNonTrumpSuitRank(winner.domino, ledSuit, trickMode)
       ? play
       : winner
   ).seat;
@@ -185,7 +198,7 @@ export function determineTrickWinnerForContract(
   trick: Trick,
   contract: Contract
 ): SeatIndex {
-  return determineTrickWinner(trick, getContractTrumpSuit(contract));
+  return determineTrickWinnerWithMode(trick, getTrickModeForContract(contract));
 }
 
 export function getExpectedTrickSeat(trick: Trick): SeatIndex {
@@ -210,20 +223,17 @@ export function getLegalLedSuits(
   domino: Domino,
   trumpSuit: TrumpSuit
 ): readonly DominoSuit[] {
-  if (isDominoTrump(domino, trumpSuit)) {
-    return [trumpSuit];
-  }
-
-  const highSuit = DOMINO_SUIT_BY_PIP[domino.high];
-
-  return [highSuit];
+  return getLegalLedSuitsWithMode(domino, {
+    kind: "pip",
+    trumpSuit
+  });
 }
 
 export function getLegalLedSuitsForContract(
   domino: Domino,
   contract: Contract
 ): readonly DominoSuit[] {
-  return getLegalLedSuits(domino, getContractTrumpSuit(contract));
+  return getLegalLedSuitsWithMode(domino, getTrickModeForContract(contract));
 }
 
 export function canFollowSuit(
@@ -231,15 +241,74 @@ export function canFollowSuit(
   ledSuit: DominoSuit,
   trumpSuit: TrumpSuit
 ): boolean {
-  return hand.some((domino) => doesDominoFollowSuit(domino, ledSuit, trumpSuit));
+  return hand.some((domino) =>
+    doesDominoFollowSuit(domino, ledSuit, {
+      kind: "pip",
+      trumpSuit
+    })
+  );
+}
+
+type TrickMode =
+  | {
+      readonly kind: "none";
+    }
+  | {
+      readonly kind: "pip";
+      readonly trumpSuit: TrumpSuit;
+    };
+
+function getTrickMode(input: PlayDominoInput): TrickMode {
+  if (input.contract) {
+    return getTrickModeForContract(input.contract);
+  }
+
+  if (input.trumpSuit !== undefined) {
+    return {
+      kind: "pip",
+      trumpSuit: input.trumpSuit
+    };
+  }
+
+  throw new EngineError(
+    "INVALID_TRUMP",
+    "Trick play requires a contract or trump suit."
+  );
+}
+
+function getTrickModeForContract(contract: Contract): TrickMode {
+  switch (contract.kind) {
+    case "noTrump":
+      return {
+        kind: "none"
+      };
+    case "standardNumeric":
+      return {
+        kind: "pip",
+        trumpSuit: contract.trump.suit
+      };
+  }
+}
+
+function getLegalLedSuitsWithMode(
+  domino: Domino,
+  trickMode: TrickMode
+): readonly DominoSuit[] {
+  if (trickMode.kind === "pip" && isDominoTrump(domino, trickMode.trumpSuit)) {
+    return [trickMode.trumpSuit];
+  }
+
+  const highSuit = DOMINO_SUIT_BY_PIP[domino.high];
+
+  return [highSuit];
 }
 
 function assertLedSuitForDomino(
   domino: Domino,
   ledSuit: DominoSuit,
-  trumpSuit: TrumpSuit
+  trickMode: TrickMode
 ): void {
-  const legalSuits = getLegalLedSuits(domino, trumpSuit);
+  const legalSuits = getLegalLedSuitsWithMode(domino, trickMode);
 
   if (!legalSuits.includes(ledSuit)) {
     throw new EngineError("INVALID_TRUMP", "Led suit is not legal for led domino.");
@@ -250,11 +319,13 @@ function assertFollowSuit(
   handBeforePlay: readonly Domino[],
   domino: Domino,
   ledSuit: DominoSuit,
-  trumpSuit: TrumpSuit
+  trickMode: TrickMode
 ): void {
   if (
-    canFollowSuit(handBeforePlay, ledSuit, trumpSuit) &&
-    !doesDominoFollowSuit(domino, ledSuit, trumpSuit)
+    handBeforePlay.some((heldDomino) =>
+      doesDominoFollowSuit(heldDomino, ledSuit, trickMode)
+    ) &&
+    !doesDominoFollowSuit(domino, ledSuit, trickMode)
   ) {
     throw new EngineError("MUST_FOLLOW_SUIT", "Player must follow the led suit.");
   }
@@ -263,22 +334,26 @@ function assertFollowSuit(
 function doesDominoFollowSuit(
   domino: Domino,
   ledSuit: DominoSuit,
-  trumpSuit: TrumpSuit
+  trickMode: TrickMode
 ): boolean {
-  if (ledSuit === trumpSuit) {
-    return isDominoTrump(domino, trumpSuit);
+  if (trickMode.kind === "pip") {
+    if (ledSuit === trickMode.trumpSuit) {
+      return isDominoTrump(domino, trickMode.trumpSuit);
+    }
+
+    return !isDominoTrump(domino, trickMode.trumpSuit) &&
+      dominoContainsPip(domino, getTrumpSuitPip(ledSuit));
   }
 
-  return !isDominoTrump(domino, trumpSuit) &&
-    dominoContainsPip(domino, getTrumpSuitPip(ledSuit));
+  return dominoContainsPip(domino, getTrumpSuitPip(ledSuit));
 }
 
 function getNonTrumpSuitRank(
   domino: Domino,
   suit: DominoSuit,
-  trumpSuit: TrumpSuit
+  trickMode: TrickMode
 ): number {
-  if (!doesDominoFollowSuit(domino, suit, trumpSuit)) {
+  if (!doesDominoFollowSuit(domino, suit, trickMode)) {
     throw new EngineError("INVALID_DOMINO", "Domino does not belong to led suit.");
   }
 

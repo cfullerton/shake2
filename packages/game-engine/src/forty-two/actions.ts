@@ -7,7 +7,10 @@ import {
   type SeatIndex
 } from "./seats.ts";
 import { type FortyTwoGameMode } from "./state.ts";
-import { type TrumpSuit } from "./trump.ts";
+import {
+  type TrumpSelection,
+  type TrumpSuit
+} from "./trump.ts";
 
 export const FORTY_TWO_ACTION_SCHEMA_VERSION = 1;
 
@@ -35,7 +38,8 @@ export interface SubmitFortyTwoBidActionPayload {
 export type CompleteFortyTwoBiddingActionPayload = Readonly<Record<string, never>>;
 
 export interface CallFortyTwoTrumpActionPayload {
-  readonly trumpSuit: TrumpSuit;
+  readonly trump?: TrumpSelection;
+  readonly trumpSuit?: TrumpSuit;
 }
 
 export interface PlayFortyTwoDominoActionPayload {

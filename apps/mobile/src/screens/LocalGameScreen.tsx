@@ -16,6 +16,7 @@ import {
   sortDominoesForLocalPlay,
   submitLocalGameBid,
   type CompletedTrick,
+  type Contract,
   type Domino,
   type EngineContext,
   type FortyTwoState,
@@ -138,8 +139,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       startedTrickAnimKeysRef.current.clear();
     };
   }, [state.handNumber]);
-  const activeTrumpSuit = state.phase === "trickPlay"
-    ? state.contract.trumpSuit
+  const activeTrumpSuit = state.phase === "trickPlay" &&
+    state.contract.kind === "standardNumeric"
+    ? state.contract.trump.suit
     : undefined;
   const sortedHumanHand = sortDominoesForLocalPlay(humanHand, activeTrumpSuit);
   const currentTrick = state.phase === "trickPlay" ? state.currentTrick : null;
@@ -878,6 +880,15 @@ function formatTrumpSuit(trumpSuit: TrumpSuit): string {
   return trumpSuit[0]?.toUpperCase() + trumpSuit.slice(1);
 }
 
+function formatContractTrump(contract: Contract): string {
+  switch (contract.kind) {
+    case "noTrump":
+      return "No Trump";
+    case "standardNumeric":
+      return formatTrumpSuit(contract.trump.suit);
+  }
+}
+
 function formatPlayKey(play: LegalDominoPlay): string {
   return `${formatDomino(play.domino)}-${play.ledSuit ?? "follow"}`;
 }
@@ -1019,7 +1030,7 @@ function formatCurrentBid(state: FortyTwoState, humanSeat: SeatIndex): string {
 
 function formatTrumpStatus(state: FortyTwoState): string {
   if (state.phase === "trickPlay") {
-    return formatTrumpSuit(state.contract.trumpSuit);
+    return formatContractTrump(state.contract);
   }
 
   if (state.phase === "trump") {

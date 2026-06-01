@@ -36,15 +36,16 @@ test("defines standard Texas 42 rules behind RuleConfig", () => {
   assert.equal(standardRules.scoring.handTotalPoints, 42);
   assert.equal(standardRules.trumpBehavior.doublesHigh, true);
   assert.equal(standardRules.trumpBehavior.trumpDominoBelongsOnlyToTrump, true);
-  assert.deepEqual(Object.values(standardRules.enabledContracts), [
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false
-  ]);
+  assert.deepEqual(standardRules.enabledContracts, {
+    eightyFour: false,
+    followMe: false,
+    markBids: false,
+    nello: false,
+    noTrump: false,
+    plunge: false,
+    sevens: false,
+    splash: false
+  });
 });
 
 test("keeps exported rule constants sourced from standardRules", () => {

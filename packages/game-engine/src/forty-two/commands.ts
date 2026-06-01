@@ -41,9 +41,9 @@ import {
   type SeatIndex
 } from "./seats.ts";
 import {
-  callTrump,
+  callTrumpSelection,
   createTrumpCallState,
-  getContractTrumpSuit
+  type TrumpSelection
 } from "./trump.ts";
 import {
   determineTrickWinnerForContract,
@@ -279,10 +279,11 @@ export function handleCallFortyTwoTrumpCommand(
     }
 
     const actorSeat = getActorSeat(action);
-    const trump = callTrump(
+    const trump = callTrumpSelection(
       snapshot.snapshot.trump,
       actorSeat,
-      action.action.payload.trumpSuit
+      getTrumpSelectionFromActionPayload(action.action.payload),
+      snapshot.snapshot.rules
     );
     const contract = trump.contract;
 
@@ -323,14 +324,14 @@ export function handlePlayFortyTwoDominoCommand(
     assertActorSeat(action, action.action.payload.seat);
 
     const playResult = playDominoToTrick({
+      contract: snapshot.snapshot.contract,
       domino: action.action.payload.domino,
       hands: snapshot.snapshot.hands,
       ...(action.action.payload.ledSuit
         ? { ledSuit: action.action.payload.ledSuit }
         : {}),
       seat: action.action.payload.seat,
-      trick: snapshot.snapshot.currentTrick,
-      trumpSuit: getContractTrumpSuit(snapshot.snapshot.contract)
+      trick: snapshot.snapshot.currentTrick
     });
     const playedEvent = createEventEnvelope(
       snapshot,
@@ -433,6 +434,33 @@ export function handlePlayFortyTwoDominoCommand(
       snapshot: nextSnapshot
     };
   });
+}
+
+function getTrumpSelectionFromActionPayload(
+  payload: CallFortyTwoTrumpAction["payload"]
+): TrumpSelection {
+  if (payload.trump && payload.trumpSuit !== undefined) {
+    throw new EngineError(
+      "INVALID_TRUMP",
+      "Trump call must include either trump or trumpSuit, not both."
+    );
+  }
+
+  if (payload.trump) {
+    return payload.trump;
+  }
+
+  if (payload.trumpSuit !== undefined) {
+    return {
+      kind: "pip",
+      suit: payload.trumpSuit
+    };
+  }
+
+  throw new EngineError(
+    "INVALID_TRUMP",
+    "Trump call must include a trump selection."
+  );
 }
 
 function getGameWinningTeamId(
