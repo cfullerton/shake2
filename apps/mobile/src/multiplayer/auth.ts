@@ -6,6 +6,12 @@ export interface CognitoPasswordSignInInput {
   readonly username: string;
 }
 
+export interface CognitoSignUpInput {
+  readonly email: string;
+  readonly password: string;
+  readonly username: string;
+}
+
 export interface CognitoCompleteNewPasswordInput {
   readonly newPassword: string;
   readonly session: string;
@@ -88,6 +94,20 @@ export class CognitoPasswordAuthClient {
     const result = readAuthenticationResult(body, input.username);
 
     return toAuthSession(result, input.username);
+  }
+
+  async signUp(input: CognitoSignUpInput): Promise<void> {
+    await this.requestCognito("AWSCognitoIdentityProviderService.SignUp", {
+      ClientId: this.config.cognitoUserPoolClientId,
+      Password: input.password,
+      UserAttributes: [
+        {
+          Name: "email",
+          Value: input.email
+        }
+      ],
+      Username: input.username
+    });
   }
 
   async completeNewPassword(

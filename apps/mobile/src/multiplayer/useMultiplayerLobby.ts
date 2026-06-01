@@ -7,6 +7,7 @@ import {
   type CognitoCompleteNewPasswordInput,
   type CognitoNewPasswordChallenge,
   type CognitoPasswordSignInInput,
+  type CognitoSignUpInput,
   StaticAuthSessionProvider
 } from "./auth";
 import {
@@ -40,6 +41,7 @@ export type MultiplayerLobbyAction =
   | "refreshPublicRooms"
   | "refreshRoom"
   | "signIn"
+  | "signUp"
   | "startGame"
   | "takeSeat";
 
@@ -60,6 +62,7 @@ export interface MultiplayerLobbyAuthClient {
     input: CognitoCompleteNewPasswordInput
   ): Promise<CognitoAuthSession>;
   signIn(input: CognitoPasswordSignInInput): Promise<CognitoAuthSession>;
+  signUp(input: CognitoSignUpInput): Promise<void>;
 }
 
 export interface MultiplayerLobbyCompleteNewPasswordInput {
@@ -79,6 +82,12 @@ export interface MultiplayerLobbyDependencies {
     session: CognitoAuthSession
   ) => MultiplayerLobbyGameClient;
   readonly readConfig?: () => MobileMultiplayerConfig | null;
+}
+
+export interface MultiplayerLobbySignUpInput {
+  readonly email: string;
+  readonly password: string;
+  readonly username: string;
 }
 
 export interface MultiplayerLobbyState {
@@ -105,6 +114,7 @@ export interface MultiplayerLobbyController extends MultiplayerLobbyState {
   refreshPublicRooms(): Promise<void>;
   refreshRoom(): Promise<void>;
   signIn(input: CognitoPasswordSignInInput): Promise<void>;
+  signUp(input: MultiplayerLobbySignUpInput): Promise<void>;
   startGame(input: StartGameInput): Promise<void>;
   takeSeat(input: TakeSeatInput): Promise<void>;
 }
@@ -217,6 +227,21 @@ export function useMultiplayerLobby(
 
         throw caught;
       }
+    });
+  }
+
+  async function signUp(input: MultiplayerLobbySignUpInput): Promise<void> {
+    await runAction("signUp", async () => {
+      const config = requireResolvedConfig(configState);
+      const authClient = (dependencies.createAuthClient ?? createDefaultAuthClient)(
+        config
+      );
+
+      await authClient.signUp({
+        email: input.email.trim(),
+        password: input.password,
+        username: input.username.trim()
+      });
     });
   }
 
@@ -453,6 +478,7 @@ export function useMultiplayerLobby(
     room,
     session,
     signIn,
+    signUp,
     startGame,
     startedGame,
     takeSeat

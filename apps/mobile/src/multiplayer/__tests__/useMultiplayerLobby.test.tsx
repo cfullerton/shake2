@@ -39,7 +39,8 @@ test("normalizes lobby form values before room requests", async () => {
   };
   const authClient = {
     completeNewPassword: jest.fn(async () => session),
-    signIn: jest.fn(async () => session)
+    signIn: jest.fn(async () => session),
+    signUp: jest.fn(async () => undefined)
   };
   const roomClient: MultiplayerLobbyClient = {
     addBot: jest.fn(async () => room),
@@ -97,6 +98,18 @@ test("normalizes lobby form values before room requests", async () => {
     password: "temporary-password",
     username: "smoke-user"
   });
+  await act(async () => {
+    await harness.current.signUp({
+      email: "smoke@example.com",
+      password: "temporary-password",
+      username: "smoke-user"
+    });
+  });
+  expect(authClient.signUp).toHaveBeenCalledWith({
+    email: "smoke@example.com",
+    password: "temporary-password",
+    username: "smoke-user"
+  });
   expect(roomClient.createRoom).toHaveBeenCalledWith({
     displayName: "Player"
   });
@@ -134,7 +147,8 @@ test("refreshes room state and starts non-hosts when the host starts", async () 
   const snapshot = createSnapshot();
   const authClient = {
     completeNewPassword: jest.fn(async () => session),
-    signIn: jest.fn(async () => session)
+    signIn: jest.fn(async () => session),
+    signUp: jest.fn(async () => undefined)
   };
   const roomClient: MultiplayerLobbyClient = {
     addBot: jest.fn(async () => readyRoom),
@@ -191,7 +205,8 @@ test("refreshes public room listings", async () => {
   });
   const authClient = {
     completeNewPassword: jest.fn(async () => session),
-    signIn: jest.fn(async () => session)
+    signIn: jest.fn(async () => session),
+    signUp: jest.fn(async () => undefined)
   };
   const roomClient: MultiplayerLobbyClient = {
     addBot: jest.fn(async () => publicRoom),
@@ -256,7 +271,8 @@ test("completes Cognito new-password challenges", async () => {
         session: "challenge-session",
         username: "canonical-user"
       });
-    })
+    }),
+    signUp: jest.fn(async () => undefined)
   };
   const roomClient: MultiplayerLobbyClient = {
     addBot: jest.fn(async () => createRoomView()),
