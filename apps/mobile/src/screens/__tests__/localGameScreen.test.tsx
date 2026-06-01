@@ -77,6 +77,33 @@ describe("LocalGameScreen", () => {
     }
   });
 
+  it("can start trick play with a no-trump call when enabled", () => {
+    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0.99);
+
+    try {
+      const view = render(
+        <LocalGameScreen
+          navigation={{} as never}
+          route={{ params: { noTrump: true, targetMarks: 7 } } as never}
+        />
+      );
+
+      fireEvent.press(view.getByText("Pass"));
+      act(() => { jest.runAllTimers(); });
+
+      expect(view.getByText("Call No Trump")).toBeTruthy();
+
+      fireEvent.press(view.getByText("Call No Trump"));
+      act(() => { jest.runAllTimers(); });
+
+      expect(view.getByText("Trick Play")).toBeTruthy();
+      expect(view.getAllByText("No Trump").length).toBeGreaterThan(0);
+      expect(view.getByText("You called No Trump.")).toBeTruthy();
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
   it("reveals bot plays in the current trick one at a time", () => {
     const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0.99);
 

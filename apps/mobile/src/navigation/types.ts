@@ -3,6 +3,7 @@ import type { PlayerSeat } from "@shake2/game-engine";
 export type RootStackParamList = {
   Home: undefined;
   LocalGame: {
+    noTrump?: boolean;
     targetMarks: number;
   };
   LocalGameStart: undefined;

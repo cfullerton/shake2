@@ -33,11 +33,17 @@ import { type FortyTwoEvent, type FortyTwoEventEnvelope } from "../forty-two/eve
 import {
   getLegalBidOptions,
   getLegalDominoPlays,
+  getLegalTrumpCalls,
   getLegalTrumpSuits,
   type LegalBidOption,
-  type LegalDominoPlay
+  type LegalDominoPlay,
+  type LegalTrumpCall
 } from "../forty-two/legal-actions.ts";
-import { type RuleConfig, standardRules } from "../forty-two/rules-config.ts";
+import {
+  type FortyTwoEnabledContracts,
+  type RuleConfig,
+  standardRules
+} from "../forty-two/rules-config.ts";
 import { type CompletedTrick, type HandScore } from "../forty-two/scoring.ts";
 import {
   SEAT_INDICES,
@@ -52,9 +58,10 @@ import {
   type DominoSuit
 } from "../forty-two/tricks.ts";
 import {
-  getContractTrumpSuit,
   getTrumpDominoRank,
   isDominoTrump,
+  type Contract,
+  type TrumpSelection,
   type TrumpSuit
 } from "../forty-two/trump.ts";
 import { chooseLegalRandomBotDecision } from "../bots/legal-random.ts";
@@ -67,6 +74,7 @@ export type LocalGameView =
     }
   | {
       readonly kind: "trumpSelection";
+      readonly legalTrumpCalls: readonly LegalTrumpCall[];
       readonly legalTrumpSuits: readonly TrumpSuit[];
       readonly seat: SeatIndex;
     }
@@ -121,6 +129,7 @@ export interface CreateLocalGameSessionInput {
   readonly playerNames?: Partial<Record<SeatIndex, string>>;
   readonly rules?: RuleConfig;
   readonly targetMarks?: number;
+  readonly variants?: Partial<Pick<FortyTwoEnabledContracts, "noTrump">>;
   readonly teamNames?: {
     readonly teamA?: string;
     readonly teamB?: string;
@@ -132,10 +141,7 @@ export function createLocalGameSession(
   context: EngineContext
 ): LocalGameSession {
   const humanSeat = input.humanSeat ?? 0;
-  const rules = input.rules ?? {
-    ...standardRules,
-    ...(input.targetMarks !== undefined ? { targetMarks: input.targetMarks } : {})
-  };
+  const rules = input.rules ?? createLocalPracticeRules(input);
   const gameId = input.gameId ?? getEngineId(context);
   const initialSnapshot = createInitialFortyTwoSnapshot(
     {
@@ -243,6 +249,21 @@ export function callLocalGameTrump(
   trumpSuit: TrumpSuit,
   context: EngineContext
 ): LocalGameSession {
+  return callLocalGameTrumpSelection(
+    session,
+    {
+      kind: "pip",
+      suit: trumpSuit
+    },
+    context
+  );
+}
+
+export function callLocalGameTrumpSelection(
+  session: LocalGameSession,
+  trump: TrumpSelection,
+  context: EngineContext
+): LocalGameSession {
   assertHumanView(session, "trumpSelection");
   return advanceLocalGameSession(
     applyCommandResult(
@@ -252,7 +273,7 @@ export function callLocalGameTrump(
         createActionEnvelope<CallFortyTwoTrumpAction>(
           {
             payload: {
-              trumpSuit
+              trump
             },
             type: "fortyTwo.trump.call"
           },
@@ -331,11 +352,13 @@ export function getLocalGameView(session: LocalGameSession): LocalGameView {
   }
 
   if (session.snapshot.snapshot.phase === "trump") {
+    const legalTrumpCalls = getLegalTrumpCalls(session.snapshot, session.humanSeat);
     const legalTrumpSuits = getLegalTrumpSuits(session.snapshot, session.humanSeat);
 
-    if (legalTrumpSuits.length > 0) {
+    if (legalTrumpCalls.length > 0) {
       return {
         kind: "trumpSelection",
+        legalTrumpCalls,
         legalTrumpSuits,
         seat: session.humanSeat
       };
@@ -420,7 +443,7 @@ export function chooseFirstLegalHumanAction(
   session: LocalGameSession
 ):
   | { readonly kind: "bid"; readonly bid: BidCall }
-  | { readonly kind: "callTrump"; readonly trumpSuit: TrumpSuit }
+  | { readonly kind: "callTrump"; readonly trump: TrumpSelection }
   | { readonly kind: "playDomino"; readonly play: LegalDominoPlay }
   | { readonly kind: "continue" }
   | { readonly kind: "none" } {
@@ -434,15 +457,15 @@ export function chooseFirstLegalHumanAction(
   }
 
   if (view.kind === "trumpSelection") {
-    const trumpSuit = view.legalTrumpSuits[0];
+    const trump = view.legalTrumpCalls[0];
 
-    if (!trumpSuit) {
+    if (!trump) {
       return { kind: "none" };
     }
 
     return {
       kind: "callTrump",
-      trumpSuit
+      trump: trump.selection
     };
   }
 
@@ -480,7 +503,7 @@ export function applyLocalHumanAction(
     case "bid":
       return submitLocalGameBid(session, action.bid, context);
     case "callTrump":
-      return callLocalGameTrump(session, action.trumpSuit, context);
+      return callLocalGameTrumpSelection(session, action.trump, context);
     case "playDomino":
       return playLocalGameDomino(session, action.play, context);
     case "continue":
@@ -626,7 +649,7 @@ function advanceOneAutomaticStep(
         createActionEnvelope<CallFortyTwoTrumpAction>(
           {
             payload: {
-              trumpSuit: decision.trumpSuit
+              trump: decision.trump
             },
             type: "fortyTwo.trump.call"
           },
@@ -808,7 +831,7 @@ function createActivityLogEntries(
         {
           id: eventEnvelope.eventId,
           seat: event.payload.contract.declarer,
-          text: `${getSeatName(session, event.payload.contract.declarer)} called ${formatActivityTrumpSuit(getContractTrumpSuit(event.payload.contract))} trump.`,
+          text: `${getSeatName(session, event.payload.contract.declarer)} called ${formatActivityContractTrump(event.payload.contract)}.`,
           type: event.type
         }
       ];
@@ -876,6 +899,26 @@ function formatActivityBid(bid: BidCall): string {
 
 function formatActivityTrumpSuit(trumpSuit: TrumpSuit): string {
   return trumpSuit[0]?.toUpperCase() + trumpSuit.slice(1);
+}
+
+function formatActivityContractTrump(contract: Contract): string {
+  switch (contract.kind) {
+    case "noTrump":
+      return "No Trump";
+    case "standardNumeric":
+      return `${formatActivityTrumpSuit(contract.trump.suit)} trump`;
+  }
+}
+
+function createLocalPracticeRules(input: CreateLocalGameSessionInput): RuleConfig {
+  return {
+    ...standardRules,
+    enabledContracts: {
+      ...standardRules.enabledContracts,
+      noTrump: input.variants?.noTrump ?? false
+    },
+    ...(input.targetMarks !== undefined ? { targetMarks: input.targetMarks } : {})
+  };
 }
 
 function unwrapCommandResult<TEvent extends FortyTwoEvent>(

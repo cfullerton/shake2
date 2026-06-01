@@ -3,13 +3,13 @@ import { EngineError } from "../errors.ts";
 import {
   getLegalBidOptions,
   getLegalDominoPlays,
-  getLegalTrumpSuits,
+  getLegalTrumpCalls,
   type LegalDominoPlay
 } from "../forty-two/legal-actions.ts";
 import { type FortyTwoSnapshotEnvelope } from "../forty-two/state.ts";
 import { type BidCall } from "../forty-two/bidding.ts";
 import { type SeatIndex } from "../forty-two/seats.ts";
-import { type TrumpSuit } from "../forty-two/trump.ts";
+import { type TrumpSelection } from "../forty-two/trump.ts";
 
 export type LegalRandomBotDecision =
   | {
@@ -20,7 +20,7 @@ export type LegalRandomBotDecision =
   | {
       readonly kind: "callTrump";
       readonly seat: SeatIndex;
-      readonly trumpSuit: TrumpSuit;
+      readonly trump: TrumpSelection;
     }
   | {
       readonly kind: "playDomino";
@@ -48,12 +48,12 @@ export function chooseLegalRandomBotDecision(
   }
 
   if (snapshot.phase === "trump") {
-    const trumpSuit = chooseRandom(getLegalTrumpSuits(input.snapshot, input.seat), input.context);
+    const trump = chooseRandom(getLegalTrumpCalls(input.snapshot, input.seat), input.context);
 
     return {
       kind: "callTrump",
       seat: input.seat,
-      trumpSuit
+      trump: trump.selection
     };
   }
 

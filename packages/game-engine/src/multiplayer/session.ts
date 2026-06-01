@@ -1199,7 +1199,7 @@ function createBotFortyTwoAction(
     case "callTrump":
       return {
         payload: {
-          trumpSuit: decision.trumpSuit
+          trump: decision.trump
         },
         type: "fortyTwo.trump.call"
       };

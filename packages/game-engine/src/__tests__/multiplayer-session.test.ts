@@ -661,7 +661,7 @@ function createBotAction(decision: LegalRandomBotDecision) {
     case "callTrump":
       return {
         payload: {
-          trumpSuit: decision.trumpSuit
+          trump: decision.trump
         },
         type: "fortyTwo.trump.call" as const
       };

@@ -1,7 +1,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   applyLocalHumanAction,
-  callLocalGameTrump,
+  callLocalGameTrumpSelection,
   continueLocalGameSession,
   createLocalGameSession,
   formatDomino,
@@ -25,6 +25,7 @@ import {
   type Pip,
   type LocalGameSession,
   type SeatIndex,
+  type TrumpSelection,
   type TrumpSuit
 } from "@shake2/game-engine";
 import { Play, RotateCcw } from "lucide-react-native";
@@ -62,6 +63,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const [session, setSession] = useState<LocalGameSession>(() =>
     createLocalGameSession(
       {
+        variants: {
+          noTrump: route.params.noTrump ?? false
+        },
         targetMarks: route.params.targetMarks
       },
       contextRef.current
@@ -449,15 +453,15 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
       {view.kind === "trumpSelection" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Select trump</Text>
-          <Text style={styles.copy}>Choose the trump suit for this hand.</Text>
+          <Text style={styles.copy}>Choose this hand's trump call.</Text>
           <View style={styles.trumpGrid}>
-            {view.legalTrumpSuits.map((trumpSuit) => (
+            {view.legalTrumpCalls.map((call) => (
               <Pressable
-                key={trumpSuit}
+                key={getTrumpSelectionKey(call.selection)}
                 disabled={isAdvancing}
                 onPress={() =>
                   updateSession(() =>
-                    callLocalGameTrump(session, trumpSuit, contextRef.current)
+                    callLocalGameTrumpSelection(session, call.selection, contextRef.current)
                   )
                 }
                 style={({ pressed }) => [
@@ -466,10 +470,14 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
                   pressed && !isAdvancing && styles.pressedTrumpTile
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel={`Call ${formatTrumpSuit(trumpSuit)} trump`}
+                accessibilityLabel={`Call ${formatTrumpSelection(call.selection)}`}
               >
-                <TrumpSuitPips suit={trumpSuit} />
-                <Text style={styles.trumpTileLabel}>{`Call ${formatTrumpSuit(trumpSuit)}`}</Text>
+                {call.selection.kind === "pip" ? (
+                  <TrumpSuitPips suit={call.selection.suit} />
+                ) : (
+                  <Text style={styles.noTrumpSymbol}>NT</Text>
+                )}
+                <Text style={styles.trumpTileLabel}>{`Call ${call.label}`}</Text>
               </Pressable>
             ))}
           </View>
@@ -878,6 +886,24 @@ function formatBid(bid: { readonly amount?: number; readonly kind: string }): st
 
 function formatTrumpSuit(trumpSuit: TrumpSuit): string {
   return trumpSuit[0]?.toUpperCase() + trumpSuit.slice(1);
+}
+
+function formatTrumpSelection(selection: TrumpSelection): string {
+  switch (selection.kind) {
+    case "none":
+      return "No Trump";
+    case "pip":
+      return `${formatTrumpSuit(selection.suit)} trump`;
+  }
+}
+
+function getTrumpSelectionKey(selection: TrumpSelection): string {
+  switch (selection.kind) {
+    case "none":
+      return "none";
+    case "pip":
+      return selection.suit;
+  }
 }
 
 function formatContractTrump(contract: Contract): string {
@@ -1302,6 +1328,11 @@ const styles = StyleSheet.create({
   pressedTrumpTile: {
     opacity: 0.82,
     transform: [{ scale: 0.97 }]
+  },
+  noTrumpSymbol: {
+    color: palette.crimson,
+    fontSize: 22,
+    fontWeight: "900"
   },
   trumpGrid: {
     flexDirection: "row",
