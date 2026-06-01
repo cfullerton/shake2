@@ -33,12 +33,6 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
       </View>
 
       <Button
-        icon={<Plus color={palette.surface} size={19} />}
-        onPress={() => navigation.navigate("NewGame")}
-      >
-        Score the Table
-      </Button>
-      <Button
         icon={<Bot color={palette.denim} size={19} />}
         onPress={() => navigation.navigate("LocalGameStart")}
         variant="secondary"
@@ -51,6 +45,13 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
         variant="secondary"
       >
         Play Online
+      </Button>
+      <Button
+        icon={<Plus color={palette.denim} size={19} />}
+        onPress={() => navigation.navigate("NewGame")}
+        variant="secondary"
+      >
+        Score Live Game
       </Button>
       <Button
         icon={<BookOpen color={palette.crimson} size={19} />}
