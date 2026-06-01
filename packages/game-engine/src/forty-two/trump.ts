@@ -12,6 +12,7 @@ import {
   type NumericBid,
   type WinningBid
 } from "./bidding.ts";
+import { type RuleConfig } from "./rules-config.ts";
 import {
   assertSeatIndex,
   type SeatIndex
@@ -34,7 +35,11 @@ export interface PipTrumpSelection {
   readonly suit: TrumpSuit;
 }
 
-export type TrumpSelection = PipTrumpSelection;
+export interface NoTrumpSelection {
+  readonly kind: "none";
+}
+
+export type TrumpSelection = NoTrumpSelection | PipTrumpSelection;
 
 export const TRUMP_SUIT_PIPS: Record<TrumpSuit, Pip> = {
   blanks: 0,
@@ -50,11 +55,18 @@ export interface StandardNumericContract {
   readonly bid: NumericBid;
   readonly declarer: SeatIndex;
   readonly kind: "standardNumeric";
-  readonly trump: TrumpSelection;
+  readonly trump: PipTrumpSelection;
   readonly trumpSuit: TrumpSuit;
 }
 
-export type Contract = StandardNumericContract;
+export interface NoTrumpContract {
+  readonly bid: NumericBid;
+  readonly declarer: SeatIndex;
+  readonly kind: "noTrump";
+  readonly trump: NoTrumpSelection;
+}
+
+export type Contract = NoTrumpContract | StandardNumericContract;
 
 export type TrumpCallPhase = "callingTrump" | "trumpCalled";
 
@@ -90,6 +102,18 @@ export function callTrump(
   actor: SeatIndex,
   trumpSuit: TrumpSuit
 ): TrumpCallState {
+  return callTrumpSelection(state, actor, {
+    kind: "pip",
+    suit: trumpSuit
+  });
+}
+
+export function callTrumpSelection(
+  state: TrumpCallState,
+  actor: SeatIndex,
+  selection: TrumpSelection,
+  rules?: RuleConfig
+): TrumpCallState {
   if (state.phase !== "callingTrump") {
     throw new EngineError("INVALID_PHASE", "Trump has already been called.");
   }
@@ -100,24 +124,47 @@ export function callTrump(
     throw new EngineError("INVALID_ACTOR", "Only the declarer can call trump.");
   }
 
-  assertTrumpSuit(trumpSuit);
+  assertTrumpSelection(selection);
+  assertTrumpSelectionEnabled(selection, rules);
 
   return {
     ...state,
-    contract: createStandardNumericContract(state.winningBid.bid, state.declarer, trumpSuit),
+    contract: createContractForSelection(
+      state.winningBid.bid,
+      state.declarer,
+      selection
+    ),
     phase: "trumpCalled"
   };
 }
 
 export function getContractTrumpSuit(contract: Contract): TrumpSuit {
   switch (contract.kind) {
+    case "noTrump":
+      throw new EngineError(
+        "INVALID_TRUMP",
+        "No-trump contracts do not have a trump suit."
+      );
     case "standardNumeric":
       return getTrumpSuitFromSelection(contract.trump);
   }
 }
 
+export function getContractTrumpSelection(contract: Contract): TrumpSelection {
+  switch (contract.kind) {
+    case "noTrump":
+    case "standardNumeric":
+      return contract.trump;
+  }
+}
+
 export function isDominoTrumpForContract(domino: Domino, contract: Contract): boolean {
-  return isDominoTrump(domino, getContractTrumpSuit(contract));
+  switch (contract.kind) {
+    case "noTrump":
+      return false;
+    case "standardNumeric":
+      return isDominoTrump(domino, getContractTrumpSuit(contract));
+  }
 }
 
 export function isDominoTrump(domino: Domino, trumpSuit: TrumpSuit): boolean {
@@ -180,8 +227,11 @@ export function assertContract(value: unknown): asserts value is Contract {
 
   const contract = value as Record<string, unknown>;
 
-  if (contract.kind !== "standardNumeric") {
-    throw new EngineError("INVALID_ACTION", `Unsupported contract kind: ${String(contract.kind)}.`);
+  if (contract.kind !== "standardNumeric" && contract.kind !== "noTrump") {
+    throw new EngineError(
+      "INVALID_ACTION",
+      `Unsupported contract kind: ${String(contract.kind)}.`
+    );
   }
 
   assertSeatIndex(contract.declarer);
@@ -199,14 +249,32 @@ export function assertContract(value: unknown): asserts value is Contract {
   }
 
   assertTrumpSelection(contract.trump);
+
+  if (contract.kind === "standardNumeric" && contract.trump.kind !== "pip") {
+    throw new EngineError(
+      "INVALID_TRUMP",
+      "Standard numeric contracts must call a pip trump."
+    );
+  }
+
+  if (contract.kind === "noTrump" && contract.trump.kind !== "none") {
+    throw new EngineError(
+      "INVALID_TRUMP",
+      "No-trump contracts must use no trump selection."
+    );
+  }
 }
 
-function assertTrumpSelection(value: unknown): asserts value is TrumpSelection {
+export function assertTrumpSelection(value: unknown): asserts value is TrumpSelection {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new EngineError("INVALID_TRUMP", "Trump selection must be an object.");
   }
 
   const trump = value as Record<string, unknown>;
+
+  if (trump.kind === "none") {
+    return;
+  }
 
   if (trump.kind !== "pip") {
     throw new EngineError(
@@ -218,10 +286,43 @@ function assertTrumpSelection(value: unknown): asserts value is TrumpSelection {
   assertTrumpSuit(trump.suit);
 }
 
+function assertTrumpSelectionEnabled(
+  selection: TrumpSelection,
+  rules?: RuleConfig
+): void {
+  if (
+    selection.kind === "none" &&
+    rules?.enabledContracts.noTrump !== true
+  ) {
+    throw new EngineError(
+      "INVALID_TRUMP",
+      "No-trump contracts are not enabled for this game."
+    );
+  }
+}
+
 function getTrumpSuitFromSelection(selection: TrumpSelection): TrumpSuit {
   switch (selection.kind) {
+    case "none":
+      throw new EngineError(
+        "INVALID_TRUMP",
+        "No-trump selection does not have a trump suit."
+      );
     case "pip":
       return selection.suit;
+  }
+}
+
+function createContractForSelection(
+  bid: NumericBid,
+  declarer: SeatIndex,
+  selection: TrumpSelection
+): Contract {
+  switch (selection.kind) {
+    case "none":
+      return createNoTrumpContract(bid, declarer);
+    case "pip":
+      return createStandardNumericContract(bid, declarer, selection.suit);
   }
 }
 
@@ -247,4 +348,18 @@ function createStandardNumericContract(
   });
 
   return contract as StandardNumericContract;
+}
+
+function createNoTrumpContract(
+  bid: NumericBid,
+  declarer: SeatIndex
+): NoTrumpContract {
+  return {
+    bid,
+    declarer,
+    kind: "noTrump",
+    trump: {
+      kind: "none"
+    }
+  };
 }

@@ -19,8 +19,8 @@ import {
   type DominoSuit
 } from "./tricks.ts";
 import {
-  getContractTrumpSuit,
   TRUMP_SUITS,
+  type TrumpSelection,
   type TrumpSuit
 } from "./trump.ts";
 
@@ -33,6 +33,11 @@ export interface LegalDominoPlay {
   readonly domino: Domino;
   readonly ledSuit?: DominoSuit;
   readonly seat: SeatIndex;
+}
+
+export interface LegalTrumpCall {
+  readonly label: string;
+  readonly selection: TrumpSelection;
 }
 
 export function getLegalBidOptions(
@@ -80,13 +85,42 @@ export function getLegalTrumpSuits(
   snapshot: FortyTwoSnapshotEnvelope,
   seat: SeatIndex
 ): readonly TrumpSuit[] {
+  return getLegalTrumpCalls(snapshot, seat)
+    .flatMap((call) => call.selection.kind === "pip" ? [call.selection.suit] : []);
+}
+
+export function getLegalTrumpCalls(
+  snapshot: FortyTwoSnapshotEnvelope,
+  seat: SeatIndex
+): readonly LegalTrumpCall[] {
   assertSeatIndex(seat);
 
   if (snapshot.snapshot.phase !== "trump") {
     return [];
   }
 
-  return snapshot.snapshot.trump.declarer === seat ? TRUMP_SUITS : [];
+  if (snapshot.snapshot.trump.declarer !== seat) {
+    return [];
+  }
+
+  const calls: LegalTrumpCall[] = TRUMP_SUITS.map((trumpSuit) => ({
+    label: formatTrumpSuitLabel(trumpSuit),
+    selection: {
+      kind: "pip" as const,
+      suit: trumpSuit
+    }
+  }));
+
+  if (snapshot.snapshot.rules.enabledContracts.noTrump) {
+    calls.push({
+      label: "No Trump",
+      selection: {
+        kind: "none"
+      }
+    });
+  }
+
+  return calls;
 }
 
 export function getLegalDominoPlays(
@@ -150,12 +184,12 @@ function isLegalDominoPlay(
 
   try {
     playDominoToTrick({
+      contract: snapshot.snapshot.contract,
       domino,
       hands: snapshot.snapshot.hands,
       ...(ledSuit ? { ledSuit } : {}),
       seat,
-      trick: snapshot.snapshot.currentTrick,
-      trumpSuit: getContractTrumpSuit(snapshot.snapshot.contract)
+      trick: snapshot.snapshot.currentTrick
     });
     return true;
   } catch (error) {
@@ -165,4 +199,8 @@ function isLegalDominoPlay(
 
     throw error;
   }
+}
+
+function formatTrumpSuitLabel(trumpSuit: TrumpSuit): string {
+  return trumpSuit[0]?.toUpperCase() + trumpSuit.slice(1);
 }

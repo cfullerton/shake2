@@ -1,6 +1,6 @@
 # Missing Rules
 
-Last reviewed: 2026-05-30
+Last reviewed: 2026-06-01
 
 ## Scope
 
@@ -45,7 +45,7 @@ This file lists rules and product decisions missing from the current engine comp
 | Nello | Missing | Config flag exists only. Requires low/no-trump style winner logic and scoring rules. |
 | Sevens | Missing | Config flag exists only. Requires special contract semantics. |
 | Follow-me | Missing | Config flag exists only. Contract union scaffolding now exists, but no follow-me contract member, bid flow, or first-lead trump behavior is implemented. |
-| No-trump | Missing | Contract union scaffolding now exists, but no no-trump contract member, call action, or no-trump trick/scoring behavior is implemented. |
+| No-trump | Partial | Engine foundation exists behind `RuleConfig.enabledContracts.noTrump`: contract member, call action selection, no-trump trick winner behavior, and standard one-mark made/set scoring. Local practice UI, multiplayer room/API controls, and full-hand fixtures are still missing. |
 | Low/no-low variants | Missing | Not represented. Product decision needed. |
 | Dealer redeal on all-pass | Missing | `RuleConfig.bidding.allPassBehavior` includes `"redeal"`, but the bidding implementation always forces dealer 30. |
 | Multiple-mark awards | Missing | Current numeric bids award exactly one mark. Higher-risk bids and variants may require more. |

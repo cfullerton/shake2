@@ -13,6 +13,7 @@ import {
   handleSubmitFortyTwoBidCommand,
   isEngineError,
   replayFortyTwoEvents,
+  standardRules,
   type CallFortyTwoTrumpAction,
   type CompleteFortyTwoBiddingAction,
   type CreateFortyTwoGameAction,
@@ -23,8 +24,11 @@ import {
   type FortyTwoCommandResult,
   type FortyTwoEventEnvelope,
   type FortyTwoSnapshotEnvelope,
+  type RuleConfig,
   type SeatIndex,
-  type SubmitFortyTwoBidAction
+  type SubmitFortyTwoBidAction,
+  type TrumpSelection,
+  type TrumpSuit
 } from "../index.ts";
 
 test("command happy path runs deal through bidding complete and trump called", () => {
@@ -47,6 +51,7 @@ test("command happy path runs deal through bidding complete and trump called", (
 
   if (journey.finalSnapshot.snapshot.phase === "trickPlay") {
     assert.equal(journey.finalSnapshot.snapshot.contract.declarer, 1);
+    assert.equal(journey.finalSnapshot.snapshot.contract.trump.kind, "pip");
     assert.equal(journey.finalSnapshot.snapshot.contract.trump.suit, "sixes");
     assert.equal(journey.finalSnapshot.snapshot.currentTrick.leader, 1);
   }
@@ -89,6 +94,62 @@ test("command rejects invalid trump actor", () => {
 
   if (!result.ok) {
     assert.equal(result.error.code, "INVALID_ACTOR");
+  }
+});
+
+test("command accepts no-trump calls when no-trump is enabled", () => {
+  const journey = runCommandHappyPathBeforeTrump({
+    rules: createNoTrumpRules()
+  });
+  const result = unwrapSuccess(
+    handleCallFortyTwoTrumpCommand(
+      journey.snapshot,
+      createCallTrumpSelectionAction(
+        journey.snapshot,
+        {
+          kind: "none"
+        },
+        1
+      ),
+      journey.context
+    )
+  );
+
+  assert.equal(result.snapshot.snapshot.phase, "trickPlay");
+
+  if (result.snapshot.snapshot.phase === "trickPlay") {
+    assert.deepEqual(result.snapshot.snapshot.contract, {
+      bid: {
+        amount: 30,
+        kind: "numeric"
+      },
+      declarer: 1,
+      kind: "noTrump",
+      trump: {
+        kind: "none"
+      }
+    });
+  }
+});
+
+test("command rejects no-trump calls when no-trump is disabled", () => {
+  const journey = runCommandHappyPathBeforeTrump();
+  const result = handleCallFortyTwoTrumpCommand(
+    journey.snapshot,
+    createCallTrumpSelectionAction(
+      journey.snapshot,
+      {
+        kind: "none"
+      },
+      1
+    ),
+    journey.context
+  );
+
+  assert.equal(result.ok, false);
+
+  if (!result.ok) {
+    assert.equal(result.error.code, "INVALID_TRUMP");
   }
 });
 
@@ -185,7 +246,9 @@ function runCommandHappyPath(): {
   };
 }
 
-function runCommandHappyPathBeforeTrump(): {
+function runCommandHappyPathBeforeTrump(options: {
+  readonly rules?: RuleConfig;
+} = {}): {
   readonly context: EngineContext;
   readonly events: readonly FortyTwoEventEnvelope[];
   readonly initialSnapshot: FortyTwoSnapshotEnvelope;
@@ -193,7 +256,9 @@ function runCommandHappyPathBeforeTrump(): {
 } {
   const context = createCommandContext();
   const created = unwrapSuccess(
-    handleCreateFortyTwoGameCommand(createGameAction(), context)
+    handleCreateFortyTwoGameCommand(createGameAction({
+      ...(options.rules ? { rules: options.rules } : {})
+    }), context)
   );
   const dealt = unwrapSuccess(
     handleDealFortyTwoHandCommand(
@@ -254,7 +319,9 @@ function runCommandHappyPathBeforeTrump(): {
   };
 }
 
-function createGameAction(): FortyTwoActionEnvelope<CreateFortyTwoGameAction> {
+function createGameAction(options: {
+  readonly rules?: RuleConfig;
+} = {}): FortyTwoActionEnvelope<CreateFortyTwoGameAction> {
   return createActionEnvelope(
     {
       payload: {
@@ -265,6 +332,7 @@ function createGameAction(): FortyTwoActionEnvelope<CreateFortyTwoGameAction> {
           2: "South",
           3: "West"
         },
+        ...(options.rules ? { rules: options.rules } : {}),
         teamNames: {
           teamA: "North/South",
           teamB: "East/West"
@@ -331,13 +399,32 @@ function createCompleteBiddingAction(
 
 function createCallTrumpAction(
   snapshot: FortyTwoSnapshotEnvelope,
-  trumpSuit: CallFortyTwoTrumpAction["payload"]["trumpSuit"],
+  trumpSuit: TrumpSuit,
   actorSeat: SeatIndex
 ): FortyTwoActionEnvelope<CallFortyTwoTrumpAction> {
   return createActionEnvelope(
     {
       payload: {
         trumpSuit
+      },
+      type: "fortyTwo.trump.call"
+    },
+    {
+      actorSeat,
+      snapshot
+    }
+  );
+}
+
+function createCallTrumpSelectionAction(
+  snapshot: FortyTwoSnapshotEnvelope,
+  trump: TrumpSelection,
+  actorSeat: SeatIndex
+): FortyTwoActionEnvelope<CallFortyTwoTrumpAction> {
+  return createActionEnvelope(
+    {
+      payload: {
+        trump
       },
       type: "fortyTwo.trump.call"
     },
@@ -413,6 +500,16 @@ function createInitialReplaySnapshot(): FortyTwoSnapshotEnvelope {
     newId: () => "unused-game-id",
     now: () => "2026-05-30T12:00:01.000Z"
   });
+}
+
+function createNoTrumpRules(): RuleConfig {
+  return {
+    ...standardRules,
+    enabledContracts: {
+      ...standardRules.enabledContracts,
+      noTrump: true
+    }
+  };
 }
 
 function unwrapSuccess<TEvent extends FortyTwoEventEnvelope>(

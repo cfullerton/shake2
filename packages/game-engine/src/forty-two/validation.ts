@@ -40,9 +40,9 @@ import {
 } from "./tricks.ts";
 import {
   assertContract,
-  callTrump,
+  callTrumpSelection,
   createTrumpCallState,
-  getContractTrumpSuit
+  getContractTrumpSelection
 } from "./trump.ts";
 
 export function assertFortyTwoSnapshotEnvelope(
@@ -309,10 +309,11 @@ function validateTrumpCalledEvent(
     throw new EngineError("INVALID_ACTOR", "Trump event actor is not the declarer.");
   }
 
-  const expectedTrump = callTrump(
+  const expectedTrump = callTrumpSelection(
     snapshot.snapshot.trump,
     contract.declarer,
-    getContractTrumpSuit(contract)
+    getContractTrumpSelection(contract),
+    snapshot.snapshot.rules
   );
 
   assertDeepEqual(
@@ -362,14 +363,14 @@ function validateDominoPlayedEvent(
   }
 
   const expected = playDominoToTrick({
+    contract: snapshot.snapshot.contract,
     domino: nextPlay.domino,
     hands: snapshot.snapshot.hands,
     ...(previousTrick.playedDominoes.length === 0 && nextTrick.ledSuit
       ? { ledSuit: nextTrick.ledSuit }
       : {}),
     seat: nextPlay.seat,
-    trick: previousTrick,
-    trumpSuit: getContractTrumpSuit(snapshot.snapshot.contract)
+    trick: previousTrick
   });
 
   assertDeepEqual(

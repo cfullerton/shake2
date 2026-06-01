@@ -10,6 +10,7 @@ export interface FortyTwoEnabledContracts {
   readonly followMe: boolean;
   readonly markBids: boolean;
   readonly nello: boolean;
+  readonly noTrump: boolean;
   readonly plunge: boolean;
   readonly sevens: boolean;
   readonly splash: boolean;
@@ -60,6 +61,7 @@ export const standardRules = {
     followMe: false,
     markBids: false,
     nello: false,
+    noTrump: false,
     plunge: false,
     sevens: false,
     splash: false
