@@ -8,7 +8,7 @@ The contract-model refactor described in PR #9 is implemented for standard numer
 
 The engine no longer treats contract data as a flat `contract.trumpSuit` assumption. It now uses a discriminated contract union with contract-aware helper paths for trump resolution, trick resolution, hand scoring, mark awards, and runtime validation.
 
-Variant support is still product-incomplete, but the engine now supports the `standardNumeric` and `noTrump` contract members behind explicit rule configuration. Local practice setup UI and multiplayer room/API controls still need to expose the no-trump option.
+Variant support is still product-incomplete, but the engine now supports the `standardNumeric` and `noTrump` contract members behind explicit rule configuration. Local practice can expose no-trump through setup and active-game trump selection. Multiplayer room/API controls still need to expose the no-trump option.
 
 ## Current Model (Implemented)
 
@@ -61,7 +61,7 @@ Current deliberate product deviation (unchanged):
 | Mark bids | No mark-bid call type or contract member is implemented yet; multi-mark award semantics are still missing. |
 | 84 | No 84 contract member/bid flow or doubled hand-value scoring semantics are implemented. |
 | Follow-me | Contract union is ready, but no follow-me contract kind, delayed/derived trump lifecycle, or command/action flow exists. |
-| No-trump | Engine foundation exists behind `RuleConfig.enabledContracts.noTrump`; remaining work is local setup UI, multiplayer room/API controls, and broader fixture coverage. |
+| No-trump | Engine foundation and local practice UI exist behind `RuleConfig.enabledContracts.noTrump`; remaining work is multiplayer room/API controls and broader fixture coverage. |
 | Nello | No nello contract member, low-wins trick model, inverted objective handling, or scoring semantics are implemented. |
 | Sevens | No sevens contract/bid definition, play semantics, or scoring model is implemented. |
 | Splash | No splash bid/contract member, eligibility checks, or scoring/mark model is implemented. |
@@ -94,7 +94,7 @@ Implemented and behavior-preserving for standard numeric:
 
 ## Completed No-Trump Engine Foundation Slice
 
-Implemented engine-only, with no local or multiplayer UI controls yet:
+Implemented as the rules foundation:
 
 1. Added `RuleConfig.enabledContracts.noTrump`.
 2. Added `NoTrumpContract` with `trump: { kind: "none" }`.
@@ -103,11 +103,21 @@ Implemented engine-only, with no local or multiplayer UI controls yet:
 5. Reused standard numeric bid amount and one-mark made/set scoring for no-trump.
 6. Added focused tests for no-trump gating, command routing, trick behavior, and standard behavior preservation.
 
+## Completed No-Trump Local Practice Slice
+
+Implemented for local practice only:
+
+1. Added a local practice setup toggle for No Trump.
+2. Routed the toggle into `createLocalGameSession` through engine-owned rule construction.
+3. Added `LegalTrumpCall`/`callLocalGameTrumpSelection` plumbing so the UI can call pip trump or no-trump without duplicating rule checks.
+4. Updated local practice trump selection to render a No Trump tile when legal.
+5. Updated local activity/status formatting to show No Trump.
+6. Added focused local session and mobile screen tests.
+
 ## Remaining Work Before Product Variant Availability
 
-The engine groundwork is in place for no-trump, but these are still required before users can select it end to end:
+The engine and local practice groundwork are in place for no-trump, but these are still required before users can select it in all modes:
 
-- Add local practice setup controls and active-game contract selection UI.
 - Add multiplayer room/start controls and API input parsing for variant selection.
 - Add multiplayer active-game contract selection UI and subscription/snapshot smoke coverage.
 - Add broader fixture-backed command/replay tests for no-trump full-hand made/set outcomes.
@@ -125,6 +135,6 @@ Still required for each new variant increment:
 
 ## Recommended Next Variant Work
 
-Finish no-trump product exposure next: local practice first, then multiplayer room/API and active-game UI. No-trump remains the safest first variant because it mostly removes trump ranking instead of adding multi-actor partner/trump decision flows.
+Finish no-trump multiplayer exposure next: room/API variant selection, active-game contract selection, and subscription/snapshot smoke coverage. No-trump remains the safest first variant because it mostly removes trump ranking instead of adding multi-actor partner/trump decision flows.
 
 Do not start with nello, splash, plunge, or sevens before product-rule clarification and dedicated fixture-backed tests.

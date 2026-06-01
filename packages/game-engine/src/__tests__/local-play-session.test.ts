@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyLocalHumanAction,
+  callLocalGameTrumpSelection,
   continueLocalGameSession,
   createDomino,
   createLocalGameSession,
@@ -37,6 +38,56 @@ test("local game activity log describes bot actions", () => {
     activity.some((entry) => entry.includes("Bot East") && /passed|bid/.test(entry)),
     true
   );
+});
+
+test("local practice exposes and plays a no-trump contract when enabled", () => {
+  const context = createAlwaysPassContext();
+  let session = createLocalGameSession(
+    {
+      targetMarks: 7,
+      variants: {
+        noTrump: true
+      }
+    },
+    context
+  );
+
+  session = applyLocalHumanAction(session, context);
+
+  const view = getLocalGameView(session);
+
+  assert.equal(view.kind, "trumpSelection");
+
+  if (view.kind !== "trumpSelection") {
+    throw new Error("Expected trump selection view.");
+  }
+
+  assert.equal(
+    view.legalTrumpCalls.some((call) => call.selection.kind === "none"),
+    true
+  );
+
+  session = callLocalGameTrumpSelection(
+    session,
+    {
+      kind: "none"
+    },
+    context
+  );
+
+  assert.equal(session.snapshot.snapshot.phase, "trickPlay");
+
+  if (session.snapshot.snapshot.phase === "trickPlay") {
+    assert.equal(session.snapshot.snapshot.contract.kind, "noTrump");
+  }
+
+  assert.equal(
+    getLocalGameActivityLog(session, 8).some((entry) =>
+      entry.text.includes("called No Trump")
+    ),
+    true
+  );
+  assertReplayMatches(session);
 });
 
 test("sorts local domino hands with trump first and high dominoes descending", () => {
@@ -205,5 +256,23 @@ function createSimulationContext(seed: number): EngineContext {
       randomState = (randomState * 1664525 + 1013904223) >>> 0;
       return randomState / 0x100000000;
     }
+  };
+}
+
+function createAlwaysPassContext(): EngineContext {
+  let id = 0;
+  let time = 0;
+
+  return {
+    newId: () => {
+      id += 1;
+      return `no-trump-${id}`;
+    },
+    now: () => {
+      time += 1;
+      return new Date(Date.UTC(2026, 4, 30, 12, 0, 0) + time * 1000)
+        .toISOString();
+    },
+    random: () => 0.99
   };
 }

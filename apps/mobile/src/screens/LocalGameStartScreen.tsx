@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Play } from "lucide-react-native";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useState } from "react";
 
 import { Button } from "../components/Button";
@@ -15,6 +15,7 @@ type LocalGameStartScreenProps = NativeStackScreenProps<
 >;
 
 export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) {
+  const [noTrump, setNoTrump] = useState(false);
   const [targetMarks, setTargetMarks] = useState("7");
 
   function handleStart() {
@@ -26,6 +27,7 @@ export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) 
     }
 
     navigation.navigate("LocalGame", {
+      noTrump,
       targetMarks: parsedTarget
     });
   }
@@ -58,6 +60,27 @@ export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) 
           onChangeText={setTargetMarks}
           value={targetMarks}
         />
+        <Pressable
+          accessibilityLabel="No Trump"
+          accessibilityRole="switch"
+          accessibilityState={{ checked: noTrump }}
+          onPress={() => setNoTrump((current) => !current)}
+          style={styles.optionRow}
+        >
+          <View style={styles.optionText}>
+            <Text style={styles.optionLabel}>No Trump</Text>
+            <Text style={styles.optionMeta}>Contract variant</Text>
+          </View>
+          <Switch
+            onValueChange={setNoTrump}
+            thumbColor={noTrump ? palette.goldSoft : palette.paper}
+            trackColor={{
+              false: palette.paperMuted,
+              true: palette.crimson
+            }}
+            value={noTrump}
+          />
+        </Pressable>
       </View>
     </Screen>
   );
@@ -81,6 +104,33 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 18,
     fontWeight: "900"
+  },
+  optionLabel: {
+    color: palette.ink,
+    fontSize: 16,
+    fontWeight: "800"
+  },
+  optionMeta: {
+    color: palette.subtle,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  optionRow: {
+    alignItems: "center",
+    backgroundColor: palette.surfaceAlt,
+    borderColor: palette.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    minHeight: 58,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  optionText: {
+    flex: 1,
+    gap: spacing.xs
   },
   title: {
     color: palette.ink,
