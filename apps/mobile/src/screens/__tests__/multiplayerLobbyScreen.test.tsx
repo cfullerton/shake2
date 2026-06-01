@@ -49,6 +49,32 @@ test("lobby screen signs in without exposing the password", async () => {
   expect(view.queryByText("temporary-password")).toBeNull();
 });
 
+test("lobby screen creates accounts with username, email, and matching passwords", async () => {
+  const signUp = jest.fn(async () => undefined);
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        session: null,
+        signUp
+      })}
+    />
+  );
+
+  fireEvent.changeText(view.getByLabelText("Username"), "new-player");
+  fireEvent.changeText(view.getByLabelText("Password"), "secure-password");
+  fireEvent.changeText(view.getByLabelText("Email"), "new-player@example.com");
+  fireEvent.changeText(view.getByLabelText("Confirm Password"), "secure-password");
+  fireEvent.press(view.getByText("Create Account"));
+
+  await waitFor(() => {
+    expect(signUp).toHaveBeenCalledWith({
+      email: "new-player@example.com",
+      password: "secure-password",
+      username: "new-player"
+    });
+  });
+});
+
 test("lobby screen hides table controls when signed out", () => {
   const view = render(
     <MultiplayerLobbyContent
@@ -226,6 +252,7 @@ function createLobbyController(
     room: null,
     session: createSession(),
     signIn: jest.fn(async () => undefined),
+    signUp: jest.fn(async () => undefined),
     startGame: jest.fn(async () => undefined),
     startedGame: null,
     takeSeat: jest.fn(async () => undefined),

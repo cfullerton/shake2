@@ -49,7 +49,9 @@ export function MultiplayerLobbyContent({
   const [displayName, setDisplayName] = useState(
     lobby.session?.username ?? ""
   );
+  const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [password, setPassword] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [roomVisibility, setRoomVisibility] =
@@ -58,6 +60,12 @@ export function MultiplayerLobbyContent({
   const [username, setUsername] = useState("");
   const signedIn = lobby.session !== null;
   const needsNewPassword = lobby.newPasswordChallenge !== null;
+  const passwordsMatch = password === confirmPassword;
+  const canCreateAccount = username.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.length > 0 &&
+    confirmPassword.length > 0 &&
+    passwordsMatch;
   const canStart = canStartMultiplayerRoom(lobby.room);
   const inStartedGame = lobby.startedGame !== null;
   const sessionUsername = lobby.session?.username ?? null;
@@ -70,6 +78,14 @@ export function MultiplayerLobbyContent({
 
   async function handleSignIn() {
     await lobby.signIn({
+      password,
+      username
+    });
+  }
+
+  async function handleCreateAccount() {
+    await lobby.signUp({
+      email,
       password,
       username
     });
@@ -219,6 +235,32 @@ export function MultiplayerLobbyContent({
                   onPress={handleSignIn}
                 >
                   Sign In
+                </Button>
+                <TextField
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  label="Email"
+                  onChangeText={setEmail}
+                  value={email}
+                />
+                <TextField
+                  label="Confirm Password"
+                  onChangeText={setConfirmPassword}
+                  returnKeyType="done"
+                  secureTextEntry
+                  value={confirmPassword}
+                />
+                {!passwordsMatch && confirmPassword.length > 0 ? (
+                  <Text style={styles.validationText}>Passwords must match.</Text>
+                ) : null}
+                <Button
+                  disabled={!canCreateAccount}
+                  icon={<Plus color={palette.surface} size={18} />}
+                  loading={lobby.busyAction === "signUp"}
+                  onPress={handleCreateAccount}
+                >
+                  Create Account
                 </Button>
               </>
             ) : (
@@ -949,5 +991,10 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 13,
     fontWeight: "900"
+  },
+  validationText: {
+    color: palette.red,
+    fontSize: 13,
+    fontWeight: "700"
   }
 });

@@ -68,6 +68,62 @@ test("CognitoPasswordAuthClient sends USER_PASSWORD_AUTH request", async () => {
   });
 });
 
+test("CognitoPasswordAuthClient sends SignUp requests", async () => {
+  const calls: Array<{
+    readonly body?: string;
+    readonly headers?: Readonly<Record<string, string>>;
+    readonly input: string;
+    readonly method?: string;
+  }> = [];
+  const fetcher: FetchLike = async (input, init) => {
+    calls.push({
+      body: init?.body,
+      headers: init?.headers,
+      input,
+      method: init?.method
+    });
+
+    return createJsonResponse({
+      UserConfirmed: false,
+      UserSub: "subject-1"
+    });
+  };
+  const client = new CognitoPasswordAuthClient(
+    {
+      awsRegion: "us-east-1",
+      cognitoUserPoolClientId: "client-id"
+    },
+    fetcher
+  );
+
+  await expect(
+    client.signUp({
+      email: "new-player@example.com",
+      password: "secure-password",
+      username: "new-player"
+    })
+  ).resolves.toBeUndefined();
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.input).toBe(
+    "https://cognito-idp.us-east-1.amazonaws.com/"
+  );
+  expect(calls[0]?.headers).toMatchObject({
+    "Content-Type": "application/x-amz-json-1.1",
+    "X-Amz-Target": "AWSCognitoIdentityProviderService.SignUp"
+  });
+  expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({
+    ClientId: "client-id",
+    Password: "secure-password",
+    UserAttributes: [
+      {
+        Name: "email",
+        Value: "new-player@example.com"
+      }
+    ],
+    Username: "new-player"
+  });
+});
+
 test("CognitoPasswordAuthClient exposes the Cognito subject from the ID token", async () => {
   const fetcher: FetchLike = async () =>
     createJsonResponse({
