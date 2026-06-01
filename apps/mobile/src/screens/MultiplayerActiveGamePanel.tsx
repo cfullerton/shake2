@@ -1,12 +1,24 @@
 import { AlertCircle, Play, RefreshCw, Send } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle
+} from "react-native";
 
 import { Button } from "../components/Button";
+import { EventFeed } from "../components/EventFeed";
 import { GameText } from "../components/GameText";
 import {
   multiplayerSeatLabels,
   multiplayerTrumpSuitLabels,
   useMultiplayerActiveGame,
+  type AppSyncSeatIndex,
+  type MultiplayerActiveGameView,
+  type MultiplayerActiveSeatSummary,
+  type MultiplayerActiveTrickPlay,
   type MultiplayerLobbyGameClient
 } from "../multiplayer";
 import type {
@@ -42,6 +54,11 @@ export function MultiplayerActiveGamePanel({
   const legalPlayByDominoKey = new Map(
     view.legalDominoPlays.map((play) => [play.domino.key, play])
   );
+  const currentTrickPlayBySeat = new Map(
+    view.currentTrickPlays.map((play) => [play.seatIndex, play])
+  );
+  const activityEntries = createMultiplayerActivityEntries(view);
+  const isTrickPlayStatus = view.phase === "trickPlay";
 
   return (
     <View style={styles.shell}>
@@ -66,16 +83,52 @@ export function MultiplayerActiveGamePanel({
         ))}
       </View>
 
-      <View style={styles.statusGrid}>
-        <InfoTile label="Turn" value={view.currentTurnLabel} />
-        <InfoTile label="Dealer" value={view.dealerLabel} />
-        <InfoTile label="Bid" value={view.currentBidLabel} />
-        <InfoTile label="Trump" value={view.currentTrumpLabel} />
-        <InfoTile label="State" value={view.snapshotVersionLabel} />
-        <InfoTile
-          label="Live"
-          value={formatLiveStatus(game.liveStatus, game.liveError)}
-        />
+      <View style={[styles.tablePanel, isTrickPlayStatus ? styles.compactPanel : null]}>
+        <View style={styles.sectionHeader}>
+          <Text
+            style={[
+              styles.panelTitle,
+              isTrickPlayStatus ? styles.compactPanelTitle : null
+            ]}
+          >
+            Table status
+          </Text>
+          <Text style={styles.meta}>
+            Latest: {getLatestActivityText(activityEntries)}
+          </Text>
+        </View>
+        <View style={[styles.statusGrid, isTrickPlayStatus ? styles.compactInfoGrid : null]}>
+          <InfoTile
+            compact={isTrickPlayStatus}
+            label="Turn"
+            value={getCurrentTurnDisplayLabel(view)}
+          />
+          <InfoTile
+            compact={isTrickPlayStatus}
+            label="Dealer"
+            value={getDealerDisplayLabel(view)}
+          />
+          <InfoTile
+            compact={isTrickPlayStatus}
+            label="Current bid"
+            value={view.currentBidLabel}
+          />
+          <InfoTile
+            compact={isTrickPlayStatus}
+            label="Trump"
+            value={view.currentTrumpLabel}
+          />
+          <InfoTile
+            compact={isTrickPlayStatus}
+            label="State"
+            value={view.snapshotVersionLabel}
+          />
+          <InfoTile
+            compact={isTrickPlayStatus}
+            label="Live"
+            value={formatLiveStatus(game.liveStatus, game.liveError)}
+          />
+        </View>
       </View>
 
       {view.lastCompletedHand ? (
@@ -121,56 +174,46 @@ export function MultiplayerActiveGamePanel({
 
       <View style={styles.tablePanel}>
         <View style={styles.tableHeader}>
-          <Text style={styles.panelTitle}>Table</Text>
-          <Text style={styles.meta}>Hand {view.handNumber}</Text>
-        </View>
-        <View style={styles.seatGrid}>
-          {view.seatSummaries.map((seat) => (
-            <View
-              key={seat.seatIndex}
-              style={[
-                styles.seatCard,
-                seat.isViewer ? styles.viewerSeatCard : null,
-                seat.isCurrentTurn ? styles.currentSeatCard : null
-              ]}
-            >
-              <Text style={styles.seatLabel}>
-                {multiplayerSeatLabels[seat.seatIndex]}
-                {seat.isDealer ? " · Dealer" : ""}
-              </Text>
-              <Text numberOfLines={1} style={styles.seatName}>
-                {seat.occupied ? seat.displayName : "Empty"}
-              </Text>
-              <Text style={styles.meta}>
-                {seat.handCount === null
-                  ? "Cards hidden"
-                  : `${seat.handCount} dominoes`}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.tablePanel}>
-        <View style={styles.tableHeader}>
-          <Text style={styles.panelTitle}>Current Trick</Text>
+          <Text style={styles.panelTitle}>Current trick</Text>
           <Text style={styles.meta}>{view.currentTrickLeadLabel}</Text>
         </View>
-        {view.currentTrickPlays.length > 0 ? (
-          <View style={styles.trickPlayList}>
-            {view.currentTrickPlays.map((play) => (
-              <View
-                key={`${play.seatIndex}-${play.domino.key}`}
-                style={styles.trickPlayRow}
-              >
-                <Text style={styles.trickPlaySeat}>{play.seatLabel}</Text>
-                <MultiplayerDominoTile domino={play.domino} />
-              </View>
-            ))}
-          </View>
-        ) : (
+        <View style={styles.trickMetaRow}>
+          <Text style={styles.meta}>
+            Leader: {getCurrentTrickLeaderDisplayLabel(view)}
+          </Text>
+          <Text style={styles.meta}>
+            Led: {getCurrentTrickLedLabel(view)}
+          </Text>
+        </View>
+        <View style={styles.trickTable} testID="multiplayer-game-trick-table">
+          <MultiplayerTrickSeatSlot
+            play={currentTrickPlayBySeat.get("SEAT_2")}
+            positionStyle={styles.trickSeatTop}
+            seat={getSeatSummary(view, "SEAT_2")}
+            testID="multiplayer-game-trick-seat-top"
+          />
+          <MultiplayerTrickSeatSlot
+            play={currentTrickPlayBySeat.get("SEAT_1")}
+            positionStyle={styles.trickSeatLeft}
+            seat={getSeatSummary(view, "SEAT_1")}
+            testID="multiplayer-game-trick-seat-left"
+          />
+          <MultiplayerTrickSeatSlot
+            play={currentTrickPlayBySeat.get("SEAT_3")}
+            positionStyle={styles.trickSeatRight}
+            seat={getSeatSummary(view, "SEAT_3")}
+            testID="multiplayer-game-trick-seat-right"
+          />
+          <MultiplayerTrickSeatSlot
+            play={currentTrickPlayBySeat.get("SEAT_0")}
+            positionStyle={styles.trickSeatBottom}
+            seat={getSeatSummary(view, "SEAT_0")}
+            testID="multiplayer-game-trick-seat-bottom"
+          />
+        </View>
+        {view.currentTrickPlays.length === 0 ? (
           <Text style={styles.copy}>No dominoes played yet.</Text>
-        )}
+        ) : null}
       </View>
 
       <View style={styles.tablePanel}>
@@ -294,6 +337,43 @@ export function MultiplayerActiveGamePanel({
         )}
       </View>
 
+      <View style={styles.tablePanel}>
+        <Text style={styles.panelTitle}>Activity</Text>
+        <EventFeed entries={activityEntries} />
+      </View>
+
+      <View style={styles.tablePanel}>
+        <View style={styles.tableHeader}>
+          <Text style={styles.panelTitle}>Table</Text>
+          <Text style={styles.meta}>Hand {view.handNumber}</Text>
+        </View>
+        <View style={styles.seatGrid}>
+          {view.seatSummaries.map((seat) => (
+            <View
+              key={seat.seatIndex}
+              style={[
+                styles.seatCard,
+                seat.isViewer ? styles.viewerSeatCard : null,
+                seat.isCurrentTurn ? styles.currentSeatCard : null
+              ]}
+            >
+              <Text style={styles.seatLabel}>
+                {multiplayerSeatLabels[seat.seatIndex]}
+                {seat.isDealer ? " · Dealer" : ""}
+              </Text>
+              <Text numberOfLines={1} style={styles.seatName}>
+                {seat.occupied ? seat.displayName : "Empty"}
+              </Text>
+              <Text style={styles.meta}>
+                {seat.handCount === null
+                  ? "Cards hidden"
+                  : `${seat.handCount} dominoes`}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
       {game.error ? (
         <Pressable onPress={game.clearError} style={styles.errorBanner}>
           <AlertCircle color={palette.red} size={18} />
@@ -305,18 +385,175 @@ export function MultiplayerActiveGamePanel({
 }
 
 function InfoTile({
+  compact = false,
   label,
   value
 }: {
+  readonly compact?: boolean;
   readonly label: string;
   readonly value: string;
 }) {
   return (
-    <View style={styles.infoTile}>
+    <View style={[styles.infoTile, compact ? styles.compactInfoTile : null]}>
       <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+      <Text style={[styles.infoValue, compact ? styles.compactInfoValue : null]}>
+        {value}
+      </Text>
     </View>
   );
+}
+
+function MultiplayerTrickSeatSlot({
+  play,
+  positionStyle,
+  seat,
+  testID
+}: {
+  readonly play: MultiplayerActiveTrickPlay | undefined;
+  readonly positionStyle: StyleProp<ViewStyle>;
+  readonly seat: MultiplayerActiveSeatSummary | undefined;
+  readonly testID: string;
+}) {
+  const displayName = getSeatDisplayName(seat);
+
+  return (
+    <View style={[styles.trickSeatSlot, positionStyle]} testID={testID}>
+      <Text numberOfLines={1} style={styles.trickSeatName}>
+        {displayName}
+      </Text>
+      {play ? (
+        <MultiplayerDominoTile
+          accessibilityLabel={`${displayName} played ${play.domino.key}`}
+          domino={play.domino}
+          size="small"
+        />
+      ) : (
+        <Text style={styles.trickWaitingText}>Waiting</Text>
+      )}
+    </View>
+  );
+}
+
+function createMultiplayerActivityEntries(
+  view: MultiplayerActiveGameView
+): readonly {
+  readonly id: string;
+  readonly text: string;
+}[] {
+  const entries: {
+    readonly id: string;
+    readonly text: string;
+  }[] = [
+    {
+      id: `phase-${view.handNumber}-${view.phase}`,
+      text: `Hand ${view.handNumber}: ${view.phaseTitle}.`
+    }
+  ];
+
+  if (view.currentBidLabel !== "No bid yet") {
+    entries.push({
+      id: `bid-${view.currentBidLabel}`,
+      text: `Current bid ${view.currentBidLabel}.`
+    });
+  }
+
+  if (view.currentTrumpLabel !== "Not called") {
+    entries.push({
+      id: `trump-${view.currentTrumpLabel}`,
+      text: `${view.currentTrumpLabel} trump.`
+    });
+  }
+
+  for (const play of view.currentTrickPlays) {
+    const seat = getSeatSummary(view, play.seatIndex);
+
+    entries.push({
+      id: `play-${play.seatIndex}-${play.domino.key}`,
+      text: `${getSeatDisplayName(seat)} played ${play.domino.key}.`
+    });
+  }
+
+  if (view.lastCompletedHand) {
+    entries.push({
+      id: `last-hand-${view.lastCompletedHand.handNumber}`,
+      text: `${view.lastCompletedHand.outcomeLabel}. ${view.lastCompletedHand.marksAwardLabel}.`
+    });
+  }
+
+  return entries.slice(-6);
+}
+
+function getLatestActivityText(
+  entries: readonly {
+    readonly text: string;
+  }[]
+): string {
+  return entries.at(-1)?.text ?? "No activity yet.";
+}
+
+function getSeatSummary(
+  view: MultiplayerActiveGameView,
+  seatIndex: AppSyncSeatIndex
+): MultiplayerActiveSeatSummary | undefined {
+  return view.seatSummaries.find((seat) => seat.seatIndex === seatIndex);
+}
+
+function getSeatDisplayName(
+  seat: MultiplayerActiveSeatSummary | undefined
+): string {
+  if (!seat || !seat.occupied) {
+    return "Empty";
+  }
+
+  return seat.displayName;
+}
+
+function getStatusSeatDisplayName(
+  seat: MultiplayerActiveSeatSummary | undefined,
+  fallback: string
+): string {
+  if (!seat || !seat.occupied) {
+    return fallback;
+  }
+
+  return seat.isViewer ? `${seat.displayName} (You)` : seat.displayName;
+}
+
+function getCurrentTurnDisplayLabel(view: MultiplayerActiveGameView): string {
+  const currentSeat = view.seatSummaries.find((seat) => seat.isCurrentTurn);
+
+  return getStatusSeatDisplayName(currentSeat, view.currentTurnLabel);
+}
+
+function getDealerDisplayLabel(view: MultiplayerActiveGameView): string {
+  const dealerSeat = view.seatSummaries.find((seat) => seat.isDealer);
+
+  return getStatusSeatDisplayName(dealerSeat, view.dealerLabel);
+}
+
+function getCurrentTrickLeaderDisplayLabel(
+  view: MultiplayerActiveGameView
+): string {
+  const leaderSeatIndex = view.currentTrickPlays[0]?.seatIndex ??
+    (view.phase === "trickPlay"
+      ? view.seatSummaries.find((seat) => seat.isCurrentTurn)?.seatIndex
+      : undefined);
+
+  if (!leaderSeatIndex) {
+    return "Waiting";
+  }
+
+  return getSeatDisplayName(getSeatSummary(view, leaderSeatIndex));
+}
+
+function getCurrentTrickLedLabel(view: MultiplayerActiveGameView): string {
+  if (view.currentTrickPlays.length === 0) {
+    return "Not led yet";
+  }
+
+  return view.currentTrickLeadLabel.endsWith(" led")
+    ? view.currentTrickLeadLabel.slice(0, -" led".length)
+    : view.currentTrickLeadLabel;
 }
 
 function formatLiveStatus(status: string, error: string | null): string {
@@ -341,33 +578,39 @@ function formatLiveStatus(status: string, error: string | null): string {
 }
 
 function MultiplayerDominoTile({
+  accessibilityLabel,
   disabled = false,
   domino,
   onPress,
-  playable = false
+  playable = false,
+  size = "regular"
 }: {
+  readonly accessibilityLabel?: string;
   readonly disabled?: boolean;
   readonly domino: MultiplayerDomino;
   readonly onPress?: () => void;
   readonly playable?: boolean;
+  readonly size?: "regular" | "small";
 }) {
+  const isSmall = size === "small";
   const tileStyle = [
     styles.dominoTile,
+    isSmall ? styles.dominoTileSmall : null,
     playable ? styles.playableDominoTile : null,
     disabled ? styles.disabledTile : null
   ];
   const content = (
     <>
-      <DominoHalf pip={domino.high} />
-      <View style={styles.dominoDivider} />
-      <DominoHalf pip={domino.low} />
+      <DominoHalf pip={domino.high} size={size} />
+      <View style={[styles.dominoDivider, isSmall ? styles.dominoDividerSmall : null]} />
+      <DominoHalf pip={domino.low} size={size} />
     </>
   );
 
   if (onPress) {
     return (
       <Pressable
-        accessibilityLabel={`Play domino ${domino.key}`}
+        accessibilityLabel={accessibilityLabel ?? `Play domino ${domino.key}`}
         accessibilityRole="button"
         disabled={disabled}
         onPress={onPress}
@@ -383,7 +626,7 @@ function MultiplayerDominoTile({
 
   return (
     <View
-      accessibilityLabel={`Domino ${domino.key}`}
+      accessibilityLabel={accessibilityLabel ?? `Domino ${domino.key}`}
       accessibilityRole="image"
       style={tileStyle}
     >
@@ -392,14 +635,23 @@ function MultiplayerDominoTile({
   );
 }
 
-function DominoHalf({ pip }: { readonly pip: number }) {
+function DominoHalf({
+  pip,
+  size = "regular"
+}: {
+  readonly pip: number;
+  readonly size?: "regular" | "small";
+}) {
   const filledCells = pipCellsByValue[pip] ?? [];
+  const isSmall = size === "small";
 
   return (
-    <View style={styles.dominoHalf}>
+    <View style={[styles.dominoHalf, isSmall ? styles.dominoHalfSmall : null]}>
       {Array.from({ length: 9 }, (_value, cell) => (
         <View key={cell} style={styles.pipCell}>
-          {filledCells.includes(cell) ? <View style={styles.dominoPip} /> : null}
+          {filledCells.includes(cell) ? (
+            <View style={[styles.dominoPip, isSmall ? styles.dominoPipSmall : null]} />
+          ) : null}
         </View>
       ))}
     </View>
@@ -482,6 +734,24 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm
   },
+  compactInfoGrid: {
+    gap: spacing.xs
+  },
+  compactInfoTile: {
+    minWidth: 116,
+    padding: spacing.xs
+  },
+  compactInfoValue: {
+    fontSize: 14,
+    lineHeight: 18
+  },
+  compactPanel: {
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  compactPanelTitle: {
+    fontSize: 17
+  },
   copy: {
     color: palette.muted,
     fontSize: 14,
@@ -501,22 +771,37 @@ const styles = StyleSheet.create({
     opacity: 0.24,
     width: "100%"
   },
+  dominoDividerSmall: {
+    height: 32,
+    width: 1
+  },
   dominoGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
   },
   dominoHalf: {
+    alignItems: "center",
     flexDirection: "row",
     flexWrap: "wrap",
     height: 34,
+    justifyContent: "center",
     width: 42
+  },
+  dominoHalfSmall: {
+    height: 32,
+    width: 32
   },
   dominoPip: {
     backgroundColor: palette.ink,
     borderRadius: 4,
     height: 7,
     width: 7
+  },
+  dominoPipSmall: {
+    borderRadius: 3,
+    height: 6,
+    width: 6
   },
   dominoTile: {
     alignItems: "center",
@@ -535,6 +820,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 4,
     width: 58
+  },
+  dominoTileSmall: {
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 3,
+    height: 44,
+    padding: 3,
+    shadowOpacity: 0,
+    width: 82
   },
   errorBanner: {
     alignItems: "center",
@@ -569,7 +863,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase"
   },
   infoTile: {
-    backgroundColor: palette.surface,
+    backgroundColor: palette.surfaceAlt,
     borderColor: palette.border,
     borderRadius: radius.sm,
     borderWidth: 1,
@@ -611,9 +905,9 @@ const styles = StyleSheet.create({
   },
   pipCell: {
     alignItems: "center",
-    height: 11,
+    height: "33.333%",
     justifyContent: "center",
-    width: 14
+    width: "33.333%"
   },
   scoreMarks: {
     color: palette.crimson,
@@ -641,6 +935,9 @@ const styles = StyleSheet.create({
   scoreboard: {
     flexDirection: "row",
     gap: spacing.sm
+  },
+  sectionHeader: {
+    gap: spacing.xs
   },
   seatCard: {
     backgroundColor: palette.surfaceAlt,
@@ -679,6 +976,8 @@ const styles = StyleSheet.create({
   tableHeader: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
     justifyContent: "space-between"
   },
   tablePanel: {
@@ -701,19 +1000,55 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900"
   },
-  trickPlayList: {
-    gap: spacing.sm
-  },
-  trickPlayRow: {
+  trickMetaRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: spacing.sm
+    flexWrap: "wrap",
+    gap: spacing.md
   },
-  trickPlaySeat: {
-    color: palette.ink,
-    flex: 1,
-    fontSize: 14,
+  trickSeatBottom: {
+    bottom: 0,
+    left: "50%",
+    transform: [{ translateX: -56 }]
+  },
+  trickSeatLeft: {
+    left: 0,
+    top: "50%",
+    transform: [{ translateY: -42 }]
+  },
+  trickSeatName: {
+    color: palette.paperMuted,
+    fontSize: 11,
     fontWeight: "900"
+  },
+  trickSeatRight: {
+    right: 0,
+    top: "50%",
+    transform: [{ translateY: -42 }]
+  },
+  trickSeatSlot: {
+    alignItems: "center",
+    gap: spacing.xs,
+    position: "absolute",
+    width: 112
+  },
+  trickSeatTop: {
+    left: "50%",
+    top: 0,
+    transform: [{ translateX: -56 }]
+  },
+  trickTable: {
+    alignSelf: "center",
+    backgroundColor: palette.felt,
+    borderRadius: radius.md,
+    minHeight: 220,
+    position: "relative",
+    width: "100%"
+  },
+  trickWaitingText: {
+    color: palette.paperMuted,
+    fontSize: 13,
+    fontWeight: "700"
   },
   trumpGrid: {
     flexDirection: "row",

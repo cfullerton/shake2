@@ -239,6 +239,89 @@ test("active game panel submits legal domino plays", async () => {
   });
 });
 
+test("active game panel renders current trick as a player-name table", async () => {
+  const hand = createPrivateHand();
+  const client = {
+    getGameSnapshot: jest.fn(async () => createTrickPlaySnapshot()),
+    getMyPrivateHand: jest.fn(async () => hand),
+    submitBid: jest.fn(),
+    submitDomino: jest.fn(),
+    submitTrump: jest.fn()
+  } as unknown as MultiplayerLobbyGameClient;
+  const view = render(
+    <MultiplayerActiveGamePanel
+      actorId="actor-sub"
+      client={client}
+      initialRoom={createRoomView({
+        seatDisplayNames: ["Avery", "Blake", "Casey", "Devon"]
+      })}
+      initialSnapshot={createTrickPlaySnapshot({
+        redactedState: {
+          contract: {
+            declarer: 1,
+            kind: "standardNumeric",
+            trump: {
+              kind: "pip",
+              suit: "sixes"
+            }
+          },
+          currentTrick: {
+            ledDomino: {
+              high: 6,
+              low: 6
+            },
+            ledSuit: "sixes",
+            leader: 1,
+            playedDominoes: [
+              {
+                domino: {
+                  high: 6,
+                  low: 6
+                },
+                seat: 1
+              },
+              {
+                domino: {
+                  high: 6,
+                  low: 5
+                },
+                seat: 2
+              }
+            ]
+          },
+          dealer: 0,
+          handNumber: 1,
+          phase: "trickPlay"
+        }
+      })}
+      session={createSession()}
+    />
+  );
+
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledWith({
+      gameId: "game-1",
+      seatIndex: "SEAT_1"
+    });
+  });
+
+  expect(view.getByText("Table status")).toBeTruthy();
+  expect(view.getByText("Current trick")).toBeTruthy();
+  expect(view.getByText("Current bid")).toBeTruthy();
+  expect(view.getByText("Activity")).toBeTruthy();
+  expect(view.getByTestId("multiplayer-game-trick-table")).toBeTruthy();
+  expect(view.getByTestId("multiplayer-game-trick-seat-top")).toBeTruthy();
+  expect(view.getByTestId("multiplayer-game-trick-seat-left")).toBeTruthy();
+  expect(view.getByTestId("multiplayer-game-trick-seat-right")).toBeTruthy();
+  expect(view.getByTestId("multiplayer-game-trick-seat-bottom")).toBeTruthy();
+  expect(view.getAllByText("Avery").length).toBeGreaterThan(0);
+  expect(view.getAllByText("Blake").length).toBeGreaterThan(0);
+  expect(view.getAllByText("Casey").length).toBeGreaterThan(0);
+  expect(view.getAllByText("Devon").length).toBeGreaterThan(0);
+  expect(view.getByLabelText("Blake played 6-6")).toBeTruthy();
+  expect(view.getByLabelText("Casey played 6-5")).toBeTruthy();
+});
+
 test("active game panel lets the host deal the next multiplayer hand", async () => {
   const hand = {
     ...createPrivateHand(),
@@ -765,7 +848,18 @@ function createCompletedHandSummary(): NonNullable<
   };
 }
 
-function createRoomView(): MultiplayerRoomView {
+function createRoomView(
+  options: {
+    readonly seatDisplayNames?: readonly [string, string, string, string];
+  } = {}
+): MultiplayerRoomView {
+  const seatDisplayNames = options.seatDisplayNames ?? [
+    "North",
+    "East",
+    "South",
+    "West"
+  ];
+
   return {
     createdAt: "2026-05-31T00:00:00.000Z",
     gameId: "game-1",
@@ -776,28 +870,28 @@ function createRoomView(): MultiplayerRoomView {
     roomId: "room-1",
     seats: [
       {
-        displayName: "North",
+        displayName: seatDisplayNames[0],
         isBot: false,
         isViewer: false,
         occupied: true,
         seatIndex: "SEAT_0"
       },
       {
-        displayName: "East",
+        displayName: seatDisplayNames[1],
         isBot: false,
         isViewer: true,
         occupied: true,
         seatIndex: "SEAT_1"
       },
       {
-        displayName: "South",
+        displayName: seatDisplayNames[2],
         isBot: false,
         isViewer: false,
         occupied: true,
         seatIndex: "SEAT_2"
       },
       {
-        displayName: "West",
+        displayName: seatDisplayNames[3],
         isBot: false,
         isViewer: false,
         occupied: true,
