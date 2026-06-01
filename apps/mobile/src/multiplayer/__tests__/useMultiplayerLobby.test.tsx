@@ -10,8 +10,11 @@ import {
   type MultiplayerLobbyController,
   type MultiplayerLobbyDependencies
 } from "../useMultiplayerLobby";
-import type { CognitoAuthSession } from "../auth";
-import { CognitoNewPasswordRequiredError } from "../auth";
+import type { CognitoAuthSession, CognitoSignUpResult } from "../auth";
+import {
+  CognitoNewPasswordRequiredError,
+  CognitoUserNotConfirmedError
+} from "../auth";
 import type { MobileMultiplayerConfig } from "../config";
 import type {
   MultiplayerRoomView,
@@ -38,9 +41,10 @@ test("normalizes lobby form values before room requests", async () => {
     }
   };
   const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
     signIn: jest.fn(async () => session),
-    signUp: jest.fn(async () => undefined)
+    signUp: jest.fn(async () => createSignUpResult("smoke-user"))
   };
   const roomClient: MultiplayerLobbyClient = {
     addBot: jest.fn(async () => room),
@@ -98,18 +102,6 @@ test("normalizes lobby form values before room requests", async () => {
     password: "temporary-password",
     username: "smoke-user"
   });
-  await act(async () => {
-    await harness.current.signUp({
-      email: "smoke@example.com",
-      password: "temporary-password",
-      username: "smoke-user"
-    });
-  });
-  expect(authClient.signUp).toHaveBeenCalledWith({
-    email: "smoke@example.com",
-    password: "temporary-password",
-    username: "smoke-user"
-  });
   expect(roomClient.createRoom).toHaveBeenCalledWith({
     displayName: "Player"
   });
@@ -133,6 +125,123 @@ test("normalizes lobby form values before room requests", async () => {
   expect(harness.current.startedGame).toBe(started);
 });
 
+test("starts account confirmation after sign-up and signs in after verification", async () => {
+  const session = createSession();
+  const room = createRoomView();
+  const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
+    completeNewPassword: jest.fn(async () => session),
+    signIn: jest.fn(async () => session),
+    signUp: jest.fn(async () =>
+      createSignUpResult("new-player", {
+        deliveryDestination: "n***@example.com",
+        deliveryMedium: "EMAIL"
+      })
+    )
+  };
+  const roomClient: MultiplayerLobbyClient = {
+    addBot: jest.fn(async () => room),
+    createRoom: jest.fn(async () => room),
+    getRoom: jest.fn(async () => room),
+    joinRoom: jest.fn(async () => room),
+    listPublicRooms: jest.fn(async () => []),
+    startGame: jest.fn(async () => ({
+      room,
+      snapshot: createSnapshot()
+    })),
+    takeSeat: jest.fn(async () => room)
+  };
+  const harness = renderHookHarness({
+    createAuthClient: () => authClient,
+    createRoomClient: () => roomClient,
+    readConfig: () => createConfig()
+  });
+
+  await act(async () => {
+    await harness.current.signUp({
+      email: " new-player@example.com ",
+      password: "secure-password",
+      username: " new-player "
+    });
+  });
+
+  expect(authClient.signUp).toHaveBeenCalledWith({
+    email: "new-player@example.com",
+    password: "secure-password",
+    username: "new-player"
+  });
+  expect(harness.current.pendingSignUpConfirmation).toEqual({
+    deliveryDestination: "n***@example.com",
+    deliveryMedium: "EMAIL",
+    username: "new-player"
+  });
+  expect(harness.current.session).toBeNull();
+
+  await act(async () => {
+    await harness.current.confirmSignUp({
+      confirmationCode: " 123456 ",
+      password: "secure-password",
+      username: " new-player "
+    });
+  });
+
+  expect(authClient.confirmSignUp).toHaveBeenCalledWith({
+    confirmationCode: "123456",
+    username: "new-player"
+  });
+  expect(authClient.signIn).toHaveBeenCalledWith({
+    password: "secure-password",
+    username: "new-player"
+  });
+  expect(harness.current.pendingSignUpConfirmation).toBeNull();
+  expect(harness.current.session).toBe(session);
+});
+
+test("routes unconfirmed sign-ins to account verification", async () => {
+  const session = createSession();
+  const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
+    completeNewPassword: jest.fn(async () => session),
+    signIn: jest.fn(async () => {
+      throw new CognitoUserNotConfirmedError("new-player");
+    }),
+    signUp: jest.fn(async () => createSignUpResult("new-player"))
+  };
+  const harness = renderHookHarness({
+    createAuthClient: () => authClient,
+    createRoomClient: () => ({
+      addBot: jest.fn(async () => createRoomView()),
+      createRoom: jest.fn(async () => createRoomView()),
+      getRoom: jest.fn(async () => createRoomView()),
+      joinRoom: jest.fn(async () => createRoomView()),
+      listPublicRooms: jest.fn(async () => []),
+      startGame: jest.fn(async () => ({
+        room: createRoomView(),
+        snapshot: createSnapshot()
+      })),
+      takeSeat: jest.fn(async () => createRoomView())
+    }),
+    readConfig: () => createConfig()
+  });
+
+  await act(async () => {
+    await harness.current.signIn({
+      password: "secure-password",
+      username: " new-player "
+    });
+  });
+
+  expect(authClient.signIn).toHaveBeenCalledWith({
+    password: "secure-password",
+    username: "new-player"
+  });
+  expect(harness.current.error).toBeNull();
+  expect(harness.current.pendingSignUpConfirmation).toEqual({
+    username: "new-player"
+  });
+  expect(harness.current.session).toBeNull();
+});
+
 test("refreshes room state and starts non-hosts when the host starts", async () => {
   const session = createSession();
   const readyRoom = createRoomView({
@@ -146,9 +255,10 @@ test("refreshes room state and starts non-hosts when the host starts", async () 
   };
   const snapshot = createSnapshot();
   const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
     signIn: jest.fn(async () => session),
-    signUp: jest.fn(async () => undefined)
+    signUp: jest.fn(async () => createSignUpResult("smoke-user"))
   };
   const roomClient: MultiplayerLobbyClient = {
     addBot: jest.fn(async () => readyRoom),
@@ -204,9 +314,10 @@ test("refreshes public room listings", async () => {
     visibility: "public"
   });
   const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
     signIn: jest.fn(async () => session),
-    signUp: jest.fn(async () => undefined)
+    signUp: jest.fn(async () => createSignUpResult("smoke-user"))
   };
   const roomClient: MultiplayerLobbyClient = {
     addBot: jest.fn(async () => publicRoom),
@@ -260,9 +371,10 @@ test("startNewGame keeps the session and clears the completed game", async () =>
     })
   };
   const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
     signIn: jest.fn(async () => session),
-    signUp: jest.fn(async () => undefined)
+    signUp: jest.fn(async () => createSignUpResult("smoke-user"))
   };
   const roomClient: MultiplayerLobbyClient = {
     addBot: jest.fn(async () => room),
@@ -328,6 +440,7 @@ test("reports missing multiplayer config without creating clients", async () => 
 test("completes Cognito new-password challenges", async () => {
   const session = createSession();
   const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
     signIn: jest.fn(async () => {
       throw new CognitoNewPasswordRequiredError({
@@ -336,7 +449,7 @@ test("completes Cognito new-password challenges", async () => {
         username: "canonical-user"
       });
     }),
-    signUp: jest.fn(async () => undefined)
+    signUp: jest.fn(async () => createSignUpResult("smoke-user"))
   };
   const roomClient: MultiplayerLobbyClient = {
     addBot: jest.fn(async () => createRoomView()),
@@ -442,6 +555,17 @@ function createSession(): CognitoAuthSession {
     idToken: "id-token",
     tokenType: "Bearer",
     username: "smoke-user"
+  };
+}
+
+function createSignUpResult(
+  username: string,
+  overrides: Partial<CognitoSignUpResult> = {}
+): CognitoSignUpResult {
+  return {
+    userConfirmed: false,
+    username,
+    ...overrides
   };
 }
 

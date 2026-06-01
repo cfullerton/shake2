@@ -89,6 +89,40 @@ test("lobby screen creates accounts with username, email, and matching passwords
   });
 });
 
+test("lobby screen verifies pending account confirmations", async () => {
+  const confirmSignUp = jest.fn(async () => undefined);
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        confirmSignUp,
+        pendingSignUpConfirmation: {
+          deliveryDestination: "n***@example.com",
+          deliveryMedium: "EMAIL",
+          username: "new-player"
+        },
+        session: null
+      })}
+    />
+  );
+
+  expect(view.getAllByText("Verify Account").length).toBeGreaterThan(0);
+  expect(
+    view.getByText("Verification code sent by email to n***@example.com.")
+  ).toBeTruthy();
+
+  fireEvent.changeText(view.getByLabelText("Verification Code"), "123456");
+  const verifyButtons = view.getAllByText("Verify Account");
+  fireEvent.press(verifyButtons[verifyButtons.length - 1]!);
+
+  await waitFor(() => {
+    expect(confirmSignUp).toHaveBeenCalledWith({
+      confirmationCode: "123456",
+      password: "",
+      username: "new-player"
+    });
+  });
+});
+
 test("lobby screen returns account creation fields to sign-in mode", () => {
   const view = render(
     <MultiplayerLobbyContent
@@ -300,6 +334,7 @@ function createLobbyController(
     busyAction: null,
     addBot: jest.fn(async () => undefined),
     clearError: jest.fn(),
+    confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => undefined),
     configError: null,
     configured: true,
@@ -308,6 +343,7 @@ function createLobbyController(
     gameClient: null,
     joinRoom: jest.fn(async () => undefined),
     newPasswordChallenge: null,
+    pendingSignUpConfirmation: null,
     publicRooms: [],
     refreshPublicRooms: jest.fn(async () => undefined),
     refreshRoom: jest.fn(async () => undefined),

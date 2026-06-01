@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  type CognitoConfirmSignUpInput,
   CognitoNewPasswordRequiredError,
   CognitoPasswordAuthClient,
   type CognitoAuthSession,
@@ -8,6 +9,8 @@ import {
   type CognitoNewPasswordChallenge,
   type CognitoPasswordSignInInput,
   type CognitoSignUpInput,
+  type CognitoSignUpResult,
+  CognitoUserNotConfirmedError,
   StaticAuthSessionProvider
 } from "./auth";
 import {
@@ -35,6 +38,7 @@ import type {
 
 export type MultiplayerLobbyAction =
   | "addBot"
+  | "confirmSignUp"
   | "completeNewPassword"
   | "createRoom"
   | "joinRoom"
@@ -58,11 +62,12 @@ export interface MultiplayerLobbyClient {
 export type MultiplayerLobbyGameClient = MultiplayerGameClient;
 
 export interface MultiplayerLobbyAuthClient {
+  confirmSignUp(input: CognitoConfirmSignUpInput): Promise<void>;
   completeNewPassword(
     input: CognitoCompleteNewPasswordInput
   ): Promise<CognitoAuthSession>;
   signIn(input: CognitoPasswordSignInInput): Promise<CognitoAuthSession>;
-  signUp(input: CognitoSignUpInput): Promise<void>;
+  signUp(input: CognitoSignUpInput): Promise<CognitoSignUpResult>;
 }
 
 export interface MultiplayerLobbyCompleteNewPasswordInput {
@@ -90,6 +95,18 @@ export interface MultiplayerLobbySignUpInput {
   readonly username: string;
 }
 
+export interface MultiplayerLobbyConfirmSignUpInput {
+  readonly confirmationCode: string;
+  readonly password?: string;
+  readonly username: string;
+}
+
+export interface MultiplayerLobbySignUpConfirmation {
+  readonly deliveryDestination?: string;
+  readonly deliveryMedium?: string;
+  readonly username: string;
+}
+
 export interface MultiplayerLobbyState {
   readonly busyAction: MultiplayerLobbyAction | null;
   readonly configError: string | null;
@@ -97,6 +114,7 @@ export interface MultiplayerLobbyState {
   readonly error: string | null;
   readonly gameClient: MultiplayerLobbyGameClient | null;
   readonly newPasswordChallenge: CognitoNewPasswordChallenge | null;
+  readonly pendingSignUpConfirmation: MultiplayerLobbySignUpConfirmation | null;
   readonly publicRooms: readonly MultiplayerRoomView[];
   readonly room: MultiplayerRoomView | null;
   readonly session: CognitoAuthSession | null;
@@ -105,6 +123,7 @@ export interface MultiplayerLobbyState {
 
 export interface MultiplayerLobbyController extends MultiplayerLobbyState {
   clearError(): void;
+  confirmSignUp(input: MultiplayerLobbyConfirmSignUpInput): Promise<void>;
   completeNewPassword(
     input: MultiplayerLobbyCompleteNewPasswordInput
   ): Promise<void>;
@@ -160,6 +179,8 @@ export function useMultiplayerLobby(
     useState<MultiplayerLobbyGameClient | null>(null);
   const [newPasswordChallenge, setNewPasswordChallenge] =
     useState<CognitoNewPasswordChallenge | null>(null);
+  const [pendingSignUpConfirmation, setPendingSignUpConfirmation] =
+    useState<MultiplayerLobbySignUpConfirmation | null>(null);
   const [publicRooms, setPublicRooms] =
     useState<readonly MultiplayerRoomView[]>([]);
   const [room, setRoom] = useState<MultiplayerRoomView | null>(null);
@@ -209,9 +230,13 @@ export function useMultiplayerLobby(
       const authClient = (dependencies.createAuthClient ?? createDefaultAuthClient)(
         config
       );
+      const username = input.username.trim();
 
       try {
-        const nextSession = await authClient.signIn(input);
+        const nextSession = await authClient.signIn({
+          password: input.password,
+          username
+        });
 
         completeSignIn(config, nextSession);
       } catch (caught) {
@@ -219,6 +244,21 @@ export function useMultiplayerLobby(
           setClient(null);
           setGameClient(null);
           setNewPasswordChallenge(caught.challenge);
+          setPendingSignUpConfirmation(null);
+          setPublicRooms([]);
+          setRoom(null);
+          setSession(null);
+          setStartedGame(null);
+          return;
+        }
+
+        if (caught instanceof CognitoUserNotConfirmedError) {
+          setClient(null);
+          setGameClient(null);
+          setNewPasswordChallenge(null);
+          setPendingSignUpConfirmation({
+            username: caught.username
+          });
           setPublicRooms([]);
           setRoom(null);
           setSession(null);
@@ -237,12 +277,60 @@ export function useMultiplayerLobby(
       const authClient = (dependencies.createAuthClient ?? createDefaultAuthClient)(
         config
       );
+      const username = input.username.trim();
 
-      await authClient.signUp({
+      const result = await authClient.signUp({
         email: input.email.trim(),
         password: input.password,
-        username: input.username.trim()
+        username
       });
+
+      if (result.userConfirmed) {
+        const nextSession = await authClient.signIn({
+          password: input.password,
+          username
+        });
+
+        completeSignIn(config, nextSession);
+        return;
+      }
+
+      setClient(null);
+      setGameClient(null);
+      setNewPasswordChallenge(null);
+      setPendingSignUpConfirmation(toSignUpConfirmation(result));
+      setPublicRooms([]);
+      setRoom(null);
+      setSession(null);
+      setStartedGame(null);
+    });
+  }
+
+  async function confirmSignUp(
+    input: MultiplayerLobbyConfirmSignUpInput
+  ): Promise<void> {
+    await runAction("confirmSignUp", async () => {
+      const config = requireResolvedConfig(configState);
+      const authClient = (dependencies.createAuthClient ?? createDefaultAuthClient)(
+        config
+      );
+      const username = input.username.trim();
+
+      await authClient.confirmSignUp({
+        confirmationCode: input.confirmationCode.trim(),
+        username
+      });
+
+      setPendingSignUpConfirmation(null);
+
+      if (input.password && input.password.length > 0) {
+        const nextSession = await authClient.signIn({
+          password: input.password,
+          username
+        });
+
+        completeSignIn(config, nextSession);
+      }
     });
   }
 
@@ -462,6 +550,7 @@ export function useMultiplayerLobby(
     setClient(nextClient);
     setGameClient(nextGameClient);
     setNewPasswordChallenge(null);
+    setPendingSignUpConfirmation(null);
     setPublicRooms([]);
     setRoom(null);
     setSession(nextSession);
@@ -472,6 +561,7 @@ export function useMultiplayerLobby(
     addBot,
     busyAction,
     clearError: () => setError(null),
+    confirmSignUp,
     completeNewPassword,
     configError: configState.error,
     configured,
@@ -480,6 +570,7 @@ export function useMultiplayerLobby(
     gameClient,
     joinRoom,
     newPasswordChallenge,
+    pendingSignUpConfirmation,
     publicRooms,
     refreshPublicRooms,
     refreshRoom,
@@ -583,6 +674,18 @@ function requireNewPasswordChallenge(
   }
 
   return challenge;
+}
+
+function toSignUpConfirmation(
+  result: CognitoSignUpResult
+): MultiplayerLobbySignUpConfirmation {
+  return {
+    ...(result.deliveryDestination
+      ? { deliveryDestination: result.deliveryDestination }
+      : {}),
+    ...(result.deliveryMedium ? { deliveryMedium: result.deliveryMedium } : {}),
+    username: result.username
+  };
 }
 
 function toLobbyErrorMessage(error: unknown): string {

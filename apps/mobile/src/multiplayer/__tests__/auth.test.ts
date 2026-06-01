@@ -2,6 +2,7 @@ import {
   CognitoAuthError,
   CognitoNewPasswordRequiredError,
   CognitoPasswordAuthClient,
+  CognitoUserNotConfirmedError,
   StaticAuthSessionProvider
 } from "../auth";
 import type { FetchLike } from "../http";
@@ -84,6 +85,10 @@ test("CognitoPasswordAuthClient sends SignUp requests", async () => {
     });
 
     return createJsonResponse({
+      CodeDeliveryDetails: {
+        DeliveryMedium: "EMAIL",
+        Destination: "n***@example.com"
+      },
       UserConfirmed: false,
       UserSub: "subject-1"
     });
@@ -102,7 +107,12 @@ test("CognitoPasswordAuthClient sends SignUp requests", async () => {
       password: "secure-password",
       username: "new-player"
     })
-  ).resolves.toBeUndefined();
+  ).resolves.toEqual({
+    deliveryDestination: "n***@example.com",
+    deliveryMedium: "EMAIL",
+    userConfirmed: false,
+    username: "new-player"
+  });
   expect(calls).toHaveLength(1);
   expect(calls[0]?.input).toBe(
     "https://cognito-idp.us-east-1.amazonaws.com/"
@@ -120,6 +130,43 @@ test("CognitoPasswordAuthClient sends SignUp requests", async () => {
         Value: "new-player@example.com"
       }
     ],
+    Username: "new-player"
+  });
+});
+
+test("CognitoPasswordAuthClient sends ConfirmSignUp requests", async () => {
+  const calls: Array<{
+    readonly body?: string;
+    readonly headers?: Readonly<Record<string, string>>;
+  }> = [];
+  const fetcher: FetchLike = async (_input, init) => {
+    calls.push({
+      body: init?.body,
+      headers: init?.headers
+    });
+
+    return createJsonResponse({});
+  };
+  const client = new CognitoPasswordAuthClient(
+    {
+      awsRegion: "us-east-1",
+      cognitoUserPoolClientId: "client-id"
+    },
+    fetcher
+  );
+
+  await expect(
+    client.confirmSignUp({
+      confirmationCode: "123456",
+      username: "new-player"
+    })
+  ).resolves.toBeUndefined();
+  expect(calls[0]?.headers?.["X-Amz-Target"]).toBe(
+    "AWSCognitoIdentityProviderService.ConfirmSignUp"
+  );
+  expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({
+    ClientId: "client-id",
+    ConfirmationCode: "123456",
     Username: "new-player"
   });
 });
@@ -178,6 +225,40 @@ test("CognitoPasswordAuthClient maps Cognito errors without echoing passwords", 
       username: "smoke-user"
     })
   ).rejects.not.toThrow(/do-not-print/u);
+});
+
+test("CognitoPasswordAuthClient exposes unconfirmed users as a typed error", async () => {
+  const fetcher: FetchLike = async () =>
+    createJsonResponse(
+      {
+        __type: "UserNotConfirmedException",
+        message: "User is not confirmed."
+      },
+      400
+    );
+  const client = new CognitoPasswordAuthClient(
+    {
+      awsRegion: "us-east-1",
+      cognitoUserPoolClientId: "client-id"
+    },
+    fetcher
+  );
+
+  await expect(
+    client.signIn({
+      password: "do-not-print",
+      username: "new-player"
+    })
+  ).rejects.toMatchObject({
+    name: "CognitoUserNotConfirmedError",
+    username: "new-player"
+  });
+  await expect(
+    client.signIn({
+      password: "do-not-print",
+      username: "new-player"
+    })
+  ).rejects.toBeInstanceOf(CognitoUserNotConfirmedError);
 });
 
 test("CognitoPasswordAuthClient reports password-change challenges", async () => {

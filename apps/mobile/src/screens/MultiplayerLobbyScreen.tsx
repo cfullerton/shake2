@@ -47,6 +47,7 @@ export function MultiplayerLobbyContent({
   readonly lobby: MultiplayerLobbyController;
 }) {
   const [authMode, setAuthMode] = useState<"signIn" | "signUp">("signIn");
+  const [confirmationCode, setConfirmationCode] = useState("");
   const [displayName, setDisplayName] = useState(
     lobby.session?.username ?? ""
   );
@@ -61,6 +62,7 @@ export function MultiplayerLobbyContent({
   const [username, setUsername] = useState("");
   const signedIn = lobby.session !== null;
   const needsNewPassword = lobby.newPasswordChallenge !== null;
+  const pendingSignUpConfirmation = lobby.pendingSignUpConfirmation;
   const creatingAccount = authMode === "signUp";
   const passwordsMatch = password === confirmPassword;
   const canCreateAccount = username.trim().length > 0 &&
@@ -68,6 +70,9 @@ export function MultiplayerLobbyContent({
     password.length > 0 &&
     confirmPassword.length > 0 &&
     passwordsMatch;
+  const canConfirmAccount = (pendingSignUpConfirmation?.username ?? username)
+    .trim().length > 0 &&
+    confirmationCode.trim().length > 0;
   const canStart = canStartMultiplayerRoom(lobby.room);
   const inStartedGame = lobby.startedGame !== null;
   const sessionUsername = lobby.session?.username ?? null;
@@ -77,6 +82,12 @@ export function MultiplayerLobbyContent({
       setDisplayName((prev) => prev || sessionUsername);
     }
   }, [sessionUsername]);
+
+  useEffect(() => {
+    if (pendingSignUpConfirmation?.username) {
+      setUsername(pendingSignUpConfirmation.username);
+    }
+  }, [pendingSignUpConfirmation?.username]);
 
   async function handleSignIn() {
     await lobby.signIn({
@@ -90,6 +101,15 @@ export function MultiplayerLobbyContent({
       email,
       password,
       username
+    });
+    setConfirmationCode("");
+  }
+
+  async function handleConfirmAccount() {
+    await lobby.confirmSignUp({
+      confirmationCode,
+      password,
+      username: pendingSignUpConfirmation?.username ?? username
     });
   }
 
@@ -187,7 +207,34 @@ export function MultiplayerLobbyContent({
               ) : null}
             </View>
 
-            {!signedIn && needsNewPassword ? (
+            {!signedIn && pendingSignUpConfirmation ? (
+              <>
+                <StatusPanel
+                  icon={<Check color={palette.felt} size={20} />}
+                  tone="felt"
+                  title="Verify Account"
+                  value={formatSignUpConfirmation(pendingSignUpConfirmation)}
+                />
+                <TextField
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="number-pad"
+                  label="Verification Code"
+                  onChangeText={setConfirmationCode}
+                  returnKeyType="done"
+                  textContentType="oneTimeCode"
+                  value={confirmationCode}
+                />
+                <Button
+                  disabled={!canConfirmAccount}
+                  icon={<Check color={palette.surface} size={18} />}
+                  loading={lobby.busyAction === "confirmSignUp"}
+                  onPress={handleConfirmAccount}
+                >
+                  Verify Account
+                </Button>
+              </>
+            ) : !signedIn && needsNewPassword ? (
               <>
                 <StatusPanel
                   icon={<AlertCircle color={palette.goldDark} size={20} />}
@@ -696,6 +743,18 @@ function formatRoomStatus(status: string): string {
 
 function formatRoomVisibility(visibility: string): string {
   return visibility === "public" ? "Public" : "Private";
+}
+
+function formatSignUpConfirmation(
+  confirmation: NonNullable<MultiplayerLobbyController["pendingSignUpConfirmation"]>
+): string {
+  const medium = confirmation.deliveryMedium
+    ? confirmation.deliveryMedium.toLowerCase()
+    : "email";
+
+  return confirmation.deliveryDestination
+    ? `Verification code sent by ${medium} to ${confirmation.deliveryDestination}.`
+    : `Verification code sent by ${medium}.`;
 }
 
 const styles = StyleSheet.create({

@@ -12,6 +12,18 @@ export interface CognitoSignUpInput {
   readonly username: string;
 }
 
+export interface CognitoConfirmSignUpInput {
+  readonly confirmationCode: string;
+  readonly username: string;
+}
+
+export interface CognitoSignUpResult {
+  readonly deliveryDestination?: string;
+  readonly deliveryMedium?: string;
+  readonly userConfirmed: boolean;
+  readonly username: string;
+}
+
 export interface CognitoCompleteNewPasswordInput {
   readonly newPassword: string;
   readonly session: string;
@@ -39,9 +51,12 @@ export interface AuthSessionProvider {
 }
 
 export class CognitoAuthError extends Error {
-  constructor(message: string) {
+  readonly code?: string;
+
+  constructor(message: string, code?: string) {
     super(message);
     this.name = "CognitoAuthError";
+    this.code = code;
   }
 }
 
@@ -53,6 +68,20 @@ export class CognitoNewPasswordRequiredError extends CognitoAuthError {
     this.name = "CognitoNewPasswordRequiredError";
     this.challenge = challenge;
     Object.setPrototypeOf(this, CognitoNewPasswordRequiredError.prototype);
+  }
+}
+
+export class CognitoUserNotConfirmedError extends CognitoAuthError {
+  readonly username: string;
+
+  constructor(username: string) {
+    super(
+      "Account verification is required before signing in.",
+      "UserNotConfirmedException"
+    );
+    this.name = "CognitoUserNotConfirmedError";
+    this.username = username;
+    Object.setPrototypeOf(this, CognitoUserNotConfirmedError.prototype);
   }
 }
 
@@ -80,24 +109,38 @@ export class CognitoPasswordAuthClient {
   }
 
   async signIn(input: CognitoPasswordSignInInput): Promise<CognitoAuthSession> {
-    const body = await this.requestCognito(
-      "AWSCognitoIdentityProviderService.InitiateAuth",
-      {
-        AuthFlow: "USER_PASSWORD_AUTH",
-        AuthParameters: {
-          PASSWORD: input.password,
-          USERNAME: input.username
-        },
-        ClientId: this.config.cognitoUserPoolClientId
+    let body: Readonly<Record<string, unknown>>;
+
+    try {
+      body = await this.requestCognito(
+        "AWSCognitoIdentityProviderService.InitiateAuth",
+        {
+          AuthFlow: "USER_PASSWORD_AUTH",
+          AuthParameters: {
+            PASSWORD: input.password,
+            USERNAME: input.username
+          },
+          ClientId: this.config.cognitoUserPoolClientId
+        }
+      );
+    } catch (caught) {
+      if (
+        caught instanceof CognitoAuthError &&
+        caught.code === "UserNotConfirmedException"
+      ) {
+        throw new CognitoUserNotConfirmedError(input.username);
       }
-    );
+
+      throw caught;
+    }
+
     const result = readAuthenticationResult(body, input.username);
 
     return toAuthSession(result, input.username);
   }
 
-  async signUp(input: CognitoSignUpInput): Promise<void> {
-    await this.requestCognito("AWSCognitoIdentityProviderService.SignUp", {
+  async signUp(input: CognitoSignUpInput): Promise<CognitoSignUpResult> {
+    const body = await this.requestCognito("AWSCognitoIdentityProviderService.SignUp", {
       ClientId: this.config.cognitoUserPoolClientId,
       Password: input.password,
       UserAttributes: [
@@ -106,6 +149,16 @@ export class CognitoPasswordAuthClient {
           Value: input.email
         }
       ],
+      Username: input.username
+    });
+
+    return readSignUpResult(body, input.username);
+  }
+
+  async confirmSignUp(input: CognitoConfirmSignUpInput): Promise<void> {
+    await this.requestCognito("AWSCognitoIdentityProviderService.ConfirmSignUp", {
+      ClientId: this.config.cognitoUserPoolClientId,
+      ConfirmationCode: input.confirmationCode,
       Username: input.username
     });
   }
@@ -146,7 +199,8 @@ export class CognitoPasswordAuthClient {
 
     if (!response.ok) {
       throw new CognitoAuthError(
-        readCognitoErrorMessage(responseBody, response.status)
+        readCognitoErrorMessage(responseBody, response.status),
+        readCognitoErrorCode(responseBody)
       );
     }
 
@@ -156,6 +210,28 @@ export class CognitoPasswordAuthClient {
   private get endpoint(): string {
     return `https://cognito-idp.${this.config.awsRegion}.amazonaws.com/`;
   }
+}
+
+function readSignUpResult(
+  body: Readonly<Record<string, unknown>>,
+  username: string
+): CognitoSignUpResult {
+  const delivery = isRecord(body.CodeDeliveryDetails)
+    ? body.CodeDeliveryDetails
+    : null;
+  const deliveryDestination = delivery
+    ? readOptionalString(delivery.Destination)
+    : undefined;
+  const deliveryMedium = delivery
+    ? readOptionalString(delivery.DeliveryMedium)
+    : undefined;
+
+  return {
+    ...(deliveryDestination ? { deliveryDestination } : {}),
+    ...(deliveryMedium ? { deliveryMedium } : {}),
+    userConfirmed: body.UserConfirmed === true,
+    username
+  };
 }
 
 function readAuthenticationResult(
@@ -233,6 +309,15 @@ function readCognitoErrorMessage(
     `Cognito sign-in failed with HTTP ${status}.`;
 
   return message;
+}
+
+function readCognitoErrorCode(
+  body: Readonly<Record<string, unknown>>
+): string | undefined {
+  const type = readOptionalString(body.__type) ??
+    readOptionalString(body.code);
+
+  return type?.split("#").at(-1);
 }
 
 function readCognitoChallengeMessage(challengeName: string): string {
