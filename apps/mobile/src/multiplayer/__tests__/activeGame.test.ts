@@ -170,11 +170,91 @@ test("active game view exposes trump selection only to the declarer", () => {
     "fives",
     "sixes"
   ]);
+  expect(declarerView.legalTrumpCalls.map((call) => call.selection)).toEqual([
+    {
+      kind: "pip",
+      suit: "blanks"
+    },
+    {
+      kind: "pip",
+      suit: "ones"
+    },
+    {
+      kind: "pip",
+      suit: "twos"
+    },
+    {
+      kind: "pip",
+      suit: "threes"
+    },
+    {
+      kind: "pip",
+      suit: "fours"
+    },
+    {
+      kind: "pip",
+      suit: "fives"
+    },
+    {
+      kind: "pip",
+      suit: "sixes"
+    }
+  ]);
   expect(declarerView.waitingMessage).toBe("Call trump.");
 
   expect(partnerView.canCallTrump).toBe(false);
   expect(partnerView.legalTrumpSuits).toEqual([]);
   expect(partnerView.waitingMessage).toBe("Waiting for East.");
+});
+
+test("active game view exposes no-trump selection when enabled", () => {
+  const view = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView({
+      viewerSeat: "SEAT_1"
+    }),
+    snapshot: createSnapshot({
+      phase: "trump",
+      redactedState: {
+        dealer: 0,
+        phase: "trump",
+        rules: {
+          enabledContracts: {
+            noTrump: true
+          }
+        },
+        trump: {
+          contract: null,
+          declarer: 1,
+          phase: "callingTrump",
+          winningBid: {
+            bid: {
+              amount: 35,
+              kind: "numeric"
+            },
+            forced: false,
+            seat: 1
+          }
+        }
+      }
+    })
+  });
+
+  expect(view.legalTrumpCalls.at(-1)).toEqual({
+    label: "No Trump",
+    selection: {
+      kind: "none"
+    }
+  });
+  expect(view.legalTrumpSuits).toEqual([
+    "blanks",
+    "ones",
+    "twos",
+    "threes",
+    "fours",
+    "fives",
+    "sixes"
+  ]);
 });
 
 test("active game view reads called trump from trick-play contracts", () => {
@@ -204,6 +284,33 @@ test("active game view reads called trump from trick-play contracts", () => {
 
   expect(view.canCallTrump).toBe(false);
   expect(view.currentTrumpLabel).toBe("Fives");
+});
+
+test("active game view reads no-trump trick-play contracts", () => {
+  const view = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView(),
+    snapshot: createSnapshot({
+      phase: "trickPlay",
+      redactedState: {
+        contract: {
+          declarer: 1,
+          kind: "noTrump",
+          trump: {
+            kind: "none"
+          }
+        },
+        currentTrick: {
+          leader: 1,
+          playedDominoes: []
+        },
+        dealer: 0,
+        phase: "trickPlay"
+      }
+    })
+  });
+
+  expect(view.currentTrumpLabel).toBe("No Trump");
 });
 
 test("active game view exposes legal domino plays for the trick leader", () => {
@@ -251,6 +358,70 @@ test("active game view exposes legal domino plays for the trick leader", () => {
         low: 4
       },
       ledSuit: "fives"
+    }
+  ]);
+});
+
+test("active game view follows natural suits in no-trump trick play", () => {
+  const view = createMultiplayerActiveGameView({
+    privateHand: {
+      ...createPrivateHand(),
+      dominoes: [
+        {
+          high: 6,
+          key: "6-5",
+          low: 5
+        },
+        {
+          high: 4,
+          key: "4-4",
+          low: 4
+        }
+      ],
+      seatIndex: "SEAT_2"
+    },
+    room: createRoomView({
+      viewerSeat: "SEAT_2"
+    }),
+    snapshot: createSnapshot({
+      phase: "trickPlay",
+      redactedState: {
+        contract: {
+          declarer: 1,
+          kind: "noTrump",
+          trump: {
+            kind: "none"
+          }
+        },
+        currentTrick: {
+          ledSuit: "fives",
+          leader: 1,
+          playedDominoes: [
+            {
+              domino: {
+                high: 5,
+                low: 4
+              },
+              seat: 1
+            }
+          ]
+        },
+        dealer: 0,
+        phase: "trickPlay"
+      }
+    })
+  });
+
+  expect(view.canPlayDomino).toBe(true);
+  expect(view.currentTrumpLabel).toBe("No Trump");
+  expect(view.currentTrickLeadLabel).toBe("Fives led");
+  expect(view.legalDominoPlays).toEqual([
+    {
+      domino: {
+        high: 6,
+        key: "6-5",
+        low: 5
+      }
     }
   ]);
 });

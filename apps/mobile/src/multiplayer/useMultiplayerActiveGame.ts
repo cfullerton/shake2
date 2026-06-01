@@ -11,7 +11,7 @@ import type {
   MultiplayerPublicGameSnapshot,
   MultiplayerReconnectView,
   MultiplayerRoomView,
-  MultiplayerTrumpSuit
+  MultiplayerTrumpSelection
 } from "./types";
 import type {
   MultiplayerBid,
@@ -53,7 +53,7 @@ export interface MultiplayerActiveGameController {
   startNextHand(): Promise<void>;
   submitBid(bid: MultiplayerBid): Promise<void>;
   submitDomino(play: MultiplayerActiveDominoPlay): Promise<void>;
-  submitTrump(trumpSuit: MultiplayerTrumpSuit): Promise<void>;
+  submitTrump(trump: MultiplayerTrumpSelection): Promise<void>;
 }
 
 export type MultiplayerActiveGameLiveStatus =
@@ -254,7 +254,7 @@ export function useMultiplayerActiveGame({
     });
   }
 
-  async function submitTrump(trumpSuit: MultiplayerTrumpSuit): Promise<void> {
+  async function submitTrump(trump: MultiplayerTrumpSelection): Promise<void> {
     await runAction("submitTrump", async () => {
       const identity = requireActionIdentity();
 
@@ -264,7 +264,7 @@ export function useMultiplayerActiveGame({
         gameId: snapshot.gameId,
         knownLastEventSequence: snapshot.lastEventSequence,
         knownSnapshotVersion: snapshot.snapshotVersion,
-        trumpSuit
+        trump
       });
 
       if (!result.accepted || !result.snapshot) {

@@ -84,6 +84,15 @@ export const multiplayerTrumpSuits = [
 
 export type MultiplayerTrumpSuit = (typeof multiplayerTrumpSuits)[number];
 
+export type MultiplayerTrumpSelection =
+  | {
+      readonly kind: "none";
+    }
+  | {
+      readonly kind: "pip";
+      readonly suit: MultiplayerTrumpSuit;
+    };
+
 export interface MultiplayerPublicGameSnapshot {
   readonly gameId: string;
   readonly generatedAt: string;

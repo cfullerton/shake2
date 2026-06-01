@@ -13,7 +13,7 @@ import {
   Wifi
 } from "lucide-react-native";
 import { type ReactNode, useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
 import { Button } from "../components/Button";
 import { GameText } from "../components/GameText";
@@ -58,6 +58,7 @@ export function MultiplayerLobbyContent({
   const [roomCode, setRoomCode] = useState("");
   const [roomVisibility, setRoomVisibility] =
     useState<"private" | "public">("private");
+  const [noTrump, setNoTrump] = useState(false);
   const [targetMarks, setTargetMarks] = useState("7");
   const [username, setUsername] = useState("");
   const signedIn = lobby.session !== null;
@@ -151,6 +152,7 @@ export function MultiplayerLobbyContent({
     }
 
     await lobby.startGame({
+      ...(noTrump ? { noTrump: true } : {}),
       roomId: lobby.room.roomId,
       ...(Number.isInteger(parsedTarget) && parsedTarget > 0
         ? { targetMarks: parsedTarget }
@@ -504,6 +506,27 @@ export function MultiplayerLobbyContent({
                         onChangeText={setTargetMarks}
                         value={targetMarks}
                       />
+                      <Pressable
+                        accessibilityLabel="No Trump"
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: noTrump }}
+                        onPress={() => setNoTrump((current) => !current)}
+                        style={styles.optionRow}
+                      >
+                        <View style={styles.optionText}>
+                          <Text style={styles.optionLabel}>No Trump</Text>
+                          <Text style={styles.optionMeta}>Contract variant</Text>
+                        </View>
+                        <Switch
+                          onValueChange={setNoTrump}
+                          thumbColor={noTrump ? palette.goldSoft : palette.paper}
+                          trackColor={{
+                            false: palette.paperMuted,
+                            true: palette.crimson
+                          }}
+                          value={noTrump}
+                        />
+                      </Pressable>
                       <Button
                         disabled={!canStart}
                         icon={<Play color={palette.surface} size={18} />}
@@ -877,6 +900,33 @@ const styles = StyleSheet.create({
   },
   occupiedSeat: {
     backgroundColor: palette.surfaceAlt
+  },
+  optionLabel: {
+    color: palette.ink,
+    fontSize: 16,
+    fontWeight: "800"
+  },
+  optionMeta: {
+    color: palette.subtle,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  optionRow: {
+    alignItems: "center",
+    backgroundColor: palette.surfaceAlt,
+    borderColor: palette.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    minHeight: 58,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  optionText: {
+    flex: 1,
+    gap: spacing.xs
   },
   panel: {
     backgroundColor: palette.surface,

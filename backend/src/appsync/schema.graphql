@@ -64,6 +64,7 @@ input AddBotInput {
 }
 
 input StartGameInput {
+  noTrump: Boolean
   roomId: ID!
   targetMarks: Int
 }

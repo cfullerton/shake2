@@ -15,6 +15,7 @@ import type {
   MultiplayerReconnectViewPayload,
   MultiplayerSubmitGameActionResultPayload,
   MultiplayerSubmitGameActionResult,
+  MultiplayerTrumpSelection,
   MultiplayerTrumpSuit
 } from "./types";
 
@@ -52,14 +53,24 @@ export interface SubmitMultiplayerBidInput {
   readonly knownSnapshotVersion: number;
 }
 
-export interface SubmitMultiplayerTrumpInput {
+interface SubmitMultiplayerTrumpBaseInput {
   readonly actorId: string;
   readonly actorSeat: AppSyncSeatIndex;
   readonly gameId: string;
   readonly knownLastEventSequence: number;
   readonly knownSnapshotVersion: number;
-  readonly trumpSuit: MultiplayerTrumpSuit;
 }
+
+export type SubmitMultiplayerTrumpInput = SubmitMultiplayerTrumpBaseInput & (
+  | {
+      readonly trump: MultiplayerTrumpSelection;
+      readonly trumpSuit?: never;
+    }
+  | {
+      readonly trump?: never;
+      readonly trumpSuit: MultiplayerTrumpSuit;
+    }
+);
 
 export interface SubmitMultiplayerDominoInput {
   readonly actorId: string;
@@ -69,6 +80,10 @@ export interface SubmitMultiplayerDominoInput {
   readonly knownLastEventSequence: number;
   readonly knownSnapshotVersion: number;
   readonly ledSuit?: MultiplayerTrumpSuit;
+}
+
+interface LegacySubmitMultiplayerTrumpInput extends SubmitMultiplayerTrumpBaseInput {
+  readonly trumpSuit: MultiplayerTrumpSuit;
 }
 
 export class MultiplayerGameClient {
@@ -224,9 +239,7 @@ export class MultiplayerGameClient {
   ): Promise<MultiplayerSubmitGameActionResult> {
     return this.submitPlayerAction({
       action: {
-        payload: {
-          trumpSuit: input.trumpSuit
-        },
+        payload: createTrumpCallPayload(input),
         type: "fortyTwo.trump.call"
       },
       actorId: input.actorId,
@@ -325,6 +338,20 @@ export class MultiplayerGameClient {
 
     return normalizeSubmitGameActionResult(data.submitGameAction);
   }
+}
+
+function createTrumpCallPayload(
+  input: SubmitMultiplayerTrumpInput
+): Readonly<Record<string, unknown>> {
+  if ("trump" in input) {
+    return {
+      trump: input.trump
+    };
+  }
+
+  return {
+    trumpSuit: (input as LegacySubmitMultiplayerTrumpInput).trumpSuit
+  };
 }
 
 const PUBLIC_SNAPSHOT_SELECTION = `

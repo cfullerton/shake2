@@ -34,6 +34,7 @@ Implemented now:
 - Mobile multiplayer network foundation for public environment config, Cognito ID-token sign-in, authenticated AppSync GraphQL calls, and typed room/start operations.
 - Mobile multiplayer lobby UI for account sign-in, private/public room creation, join by room code, public room listing, room/seat display, seat taking, and host-only start-game.
 - Mobile multiplayer active-game UI for the started-room handoff, public table/score/turn rendering, private-hand loading, manual snapshot refresh, live game-update subscription sync with background snapshot catch-up, pass/numeric bid submission, declarer trump selection, current-trick rendering, legal domino-play submission, host next-hand dealing, compact post-hand recap, and game-over banner.
+- Multiplayer no-trump exposure through a host start-game variant flag, sanitized backend rule construction, generalized trump-call actions, No Trump declarer UI, and no-trump client-side legal play hints.
 
 ## Authority Model
 
@@ -46,7 +47,7 @@ Clients may request actions:
 - add a bot to an empty seat as host before the game starts
 - start game as host once the room is ready
 - submit bid
-- call trump
+- call trump, including No Trump when the room was started with that variant enabled
 - play domino
 
 Clients must not submit server-managed actions:
