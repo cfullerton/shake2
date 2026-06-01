@@ -49,6 +49,23 @@ test("lobby screen signs in without exposing the password", async () => {
   expect(view.queryByText("temporary-password")).toBeNull();
 });
 
+test("lobby screen hides table controls when signed out", () => {
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        session: null
+      })}
+    />
+  );
+
+  expect(view.getByText("Sign In")).toBeTruthy();
+  expect(view.queryByText("Table Name")).toBeNull();
+  expect(view.queryByText("Create")).toBeNull();
+  expect(view.queryByText("Join")).toBeNull();
+  expect(view.queryByText("Create Room")).toBeNull();
+  expect(view.queryByText("Join Room")).toBeNull();
+});
+
 test("lobby screen completes new password challenges", async () => {
   const completeNewPassword = jest.fn(async () => undefined);
   const view = render(
