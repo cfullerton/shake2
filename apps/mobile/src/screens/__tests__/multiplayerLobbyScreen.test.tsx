@@ -42,6 +42,8 @@ test("lobby screen signs in without exposing the password", async () => {
 
   fireEvent.changeText(view.getByLabelText("Username"), "smoke-user");
   fireEvent.changeText(view.getByLabelText("Password"), "temporary-password");
+  expect(view.queryByLabelText("Email")).toBeNull();
+  expect(view.queryByLabelText("Confirm Password")).toBeNull();
   fireEvent.press(view.getByText("Sign In"));
 
   await waitFor(() => {
@@ -64,6 +66,14 @@ test("lobby screen creates accounts with username, email, and matching passwords
     />
   );
 
+  expect(view.queryByLabelText("Email")).toBeNull();
+  expect(view.queryByLabelText("Confirm Password")).toBeNull();
+
+  fireEvent.press(view.getByText("Create Account"));
+
+  expect(view.getByLabelText("Email")).toBeTruthy();
+  expect(view.getByLabelText("Confirm Password")).toBeTruthy();
+
   fireEvent.changeText(view.getByLabelText("Username"), "new-player");
   fireEvent.changeText(view.getByLabelText("Password"), "secure-password");
   fireEvent.changeText(view.getByLabelText("Email"), "new-player@example.com");
@@ -77,6 +87,24 @@ test("lobby screen creates accounts with username, email, and matching passwords
       username: "new-player"
     });
   });
+});
+
+test("lobby screen returns account creation fields to sign-in mode", () => {
+  const view = render(
+    <MultiplayerLobbyContent
+      lobby={createLobbyController({
+        session: null
+      })}
+    />
+  );
+
+  fireEvent.press(view.getByText("Create Account"));
+  expect(view.getByLabelText("Email")).toBeTruthy();
+  expect(view.getByLabelText("Confirm Password")).toBeTruthy();
+
+  fireEvent.press(view.getByText("Sign In Instead"));
+  expect(view.queryByLabelText("Email")).toBeNull();
+  expect(view.queryByLabelText("Confirm Password")).toBeNull();
 });
 
 test("lobby screen hides table controls when signed out", () => {
