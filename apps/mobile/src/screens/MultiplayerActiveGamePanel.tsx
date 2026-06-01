@@ -120,13 +120,8 @@ export function MultiplayerActiveGamePanel({
           />
           <InfoTile
             compact={isTrickPlayStatus}
-            label="State"
-            value={view.snapshotVersionLabel}
-          />
-          <InfoTile
-            compact={isTrickPlayStatus}
-            label="Live"
-            value={formatLiveStatus(game.liveStatus, game.liveError)}
+            label="Current score"
+            value={view.currentScoreLabel}
           />
         </View>
       </View>
@@ -342,6 +337,15 @@ export function MultiplayerActiveGamePanel({
         <EventFeed entries={activityEntries} />
       </View>
 
+      {hasWonDominoes(view) ? (
+        <View style={styles.tablePanel}>
+          <Text style={styles.panelTitle}>Won Dominoes</Text>
+          <MultiplayerWonDominoesSection team={view.wonDominoes[0]} />
+          <View style={styles.wonDominoesDivider} />
+          <MultiplayerWonDominoesSection team={view.wonDominoes[1]} />
+        </View>
+      ) : null}
+
       <View style={styles.tablePanel}>
         <View style={styles.tableHeader}>
           <Text style={styles.panelTitle}>Table</Text>
@@ -434,6 +438,38 @@ function MultiplayerTrickSeatSlot({
   );
 }
 
+function MultiplayerWonDominoesSection({
+  team
+}: {
+  readonly team: MultiplayerActiveGameView["wonDominoes"][number];
+}) {
+  return (
+    <View style={styles.wonTeamSection}>
+      <Text style={styles.wonTeamLabel}>
+        {team.name} · {team.trickCount} trick{team.trickCount !== 1 ? "s" : ""}
+      </Text>
+      {team.tricks.length === 0 ? (
+        <Text style={styles.meta}>No tricks yet</Text>
+      ) : (
+        <View style={styles.wonTricksList}>
+          {team.tricks.map((trick) => (
+            <View key={trick.id} style={styles.wonTrickPile}>
+              {trick.dominoes.map((domino) => (
+                <MultiplayerDominoTile
+                  accessibilityLabel={`${domino.key} won by ${team.name}`}
+                  domino={domino}
+                  key={domino.key}
+                  size="small"
+                />
+              ))}
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 function createMultiplayerActivityEntries(
   view: MultiplayerActiveGameView
 ): readonly {
@@ -481,6 +517,10 @@ function createMultiplayerActivityEntries(
   }
 
   return entries.slice(-6);
+}
+
+function hasWonDominoes(view: MultiplayerActiveGameView): boolean {
+  return view.wonDominoes.some((team) => team.tricks.length > 0);
 }
 
 function getLatestActivityText(
@@ -554,27 +594,6 @@ function getCurrentTrickLedLabel(view: MultiplayerActiveGameView): string {
   return view.currentTrickLeadLabel.endsWith(" led")
     ? view.currentTrickLeadLabel.slice(0, -" led".length)
     : view.currentTrickLeadLabel;
-}
-
-function formatLiveStatus(status: string, error: string | null): string {
-  if (error) {
-    return "Realtime issue";
-  }
-
-  switch (status) {
-    case "connecting":
-      return "Connecting";
-    case "connected":
-      return "Connected";
-    case "reconnecting":
-      return "Reconnecting";
-    case "subscribed":
-      return "Live";
-    case "closed":
-      return "Closed";
-    default:
-      return "Polling ready";
-  }
 }
 
 function MultiplayerDominoTile({
@@ -1091,5 +1110,26 @@ const styles = StyleSheet.create({
   viewerSeatCard: {
     borderColor: palette.crimson,
     borderWidth: 2
+  },
+  wonDominoesDivider: {
+    backgroundColor: palette.border,
+    height: 1
+  },
+  wonTeamLabel: {
+    color: palette.subtle,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+  wonTeamSection: {
+    gap: spacing.sm
+  },
+  wonTrickPile: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
+  },
+  wonTricksList: {
+    gap: spacing.sm
   }
 });

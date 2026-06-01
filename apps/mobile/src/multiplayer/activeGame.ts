@@ -1,3 +1,13 @@
+import {
+  TRICK_PLAY_COUNT,
+  getTeamForSeat,
+  scoreCompletedTricks,
+  type CompletedTrick,
+  type Domino,
+  type PlayedDomino,
+  type Trick
+} from "@shake2/game-engine";
+
 import { multiplayerTrumpSuits } from "./types";
 import type {
   AppSyncSeatIndex,
@@ -12,6 +22,16 @@ import type {
 
 type SeatNumber = 0 | 1 | 2 | 3;
 type TeamId = "teamA" | "teamB";
+
+interface MultiplayerActiveCompletedTrick {
+  readonly trick: {
+    readonly ledDomino: MultiplayerDomino;
+    readonly ledSuit: MultiplayerTrumpSuit;
+    readonly leader: AppSyncSeatIndex;
+    readonly playedDominoes: readonly MultiplayerActiveTrickPlay[];
+  };
+  readonly winner: AppSyncSeatIndex;
+}
 
 export interface MultiplayerActiveDominoPlay {
   readonly domino: MultiplayerDomino;
@@ -51,6 +71,18 @@ export interface MultiplayerActiveCompletedHandSummary {
   readonly tricksLabel: string;
 }
 
+export interface MultiplayerActiveWonDominoTrick {
+  readonly dominoes: readonly MultiplayerDomino[];
+  readonly id: string;
+}
+
+export interface MultiplayerActiveWonDominoTeam {
+  readonly id: TeamId;
+  readonly name: string;
+  readonly trickCount: number;
+  readonly tricks: readonly MultiplayerActiveWonDominoTrick[];
+}
+
 export interface MultiplayerActiveGameView {
   readonly canCallTrump: boolean;
   readonly canPass: boolean;
@@ -58,6 +90,7 @@ export interface MultiplayerActiveGameView {
   readonly canStartNextHand: boolean;
   readonly canSubmitBid: boolean;
   readonly currentBidLabel: string;
+  readonly currentScoreLabel: string;
   readonly currentTrickLeadLabel: string;
   readonly currentTrickPlays: readonly MultiplayerActiveTrickPlay[];
   readonly currentTrumpLabel: string;
@@ -79,6 +112,10 @@ export interface MultiplayerActiveGameView {
   readonly viewerSeat: AppSyncSeatIndex | null;
   readonly viewerSeatLabel: string;
   readonly waitingMessage: string;
+  readonly wonDominoes: readonly [
+    MultiplayerActiveWonDominoTeam,
+    MultiplayerActiveWonDominoTeam
+  ];
 }
 
 export const multiplayerSeatLabels: Record<AppSyncSeatIndex, string> = {
@@ -114,6 +151,7 @@ export function createMultiplayerActiveGameView(input: {
     readWinningBidAmount(trump?.winningBid);
   const currentTrick = readRecord(state.currentTrick);
   const currentTrickPlays = readCurrentTrickPlays(currentTrick, viewerSeat);
+  const completedTricks = readCompletedTricks(state);
   const teams: [MultiplayerActiveTeamSummary, MultiplayerActiveTeamSummary] = [
     {
       id: "teamA",
@@ -154,6 +192,7 @@ export function createMultiplayerActiveGameView(input: {
       input.snapshot.phase === "setup",
     canSubmitBid: legalBidAmounts.length > 0,
     currentBidLabel: currentBidAmount === null ? "No bid yet" : String(currentBidAmount),
+    currentScoreLabel: createCurrentScoreLabel(completedTricks, teams),
     currentTrickLeadLabel: createCurrentTrickLeadLabel(
       currentTrick,
       currentTrickPlays,
@@ -186,7 +225,12 @@ export function createMultiplayerActiveGameView(input: {
     teams,
     viewerSeat,
     viewerSeatLabel: viewerSeat ? multiplayerSeatLabels[viewerSeat] : "Spectator",
-    waitingMessage: createWaitingMessage(input.snapshot.phase, currentTurnSeat, viewerSeat)
+    waitingMessage: createWaitingMessage(input.snapshot.phase, currentTurnSeat, viewerSeat),
+    wonDominoes: createWonDominoTeams(
+      completedTricks,
+      readNumber(state.handNumber, 1),
+      teams
+    )
   };
 }
 
@@ -457,6 +501,142 @@ function createCurrentTrickLeadLabel(
   return ledSuit
     ? `${multiplayerTrumpSuitLabels[ledSuit]} led`
     : "Suit not set";
+}
+
+function readCompletedTricks(
+  state: Readonly<Record<string, unknown>>
+): readonly MultiplayerActiveCompletedTrick[] {
+  const completedTricks = Array.isArray(state.completedTricks)
+    ? state.completedTricks
+    : [];
+
+  return completedTricks.flatMap((value) => {
+    const completedTrick = readRecord(value);
+    const trick = readRecord(completedTrick?.trick);
+    const winner = readNullableSeatNumber(completedTrick?.winner);
+    const leader = readNullableSeatNumber(trick?.leader);
+    const ledDomino = readDomino(trick?.ledDomino);
+    const ledSuit = readTrumpSuit(trick?.ledSuit);
+    const playedDominoes = readPlayedDominoes(trick?.playedDominoes);
+
+    if (
+      winner === null ||
+      leader === null ||
+      !ledDomino ||
+      !ledSuit ||
+      playedDominoes.length !== TRICK_PLAY_COUNT
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        trick: {
+          leader: toSeatIndex(leader),
+          ledDomino,
+          ledSuit,
+          playedDominoes
+        },
+        winner: toSeatIndex(winner)
+      }
+    ];
+  });
+}
+
+function readPlayedDominoes(value: unknown): readonly MultiplayerActiveTrickPlay[] {
+  const playedDominoes = Array.isArray(value) ? value : [];
+
+  return playedDominoes.flatMap((playValue) => {
+    const play = readRecord(playValue);
+    const seat = readNullableSeatNumber(play?.seat);
+    const domino = readDomino(play?.domino);
+
+    if (seat === null || !domino) {
+      return [];
+    }
+
+    const seatIndex = toSeatIndex(seat);
+
+    return [
+      {
+        domino,
+        seatIndex,
+        seatLabel: multiplayerSeatLabels[seatIndex]
+      }
+    ];
+  });
+}
+
+function createCurrentScoreLabel(
+  completedTricks: readonly MultiplayerActiveCompletedTrick[],
+  teams: readonly [MultiplayerActiveTeamSummary, MultiplayerActiveTeamSummary]
+): string {
+  const score = scoreCompletedTricks(completedTricks.map(toEngineCompletedTrick));
+
+  return `${teams[0].name} ${score.teamPoints.teamA} · ${teams[1].name} ${score.teamPoints.teamB}`;
+}
+
+function createWonDominoTeams(
+  completedTricks: readonly MultiplayerActiveCompletedTrick[],
+  handNumber: number,
+  teams: readonly [MultiplayerActiveTeamSummary, MultiplayerActiveTeamSummary]
+): readonly [
+  MultiplayerActiveWonDominoTeam,
+  MultiplayerActiveWonDominoTeam
+] {
+  return [
+    createWonDominoTeam(completedTricks, handNumber, teams[0]),
+    createWonDominoTeam(completedTricks, handNumber, teams[1])
+  ];
+}
+
+function createWonDominoTeam(
+  completedTricks: readonly MultiplayerActiveCompletedTrick[],
+  handNumber: number,
+  team: MultiplayerActiveTeamSummary
+): MultiplayerActiveWonDominoTeam {
+  const teamTricks = completedTricks
+    .map((trick, index) => ({
+      index,
+      trick
+    }))
+    .filter(({ trick }) => getTeamForSeat(toSeatNumber(trick.winner)) === team.id);
+
+  return {
+    id: team.id,
+    name: team.name,
+    trickCount: teamTricks.length,
+    tricks: teamTricks.map(({ index, trick }) => ({
+      dominoes: trick.trick.playedDominoes.map((play) => play.domino),
+      id: `${handNumber}-${index}`
+    }))
+  };
+}
+
+function toEngineCompletedTrick(
+  completedTrick: MultiplayerActiveCompletedTrick
+): CompletedTrick {
+  return {
+    trick: {
+      leader: toSeatNumber(completedTrick.trick.leader),
+      ledDomino: toEngineDomino(completedTrick.trick.ledDomino),
+      ledSuit: completedTrick.trick.ledSuit,
+      playedDominoes: completedTrick.trick.playedDominoes.map(
+        (play): PlayedDomino => ({
+          domino: toEngineDomino(play.domino),
+          seat: toSeatNumber(play.seatIndex)
+        })
+      )
+    } satisfies Trick,
+    winner: toSeatNumber(completedTrick.winner)
+  };
+}
+
+function toEngineDomino(domino: MultiplayerDomino): Domino {
+  return {
+    high: domino.high as Domino["high"],
+    low: domino.low as Domino["low"]
+  };
 }
 
 function createCompletedHandSummary(

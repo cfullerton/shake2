@@ -330,6 +330,139 @@ test("active game view filters domino plays when the viewer must follow suit", (
   ]);
 });
 
+test("active game view exposes current score and won domino piles", () => {
+  const view = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView(),
+    snapshot: createSnapshot({
+      phase: "trickPlay",
+      redactedState: {
+        contract: {
+          declarer: 1,
+          kind: "standardNumeric",
+          trump: {
+            kind: "pip",
+            suit: "sixes"
+          }
+        },
+        completedTricks: [
+          createCompletedTrick({
+            winner: 0
+          }),
+          createCompletedTrick({
+            playedDominoes: [
+              {
+                domino: {
+                  high: 5,
+                  low: 5
+                },
+                seat: 1
+              },
+              {
+                domino: {
+                  high: 4,
+                  low: 4
+                },
+                seat: 2
+              },
+              {
+                domino: {
+                  high: 3,
+                  low: 3
+                },
+                seat: 3
+              },
+              {
+                domino: {
+                  high: 2,
+                  low: 2
+                },
+                seat: 0
+              }
+            ],
+            winner: 1
+          })
+        ],
+        currentTrick: {
+          leader: 3,
+          playedDominoes: []
+        },
+        dealer: 0,
+        handNumber: 1,
+        phase: "trickPlay"
+      }
+    })
+  });
+
+  expect(view.currentScoreLabel).toBe("North/South 1 · East/West 11");
+  expect(view.wonDominoes).toEqual([
+    {
+      id: "teamA",
+      name: "North/South",
+      trickCount: 1,
+      tricks: [
+        {
+          dominoes: [
+            {
+              high: 0,
+              key: "0-0",
+              low: 0
+            },
+            {
+              high: 1,
+              key: "1-1",
+              low: 1
+            },
+            {
+              high: 2,
+              key: "2-1",
+              low: 1
+            },
+            {
+              high: 3,
+              key: "3-1",
+              low: 1
+            }
+          ],
+          id: "1-0"
+        }
+      ]
+    },
+    {
+      id: "teamB",
+      name: "East/West",
+      trickCount: 1,
+      tricks: [
+        {
+          dominoes: [
+            {
+              high: 5,
+              key: "5-5",
+              low: 5
+            },
+            {
+              high: 4,
+              key: "4-4",
+              low: 4
+            },
+            {
+              high: 3,
+              key: "3-3",
+              low: 3
+            },
+            {
+              high: 2,
+              key: "2-2",
+              low: 2
+            }
+          ],
+          id: "1-1"
+        }
+      ]
+    }
+  ]);
+});
+
 test("active game view exposes host next-hand control during setup", () => {
   const hostView = createMultiplayerActiveGameView({
     privateHand: createPrivateHand(),
@@ -536,6 +669,60 @@ function createCompletedHandSummary(
     },
     totalPoints: 42,
     ...overrides
+  };
+}
+
+function createCompletedTrick(
+  overrides: {
+    readonly playedDominoes?: readonly {
+      readonly domino: {
+        readonly high: number;
+        readonly low: number;
+      };
+      readonly seat: number;
+    }[];
+    readonly winner?: number;
+  } = {}
+) {
+  const playedDominoes = overrides.playedDominoes ?? [
+    {
+      domino: {
+        high: 0,
+        low: 0
+      },
+      seat: 0
+    },
+    {
+      domino: {
+        high: 1,
+        low: 1
+      },
+      seat: 1
+    },
+    {
+      domino: {
+        high: 2,
+        low: 1
+      },
+      seat: 2
+    },
+    {
+      domino: {
+        high: 3,
+        low: 1
+      },
+      seat: 3
+    }
+  ];
+
+  return {
+    trick: {
+      ledDomino: playedDominoes[0]?.domino,
+      ledSuit: "blanks",
+      leader: 0,
+      playedDominoes
+    },
+    winner: overrides.winner ?? 0
   };
 }
 

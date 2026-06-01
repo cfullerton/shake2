@@ -265,6 +265,11 @@ test("active game panel renders current trick as a player-name table", async () 
               suit: "sixes"
             }
           },
+          completedTricks: [
+            createCompletedTrick({
+              winner: 1
+            })
+          ],
           currentTrick: {
             ledDomino: {
               high: 6,
@@ -308,7 +313,14 @@ test("active game panel renders current trick as a player-name table", async () 
   expect(view.getByText("Table status")).toBeTruthy();
   expect(view.getByText("Current trick")).toBeTruthy();
   expect(view.getByText("Current bid")).toBeTruthy();
+  expect(view.getByText("Current score")).toBeTruthy();
+  expect(view.getByText("North/South 0 · East/West 1")).toBeTruthy();
+  expect(view.queryByText("State")).toBeNull();
+  expect(view.queryByText("Live")).toBeNull();
   expect(view.getByText("Activity")).toBeTruthy();
+  expect(view.getByText("Won Dominoes")).toBeTruthy();
+  expect(view.getByText("East/West · 1 trick")).toBeTruthy();
+  expect(view.getByLabelText("0-0 won by East/West")).toBeTruthy();
   expect(view.getByTestId("multiplayer-game-trick-table")).toBeTruthy();
   expect(view.getByTestId("multiplayer-game-trick-seat-top")).toBeTruthy();
   expect(view.getByTestId("multiplayer-game-trick-seat-left")).toBeTruthy();
@@ -393,7 +405,7 @@ test("active game panel lets the host deal the next multiplayer hand", async () 
       seatIndex: "SEAT_1"
     });
   });
-  expect(view.getByText("Snapshot 32 · Event 32")).toBeTruthy();
+  expect(view.getByText("Hand 2: Bidding.")).toBeTruthy();
 });
 
 test("active game panel applies live game update snapshots", async () => {
@@ -442,7 +454,14 @@ test("active game panel applies live game update snapshots", async () => {
       phase: "bidding",
       redactedState: {
         bidding: {
-          currentSeat: 2
+          currentSeat: 2,
+          highestBid: {
+            bid: {
+              amount: 31,
+              kind: "numeric"
+            },
+            seat: 1
+          }
         },
         dealer: 0,
         handNumber: 1,
@@ -455,7 +474,7 @@ test("active game panel applies live game update snapshots", async () => {
   await waitFor(() => {
     expect(client.getMyPrivateHand).toHaveBeenCalledTimes(2);
   });
-  expect(view.getByText("Snapshot 3 · Event 3")).toBeTruthy();
+  expect(view.getByText("Current bid 31.")).toBeTruthy();
 });
 
 test("active game panel silently refreshes when realtime stalls", async () => {
@@ -469,7 +488,14 @@ test("active game panel silently refreshes when realtime stalls", async () => {
       phase: "bidding",
       redactedState: {
         bidding: {
-          currentSeat: 2
+          currentSeat: 2,
+          highestBid: {
+            bid: {
+              amount: 31,
+              kind: "numeric"
+            },
+            seat: 1
+          }
         },
         dealer: 0,
         handNumber: 1,
@@ -510,7 +536,7 @@ test("active game panel silently refreshes when realtime stalls", async () => {
     });
 
     expect(client.getGameSnapshot).toHaveBeenCalledWith("game-1");
-    expect(view.getByText("Snapshot 3 · Event 3")).toBeTruthy();
+    expect(view.getByText("Current bid 31.")).toBeTruthy();
   } finally {
     view?.unmount();
     jest.useRealTimers();
@@ -600,7 +626,6 @@ test("active game panel reconnects when live updates skip event sequences", asyn
       snapshotVersion: 2
     });
   });
-  expect(view.getByText("Snapshot 5 · Event 5")).toBeTruthy();
   expect(view.getByLabelText("Domino 5-0")).toBeTruthy();
 });
 
@@ -632,7 +657,14 @@ test("active game panel accepts contiguous multi-event live updates", async () =
     phase: "bidding",
     redactedState: {
       bidding: {
-        currentSeat: 2
+        currentSeat: 2,
+        highestBid: {
+          bid: {
+            amount: 32,
+            kind: "numeric"
+          },
+          seat: 1
+        }
       },
       dealer: 0,
       handNumber: 1,
@@ -669,7 +701,7 @@ test("active game panel accepts contiguous multi-event live updates", async () =
     expect(client.getMyPrivateHand).toHaveBeenCalledTimes(2);
   });
   expect(client.getReconnectView).not.toHaveBeenCalled();
-  expect(view.getByText("Snapshot 4 · Event 4")).toBeTruthy();
+  expect(view.getByText("Current bid 32.")).toBeTruthy();
 });
 
 function createSession(): CognitoAuthSession {
@@ -845,6 +877,60 @@ function createCompletedHandSummary(): NonNullable<
       teamB: 4
     },
     totalPoints: 42
+  };
+}
+
+function createCompletedTrick(
+  overrides: {
+    readonly playedDominoes?: readonly {
+      readonly domino: {
+        readonly high: number;
+        readonly low: number;
+      };
+      readonly seat: number;
+    }[];
+    readonly winner?: number;
+  } = {}
+) {
+  const playedDominoes = overrides.playedDominoes ?? [
+    {
+      domino: {
+        high: 0,
+        low: 0
+      },
+      seat: 0
+    },
+    {
+      domino: {
+        high: 1,
+        low: 1
+      },
+      seat: 1
+    },
+    {
+      domino: {
+        high: 2,
+        low: 1
+      },
+      seat: 2
+    },
+    {
+      domino: {
+        high: 3,
+        low: 1
+      },
+      seat: 3
+    }
+  ];
+
+  return {
+    trick: {
+      ledDomino: playedDominoes[0]?.domino,
+      ledSuit: "blanks",
+      leader: 0,
+      playedDominoes
+    },
+    winner: overrides.winner ?? 0
   };
 }
 
