@@ -88,6 +88,90 @@ test("active game view raises the next numeric bid above the high bid", () => {
   expect(view.legalBidAmounts[0]).toBe(35);
 });
 
+test("active game view exposes opening mark bids when enabled", () => {
+  const view = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView({
+      viewerSeat: "SEAT_1"
+    }),
+    snapshot: createSnapshot({
+      phase: "bidding",
+      redactedState: {
+        bidding: {
+          currentSeat: 1
+        },
+        dealer: 0,
+        phase: "bidding",
+        rules: {
+          bidding: {
+            maximumNumericBid: 42,
+            minimumBid: 30
+          },
+          enabledContracts: {
+            markBids: true
+          },
+          targetMarks: 7
+        }
+      }
+    })
+  });
+
+  expect(view.canSubmitBid).toBe(true);
+  expect(view.legalBidAmounts[0]).toBe(30);
+  expect(view.legalBidOptions.map((option) => option.label)).toContain("1 mark");
+  expect(view.legalBidOptions.map((option) => option.label)).toContain("2 marks");
+});
+
+test("active game view advances mark bids by one and hides numeric bids", () => {
+  const view = createMultiplayerActiveGameView({
+    privateHand: null,
+    room: createRoomView({
+      viewerSeat: "SEAT_2"
+    }),
+    snapshot: createSnapshot({
+      phase: "bidding",
+      redactedState: {
+        bidding: {
+          currentSeat: 2,
+          highestBid: {
+            bid: {
+              kind: "marks",
+              marks: 2
+            },
+            seat: 1
+          }
+        },
+        dealer: 0,
+        phase: "bidding",
+        rules: {
+          enabledContracts: {
+            markBids: true
+          },
+          targetMarks: 7
+        }
+      }
+    })
+  });
+
+  expect(view.currentBidLabel).toBe("2 marks");
+  expect(view.legalBidAmounts).toEqual([]);
+  expect(view.legalBidOptions).toEqual([
+    {
+      bid: {
+        kind: "pass"
+      },
+      label: "Pass"
+    },
+    {
+      bid: {
+        kind: "marks",
+        marks: 3
+      },
+      label: "3 marks"
+    }
+  ]);
+});
+
 test("active game view hides bidding controls while waiting on another seat", () => {
   const view = createMultiplayerActiveGameView({
     privateHand: null,
@@ -820,6 +904,7 @@ function createCompletedHandSummary(
   return {
     awardedTeamId: "teamB",
     bidAmount: 32,
+    bidLabel: "32",
     biddingTeamId: "teamA",
     biddingTeamPoints: 29,
     completedAt: "2026-05-31T00:00:00.000Z",

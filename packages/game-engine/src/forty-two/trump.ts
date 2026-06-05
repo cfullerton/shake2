@@ -9,7 +9,7 @@ import {
 import { EngineError } from "../errors.ts";
 import {
   type BiddingState,
-  type NumericBid,
+  type NonPassBid,
   type WinningBid
 } from "./bidding.ts";
 import { type RuleConfig } from "./rules-config.ts";
@@ -52,7 +52,7 @@ export const TRUMP_SUIT_PIPS: Record<TrumpSuit, Pip> = {
 };
 
 export interface StandardNumericContract {
-  readonly bid: NumericBid;
+  readonly bid: NonPassBid;
   readonly declarer: SeatIndex;
   readonly kind: "standardNumeric";
   readonly trump: PipTrumpSelection;
@@ -60,7 +60,7 @@ export interface StandardNumericContract {
 }
 
 export interface NoTrumpContract {
-  readonly bid: NumericBid;
+  readonly bid: NonPassBid;
   readonly declarer: SeatIndex;
   readonly kind: "noTrump";
   readonly trump: NoTrumpSelection;
@@ -242,10 +242,18 @@ export function assertContract(value: unknown): asserts value is Contract {
     throw new EngineError("INVALID_BID", "Contract bid must be an object.");
   }
 
-  const numericBid = bid as Record<string, unknown>;
+  const contractBid = bid as Record<string, unknown>;
 
-  if (numericBid.kind !== "numeric" || !Number.isInteger(numericBid.amount)) {
-    throw new EngineError("INVALID_BID", "Contract bid must be numeric.");
+  if (contractBid.kind === "numeric") {
+    if (!Number.isInteger(contractBid.amount)) {
+      throw new EngineError("INVALID_BID", "Contract numeric bid amount is invalid.");
+    }
+  } else if (contractBid.kind === "marks") {
+    if (!Number.isInteger(contractBid.marks)) {
+      throw new EngineError("INVALID_BID", "Contract mark bid count is invalid.");
+    }
+  } else {
+    throw new EngineError("INVALID_BID", "Contract bid must be numeric or marks.");
   }
 
   assertTrumpSelection(contract.trump);
@@ -314,7 +322,7 @@ function getTrumpSuitFromSelection(selection: TrumpSelection): TrumpSuit {
 }
 
 function createContractForSelection(
-  bid: NumericBid,
+  bid: NonPassBid,
   declarer: SeatIndex,
   selection: TrumpSelection
 ): Contract {
@@ -327,7 +335,7 @@ function createContractForSelection(
 }
 
 function createStandardNumericContract(
-  bid: NumericBid,
+  bid: NonPassBid,
   declarer: SeatIndex,
   trumpSuit: TrumpSuit
 ): StandardNumericContract {
@@ -351,7 +359,7 @@ function createStandardNumericContract(
 }
 
 function createNoTrumpContract(
-  bid: NumericBid,
+  bid: NonPassBid,
   declarer: SeatIndex
 ): NoTrumpContract {
   return {

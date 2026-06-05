@@ -58,6 +58,7 @@ export function MultiplayerLobbyContent({
   const [roomCode, setRoomCode] = useState("");
   const [roomVisibility, setRoomVisibility] =
     useState<"private" | "public">("private");
+  const [markBids, setMarkBids] = useState(false);
   const [noTrump, setNoTrump] = useState(false);
   const [targetMarks, setTargetMarks] = useState("7");
   const [username, setUsername] = useState("");
@@ -152,6 +153,7 @@ export function MultiplayerLobbyContent({
     }
 
     await lobby.startGame({
+      ...(markBids ? { markBids: true } : {}),
       ...(noTrump ? { noTrump: true } : {}),
       roomId: lobby.room.roomId,
       ...(Number.isInteger(parsedTarget) && parsedTarget > 0
@@ -525,6 +527,27 @@ export function MultiplayerLobbyContent({
                             true: palette.crimson
                           }}
                           value={noTrump}
+                        />
+                      </Pressable>
+                      <Pressable
+                        accessibilityLabel="Mark Bids"
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: markBids }}
+                        onPress={() => setMarkBids((current) => !current)}
+                        style={styles.optionRow}
+                      >
+                        <View style={styles.optionText}>
+                          <Text style={styles.optionLabel}>Mark Bids</Text>
+                          <Text style={styles.optionMeta}>Bidding variant</Text>
+                        </View>
+                        <Switch
+                          onValueChange={setMarkBids}
+                          thumbColor={markBids ? palette.goldSoft : palette.paper}
+                          trackColor={{
+                            false: palette.paperMuted,
+                            true: palette.crimson
+                          }}
+                          value={markBids}
                         />
                       </Pressable>
                       <Button

@@ -4,18 +4,19 @@ Last reviewed: 2026-06-01
 
 ## Executive Summary
 
-The contract-model refactor described in PR #9 is implemented for standard numeric Texas 42, and the no-trump engine, local practice, and multiplayer exposure slices are now in place.
+The contract-model refactor described in PR #9 is implemented for standard numeric Texas 42, and the no-trump plus mark-bid engine, local practice, and multiplayer exposure slices are now in place.
 
 The engine no longer treats contract data as a flat `contract.trumpSuit` assumption. It now uses a discriminated contract union with contract-aware helper paths for trump resolution, trick resolution, hand scoring, mark awards, and runtime validation.
 
-Variant support is still product-incomplete, but the engine now supports the `standardNumeric` and `noTrump` contract members behind explicit rule configuration. Local practice and multiplayer can expose no-trump through setup/start-game controls and active-game trump selection.
+Variant support is still product-incomplete, but the engine now supports the `standardNumeric` and `noTrump` contract members behind explicit rule configuration, and mark bids as a gated bid type on those contracts. Local practice and multiplayer can expose no-trump through setup/start-game controls and active-game trump selection, and can expose mark bids through setup/start-game controls and bidding surfaces.
 
 ## Current Model (Implemented)
 
 Current implemented assumptions and behavior:
 
-- `BidCall` is still only `pass | numeric`.
-- `NumericBid` is still limited to integer amounts from 30 through 42.
+- `BidCall` supports `pass | numeric | marks`.
+- `NumericBid` is limited to integer amounts from 30 through 42.
+- `MarkBid` is gated by `RuleConfig.enabledContracts.markBids`. The opening mark bidder may bid one or two marks; later mark bids must climb exactly one mark, up to the target marks.
 - `Contract` is now a discriminated union:
 
 ```ts
@@ -23,7 +24,7 @@ type Contract = NoTrumpContract | StandardNumericContract;
 
 type StandardNumericContract = {
   kind: "standardNumeric";
-  bid: NumericBid;
+  bid: NumericBid | MarkBid;
   declarer: SeatIndex;
   trump: {
     kind: "pip";
@@ -33,7 +34,7 @@ type StandardNumericContract = {
 
 type NoTrumpContract = {
   kind: "noTrump";
-  bid: NumericBid;
+  bid: NumericBid | MarkBid;
   declarer: SeatIndex;
   trump: {
     kind: "none";
@@ -47,6 +48,7 @@ type NoTrumpContract = {
 - Trump lookup and trump checks are contract-aware (`getContractTrumpSuit`, `getContractTrumpSelection`, `isDominoTrumpForContract`).
 - Hand scoring is now contract-aware: `scoreCompletedHand(completedTricks, contract, rules)`.
 - Mark awards are now contract-aware via `getContractMarkAwards(contract, biddingTeamId, outcome)`.
+- Mark bids require the bidding team to capture all 42 hand points and award the bid mark count to the bidding team if made or to opponents if set.
 - Runtime validation rejects unsupported contract kinds (`assertContract` in validation/replay boundaries).
 - `RuleConfig.enabledContracts.noTrump` gates no-trump calls. Standard rules keep it disabled.
 
@@ -58,7 +60,7 @@ Current deliberate product deviation (unchanged):
 
 | Variant | Current blockers |
 |---|---|
-| Mark bids | No mark-bid call type or contract member is implemented yet; multi-mark award semantics are still missing. |
+| Mark bids | Engine, local practice UI, and multiplayer UI/API exposure exist behind `RuleConfig.enabledContracts.markBids`; remaining work is broader fixture and deployed smoke coverage. |
 | 84 | No 84 contract member/bid flow or doubled hand-value scoring semantics are implemented. |
 | Follow-me | Contract union is ready, but no follow-me contract kind, delayed/derived trump lifecycle, or command/action flow exists. |
 | No-trump | Engine foundation, local practice UI, and multiplayer room/API/active-game exposure exist behind `RuleConfig.enabledContracts.noTrump`; remaining work is broader fixture and deployed smoke coverage. |
@@ -125,12 +127,25 @@ Implemented for multiplayer:
 5. Updated multiplayer active-game status, trump labels, and legal play hints for no-trump contracts.
 6. Added focused engine, backend, mobile client, lobby, and active-game tests.
 
+## Completed Mark-Bid Variant Slice
+
+Implemented for local practice and multiplayer:
+
+1. Added `MarkBid` to the engine bid model behind `RuleConfig.enabledContracts.markBids`.
+2. Added the mark-bid ladder: first mark bidder may bid one or two marks; later mark bids climb exactly one mark.
+3. Scored mark bids as all-42-point contracts with bid-mark awards to the bidding team when made or opponents when set.
+4. Routed mark-bid rules through local practice setup and multiplayer start-game input instead of accepting arbitrary rules from clients.
+5. Added mobile local/lobby controls and active-game bid buttons for legal mark bids.
+6. Added focused engine, backend, mobile client, lobby, and active-game tests.
+
 ## Remaining Work Before Product Variant Availability
 
-The engine, local practice, and multiplayer control paths are in place for no-trump, but these are still required before treating it as fully product-hardened:
+The engine, local practice, and multiplayer control paths are in place for no-trump and mark bids, but these are still required before treating them as fully product-hardened:
 
 - Add broader fixture-backed command/replay tests for no-trump full-hand made/set outcomes.
+- Add broader fixture-backed command/replay tests for mark-bid full-hand made/set outcomes across multiple declarers.
 - Add deployed subscription/snapshot smoke coverage for no-trump multiplayer actions.
+- Add deployed subscription/snapshot smoke coverage for mark-bid multiplayer actions.
 - Keep unsupported contract kinds rejected at boundaries until each variant is fully implemented.
 
 ## Test Expectations Going Forward
@@ -145,6 +160,6 @@ Still required for each new variant increment:
 
 ## Recommended Next Variant Work
 
-Harden no-trump with broader full-hand fixtures and deployed multiplayer smoke coverage before starting a second variant. No-trump remains the safest first variant because it mostly removes trump ranking instead of adding multi-actor partner/trump decision flows.
+Harden no-trump and mark bids with broader full-hand fixtures and deployed multiplayer smoke coverage before starting another variant. They remain safer than nello, splash, plunge, or sevens because they do not add multi-actor partner/trump decision flows.
 
 Do not start with nello, splash, plunge, or sevens before product-rule clarification and dedicated fixture-backed tests.

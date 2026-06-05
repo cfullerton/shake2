@@ -145,7 +145,7 @@ export interface StartMultiplayerGameInput {
   readonly rules?: RuleConfig;
   readonly targetMarks?: number;
   readonly teamNames?: Partial<Record<FortyTwoTeamId, string>>;
-  readonly variants?: Partial<Pick<FortyTwoEnabledContracts, "noTrump">>;
+  readonly variants?: Partial<Pick<FortyTwoEnabledContracts, "markBids" | "noTrump">>;
 }
 
 export interface StartNextMultiplayerHandInput {
@@ -526,8 +526,9 @@ function createMultiplayerRules(
   }
 
   const noTrump = input.variants?.noTrump === true;
+  const markBids = input.variants?.markBids === true;
 
-  if (!noTrump && input.targetMarks === undefined) {
+  if (!markBids && !noTrump && input.targetMarks === undefined) {
     return undefined;
   }
 
@@ -535,6 +536,7 @@ function createMultiplayerRules(
     ...standardRules,
     enabledContracts: {
       ...standardRules.enabledContracts,
+      markBids,
       noTrump
     },
     ...(input.targetMarks !== undefined ? { targetMarks: input.targetMarks } : {})

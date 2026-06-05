@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   FORTY_TWO_ACTION_SCHEMA_VERSION,
+  createMarkBid,
   createNumericBid,
   createPassBid,
   createInitialFortyTwoSnapshot,
@@ -129,6 +130,35 @@ test("command accepts no-trump calls when no-trump is enabled", () => {
         kind: "none"
       }
     });
+  }
+});
+
+test("command accepts mark bids when mark bidding is enabled", () => {
+  const context = createCommandContext();
+  const created = unwrapSuccess(
+    handleCreateFortyTwoGameCommand(createGameAction({
+      rules: createMarkBidRules()
+    }), context)
+  );
+  const dealt = unwrapSuccess(
+    handleDealFortyTwoHandCommand(
+      created.snapshot,
+      createDealAction(created.snapshot),
+      context
+    )
+  );
+  const result = unwrapSuccess(
+    handleSubmitFortyTwoBidCommand(
+      dealt.snapshot,
+      createSubmitBidAction(dealt.snapshot, 1, createMarkBid(2)),
+      context
+    )
+  );
+
+  assert.equal(result.snapshot.snapshot.phase, "bidding");
+
+  if (result.snapshot.snapshot.phase === "bidding") {
+    assert.deepEqual(result.snapshot.snapshot.bidding.highestBid?.bid, createMarkBid(2));
   }
 });
 
@@ -508,6 +538,16 @@ function createNoTrumpRules(): RuleConfig {
     enabledContracts: {
       ...standardRules.enabledContracts,
       noTrump: true
+    }
+  };
+}
+
+function createMarkBidRules(): RuleConfig {
+  return {
+    ...standardRules,
+    enabledContracts: {
+      ...standardRules.enabledContracts,
+      markBids: true
     }
   };
 }

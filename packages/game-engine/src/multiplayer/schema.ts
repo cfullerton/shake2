@@ -403,12 +403,27 @@ function parseMultiplayerCompletedHandSummary(
         "snapshotRecord.lastCompletedHand.awardedTeamId"
       );
 
+  const bidAmount = parsePositiveInteger(
+    summary.bidAmount,
+    "snapshotRecord.lastCompletedHand.bidAmount"
+  );
+  const bidMarks = summary.bidMarks === undefined
+    ? undefined
+    : parsePositiveInteger(
+        summary.bidMarks,
+        "snapshotRecord.lastCompletedHand.bidMarks"
+      );
+
   return {
     ...(awardedTeamId ? { awardedTeamId } : {}),
-    bidAmount: parsePositiveInteger(
-      summary.bidAmount,
-      "snapshotRecord.lastCompletedHand.bidAmount"
-    ),
+    bidAmount,
+    bidLabel: summary.bidLabel === undefined
+      ? String(bidAmount)
+      : parseNonEmptyString(
+          summary.bidLabel,
+          "snapshotRecord.lastCompletedHand.bidLabel"
+        ),
+    ...(bidMarks !== undefined ? { bidMarks } : {}),
     biddingTeamId: parseTeamId(
       summary.biddingTeamId,
       "snapshotRecord.lastCompletedHand.biddingTeamId"
@@ -764,7 +779,14 @@ function parseBidCall(value: unknown): BidCall {
     };
   }
 
-  throw new EngineError("INVALID_BID", "Bid kind must be pass or numeric.");
+  if (bid.kind === "marks") {
+    return {
+      kind: "marks",
+      marks: parseInteger(bid.marks, "bid.marks")
+    };
+  }
+
+  throw new EngineError("INVALID_BID", "Bid kind must be pass, numeric, or marks.");
 }
 
 function parseMultiplayerRoom(value: unknown): MultiplayerRoom {

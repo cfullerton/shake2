@@ -1,12 +1,12 @@
 # Engine Confidence Report
 
-Last reviewed: 2026-05-30
+Last reviewed: 2026-06-01
 
 ## Summary
 
-Confidence is high for the local, standard, numeric-bid Texas 42 command path. The engine can create a game, deal, bid, force the dealer on all-pass hands, call trump, play seven tricks, score a hand, award marks, rotate the dealer, complete a game, and replay command-emitted events deterministically.
+Confidence is high for the local, standard, numeric-bid Texas 42 command path. The engine can create a game, deal, bid, force the dealer on all-pass hands, call trump, play seven tricks, score a hand, award marks, rotate the dealer, complete a game, and replay command-emitted events deterministically. Confidence is early but growing for no-trump and mark-bid variants now that both are behind explicit rule flags and have focused engine/API/mobile tests.
 
-Confidence is not yet high enough for server-authoritative multiplayer. Accepted events are trusted by the reducer, snapshots and events do not have runtime schema validation, local practice is in-memory only, and the bot/session boundary does not yet enforce hidden-information limits.
+Multiplayer confidence has improved with runtime boundary parsing, validated replay before persisted writes/restores, AppSync/DynamoDB adapters, and active-game UI, but it still needs broader deployed smoke coverage and reconnect/pending-action hardening. Local practice remains in-memory only, and the bot/session boundary does not yet enforce hidden-information limits by construction.
 
 ## Confidence Matrix
 
@@ -16,11 +16,11 @@ Confidence is not yet high enough for server-authoritative multiplayer. Accepted
 | Count scoring | High | Five count dominoes are identified; count total is proven as 35. | None for standard double-six rules. |
 | Seats and teams | High | Seat `0-3`, teams `0/2` vs `1/3`, dealer and bid-order tests. | No player identity/seat-claiming model yet. |
 | Shuffle and deal | High | Deterministic shuffle uses `EngineContext.random`; tests prove 7 dominoes to 4 seats and all 28 dealt once. | No persisted shuffle seed or server-verifiable shuffle protocol yet. |
-| Numeric bidding | High | Tests cover minimum 30, maximum 42, increasing bids, turn order, all-pass dealer-forced bid, and declarer selection. | `RuleConfig.bidding.allPassBehavior: "redeal"` exists as a type but behavior is not implemented. |
-| Trump model | High for standard pip trump and early no-trump | Tests cover each suit, declarer-only calls, phase validation, trump identity, double-high ranking, and no-trump contract calls. | Follow-me, nello, sevens, splash, plunge, 84, and mark-bid contract behavior are not implemented. |
+| Numeric and mark bidding | High for numeric, medium for mark bids | Tests cover minimum 30, maximum 42, increasing numeric bids, turn order, all-pass dealer-forced bid, declarer selection, mark-bid gating, opening one/two-mark bids, one-mark ladder progression, and numeric rejection after mark bids. | `RuleConfig.bidding.allPassBehavior: "redeal"` exists as a type but behavior is not implemented. Mark bids still need broader full-hand fixtures and deployed multiplayer smoke coverage. |
+| Trump model | High for standard pip trump and early no-trump | Tests cover each suit, declarer-only calls, phase validation, trump identity, double-high ranking, and no-trump contract calls. | Follow-me, nello, sevens, splash, plunge, and 84 behavior are not implemented. |
 | Trick legality | High for standard rules, medium for no-trump | Tests cover invalid turn, missing domino, led suit legality, must-follow, sloughing, trump winners, led-suit winners, and no-trump led-suit behavior. | No-trump needs broader fixture coverage; other variant behavior is not implemented yet. |
-| Hand scoring | High for command-emitted hands | Tests cover made exact, made over target, set by one, count capture extremes, and total 42 points. | `scoreCompletedHand` trusts supplied completed trick winners; command path derives them, but forged accepted events can bypass that derivation. |
-| Mark scoring and game completion | High locally | Tests cover mark awards, dealer rotation, target marks, and game-complete event emission. | No standalone adjudication/correction command and no multiplayer authority layer. |
+| Hand scoring | High for command-emitted standard hands, medium for mark bids | Tests cover made exact, made over target, set by one, count capture extremes, total 42 points, and made/set mark bids. | Mark bids need more declarer/team fixture coverage. |
+| Mark scoring and game completion | High locally | Tests cover mark awards, mark-bid multi-mark awards, dealer rotation, target marks, and game-complete event emission. | No standalone adjudication/correction command. |
 | Event replay | High for accepted, command-emitted streams | Replay tests prove deterministic state for command-emitted event streams through full hands and games. | Reducer intentionally trusts accepted events; it does not prove that accepted events were valid. |
 | Local session layer | Medium-high | Session tests cover start, restart, dealer rotation, 100 completed hands, and 25 completed games. | Session is in-memory only and is not resumable after process/app restart. |
 | Legal-random bots | Medium-high for legality | Bots choose from legal-action selectors; simulation tests complete many hands/games without illegal states. | Bot input receives the full snapshot, so hidden information is a convention, not an enforced boundary. |
@@ -54,9 +54,9 @@ Confidence is not yet high enough for server-authoritative multiplayer. Accepted
 
    The legal-random bot chooses actions from legal selectors, but its input includes the full snapshot, including all hands. That is acceptable for V1 tests, but not acceptable as a hard architecture boundary.
 
-5. Variant behavior is partially modeled and no-trump is implemented behind explicit rules.
+5. Variant behavior is partially modeled; no-trump and mark bids are implemented behind explicit rules.
 
-   `RuleConfig` exposes future switches such as redeal all-pass behavior and variant contracts. Command logic currently implements standard numeric and no-trump contracts; other variant flags remain placeholders.
+   `RuleConfig` exposes future switches such as redeal all-pass behavior and variant contracts. Command logic currently implements standard numeric, no-trump, and mark-bid behavior; other variant flags remain placeholders.
 
 6. UI confidence lags engine confidence.
 

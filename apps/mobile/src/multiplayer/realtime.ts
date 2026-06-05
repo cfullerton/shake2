@@ -412,6 +412,8 @@ const ON_GAME_UPDATED_SUBSCRIPTION = `
         lastCompletedHand {
           awardedTeamId
           bidAmount
+          bidLabel
+          bidMarks
           biddingTeamId
           biddingTeamPoints
           completedAt

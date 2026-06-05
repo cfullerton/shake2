@@ -20,7 +20,7 @@ type Mutation {
 
 `addBot` is a host-only lobby mutation for filling empty seats before start. The response uses safe room fields with `isBot` flags; raw bot player IDs are not part of room views.
 
-`StartGameInput` includes `targetMarks` and a sanitized `noTrump` boolean. The backend turns those fields into engine-owned rules so clients can opt into supported variants without submitting arbitrary `RuleConfig` payloads.
+`StartGameInput` includes `targetMarks` plus sanitized `noTrump` and `markBids` booleans. The backend turns those fields into engine-owned rules so clients can opt into supported variants without submitting arbitrary `RuleConfig` payloads.
 
 `startNextHand` is a server-owned lifecycle mutation. It deals from the authoritative post-hand `setup` state, is host-only in the current API, returns the same safe public result shape as `submitGameAction`, and is included in the game-update subscription fan-out.
 
@@ -63,4 +63,4 @@ type SubmitGameActionResult = {
 };
 ```
 
-`PublicGameSnapshot.lastCompletedHand` is optional public metadata populated after a hand completes. It includes bid amount, declarer, bidding team, team point totals, trick counts, mark awards, and outcome, but not completed tricks, played dominoes, raw hands, or viewer hands. This keeps post-hand and game-over UI renderable from AppSync reads/subscriptions without exposing hidden information.
+`PublicGameSnapshot.lastCompletedHand` is optional public metadata populated after a hand completes. It includes bid amount, bid label, optional bid-mark count, declarer, bidding team, team point totals, trick counts, mark awards, and outcome, but not completed tricks, played dominoes, raw hands, or viewer hands. This keeps post-hand and game-over UI renderable from AppSync reads/subscriptions without exposing hidden information.

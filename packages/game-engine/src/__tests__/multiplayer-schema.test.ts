@@ -170,6 +170,37 @@ test("multiplayer schema parses no-trump call actions", () => {
   });
 });
 
+test("multiplayer schema parses mark bid actions", () => {
+  const parsed = parseFortyTwoActionEnvelope({
+    action: {
+      payload: {
+        bid: {
+          kind: "marks",
+          marks: 2
+        },
+        seat: 1
+      },
+      type: "fortyTwo.bid.submit"
+    },
+    actionId: "action-mark-bid",
+    actorId: "player-1",
+    actorSeat: 1,
+    clientCreatedAt: "2026-05-30T12:00:00.000Z",
+    gameId: "game-1",
+    knownLastEventSequence: 2,
+    knownSnapshotVersion: 2,
+    schemaVersion: FORTY_TWO_ACTION_SCHEMA_VERSION
+  });
+
+  assert.deepEqual(parsed.action.payload, {
+    bid: {
+      kind: "marks",
+      marks: 2
+    },
+    seat: 1
+  });
+});
+
 test("multiplayer schema rejects malformed action idempotency records", () => {
   const context = createTestContext();
   const session = createStartedSession(context);

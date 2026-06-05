@@ -90,6 +90,22 @@ test("local practice exposes and plays a no-trump contract when enabled", () => 
   assertReplayMatches(session);
 });
 
+test("local practice can enable mark bids", () => {
+  const context = createSimulationContext(4);
+  const session = createLocalGameSession(
+    {
+      targetMarks: 7,
+      variants: {
+        markBids: true
+      }
+    },
+    context
+  );
+
+  assert.equal(session.snapshot.snapshot.rules.enabledContracts.markBids, true);
+  assertReplayMatches(session);
+});
+
 test("sorts local domino hands with trump first and high dominoes descending", () => {
   const sorted = sortDominoesForLocalPlay(
     [

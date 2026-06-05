@@ -85,6 +85,96 @@ test("active game panel loads the viewer hand and submits bids", async () => {
   });
 });
 
+test("active game panel submits mark bids", async () => {
+  const hand = createPrivateHand();
+  const accepted: MultiplayerSubmitGameActionResult = {
+    accepted: true,
+    committed: true,
+    duplicate: false,
+    events: [],
+    gameId: "game-1",
+    snapshot: createSnapshot({
+      lastEventSequence: 3,
+      phase: "bidding",
+      redactedState: {
+        bidding: {
+          currentSeat: 2,
+          highestBid: {
+            bid: {
+              kind: "marks",
+              marks: 2
+            },
+            seat: 1
+          }
+        },
+        dealer: 0,
+        phase: "bidding"
+      },
+      snapshotVersion: 3
+    })
+  };
+  const initialSnapshot = createSnapshot({
+    phase: "bidding",
+    redactedState: {
+      bidding: {
+        currentSeat: 1
+      },
+      dealer: 0,
+      handNumber: 1,
+      phase: "bidding",
+      rules: {
+        bidding: {
+          maximumNumericBid: 42,
+          minimumBid: 30
+        },
+        enabledContracts: {
+          markBids: true
+        },
+        targetMarks: 7
+      }
+    }
+  });
+  const client = {
+    getGameSnapshot: jest.fn(async () => initialSnapshot),
+    getMyPrivateHand: jest.fn(async () => hand),
+    submitBid: jest.fn(async () => accepted),
+    submitDomino: jest.fn(),
+    submitTrump: jest.fn()
+  } as unknown as MultiplayerLobbyGameClient;
+  const view = render(
+    <MultiplayerActiveGamePanel
+      actorId="actor-sub"
+      client={client}
+      initialRoom={createRoomView()}
+      initialSnapshot={initialSnapshot}
+      session={createSession()}
+    />
+  );
+
+  await waitFor(() => {
+    expect(client.getMyPrivateHand).toHaveBeenCalledWith({
+      gameId: "game-1",
+      seatIndex: "SEAT_1"
+    });
+  });
+
+  fireEvent.press(view.getByText("2 marks"));
+
+  await waitFor(() => {
+    expect(client.submitBid).toHaveBeenCalledWith({
+      actorId: "actor-sub",
+      actorSeat: "SEAT_1",
+      bid: {
+        kind: "marks",
+        marks: 2
+      },
+      gameId: "game-1",
+      knownLastEventSequence: 2,
+      knownSnapshotVersion: 2
+    });
+  });
+});
+
 test("active game panel submits declarer trump calls", async () => {
   const hand = createPrivateHand();
   const accepted: MultiplayerSubmitGameActionResult = {
@@ -1021,6 +1111,7 @@ function createCompletedHandSummary(): NonNullable<
   return {
     awardedTeamId: "teamB",
     bidAmount: 32,
+    bidLabel: "32",
     biddingTeamId: "teamA",
     biddingTeamPoints: 29,
     completedAt: "2026-05-31T00:00:00.000Z",

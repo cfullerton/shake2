@@ -13,6 +13,10 @@ import {
 } from "../dominoes/set.ts";
 import { EngineError } from "../errors.ts";
 import {
+  formatBidLabel,
+  type NonPassBid
+} from "./bidding.ts";
+import {
   standardRules,
   type RuleConfig
 } from "./rules-config.ts";
@@ -55,6 +59,8 @@ export interface CompletedTrickScore {
 
 export interface HandScore {
   readonly bidAmount: number;
+  readonly bidLabel: string;
+  readonly bidMarks?: number;
   readonly biddingTeamId: FortyTwoTeamId;
   readonly biddingTeamPoints: number;
   readonly declarer: SeatIndex;
@@ -146,11 +152,14 @@ export function scoreCompletedHand(
 
   const biddingTeamId = getTeamForSeat(contract.declarer);
   const biddingTeamPoints = currentScore.teamPoints[biddingTeamId];
-  const bidAmount = getContractBidAmount(contract);
+  const bidAmount = getContractBidPointRequirement(contract, rules);
   const outcome: BidOutcome = biddingTeamPoints >= bidAmount ? "made" : "set";
+  const bidMarks = getContractBidMarks(contract);
 
   return {
     bidAmount,
+    bidLabel: formatBidLabel(contract.bid),
+    ...(bidMarks !== null ? { bidMarks } : {}),
     biddingTeamId,
     biddingTeamPoints,
     declarer: contract.declarer,
@@ -172,7 +181,7 @@ export function getContractMarkAwards(
   switch (contract.kind) {
     case "noTrump":
     case "standardNumeric":
-      return getStandardNumericMarkAwards(biddingTeamId, outcome);
+      return getStandardMarkAwards(contract.bid, biddingTeamId, outcome);
   }
 }
 
@@ -257,7 +266,8 @@ function assertCompleteHandDominoes(
   }
 }
 
-function getStandardNumericMarkAwards(
+function getStandardMarkAwards(
+  bid: NonPassBid,
   biddingTeamId: FortyTwoTeamId,
   outcome: BidOutcome
 ): TeamMarkAwards {
@@ -265,15 +275,28 @@ function getStandardNumericMarkAwards(
   const awardedTeamId =
     outcome === "made" ? biddingTeamId : getOpposingTeamId(biddingTeamId);
 
-  markAwards[awardedTeamId] = 1;
+  markAwards[awardedTeamId] = bid.kind === "marks" ? bid.marks : 1;
   return markAwards;
 }
 
-function getContractBidAmount(contract: Contract): number {
+function getContractBidPointRequirement(
+  contract: Contract,
+  rules: RuleConfig
+): number {
   switch (contract.kind) {
     case "noTrump":
     case "standardNumeric":
-      return contract.bid.amount;
+      return contract.bid.kind === "marks"
+        ? rules.scoring.handTotalPoints
+        : contract.bid.amount;
+  }
+}
+
+function getContractBidMarks(contract: Contract): number | null {
+  switch (contract.kind) {
+    case "noTrump":
+    case "standardNumeric":
+      return contract.bid.kind === "marks" ? contract.bid.marks : null;
   }
 }
 

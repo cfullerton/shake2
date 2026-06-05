@@ -58,7 +58,7 @@ test("multiplayer room seats four players and starts a dealt authoritative game"
   );
 });
 
-test("multiplayer game start can enable no-trump rules", () => {
+test("multiplayer game start can enable variant rules", () => {
   const context = createTestContext();
   const room = createReadyRoom(context);
   const session = unwrapResult(
@@ -69,6 +69,7 @@ test("multiplayer game start can enable no-trump rules", () => {
         gameId: "game-1",
         targetMarks: 5,
         variants: {
+          markBids: true,
           noTrump: true
         }
       },
@@ -76,6 +77,7 @@ test("multiplayer game start can enable no-trump rules", () => {
     )
   );
 
+  assert.equal(session.snapshot.snapshot.rules.enabledContracts.markBids, true);
   assert.equal(session.snapshot.snapshot.rules.enabledContracts.noTrump, true);
   assert.equal(session.snapshot.snapshot.rules.targetMarks, 5);
 });

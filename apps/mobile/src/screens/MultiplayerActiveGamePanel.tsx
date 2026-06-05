@@ -294,22 +294,19 @@ export function MultiplayerActiveGamePanel({
           <>
             <Text style={styles.copy}>Your bid.</Text>
             <View style={styles.bidGrid}>
-              {view.legalBidAmounts.map((amount) => (
-                <Button
-                  disabled={!canSubmitActions}
-                  key={amount}
-                  loading={game.busyAction === "submitBid"}
-                  onPress={() =>
-                    game.submitBid({
-                      amount,
-                      kind: "numeric"
-                    })
-                  }
-                  style={styles.bidButton}
-                >
-                  {String(amount)}
-                </Button>
-              ))}
+              {view.legalBidOptions
+                .filter((option) => option.bid.kind !== "pass")
+                .map((option) => (
+                  <Button
+                    disabled={!canSubmitActions}
+                    key={option.label}
+                    loading={game.busyAction === "submitBid"}
+                    onPress={() => game.submitBid(option.bid)}
+                    style={styles.bidButton}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
             </View>
             <Button
               disabled={!canSubmitActions}

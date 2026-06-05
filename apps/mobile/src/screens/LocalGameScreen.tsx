@@ -10,12 +10,14 @@ import {
   getLocalGameCurrentTurnSeat,
   getLocalGameView,
   getTeamForSeat,
+  formatBidLabel,
   playLocalGameDomino,
   restartLocalGameSession,
   scoreCompletedTricks,
   sortDominoesForLocalPlay,
   submitLocalGameBid,
   type CompletedTrick,
+  type BidCall,
   type Contract,
   type Domino,
   type EngineContext,
@@ -64,6 +66,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
     createLocalGameSession(
       {
         variants: {
+          markBids: route.params.markBids ?? false,
           noTrump: route.params.noTrump ?? false
         },
         targetMarks: route.params.targetMarks
@@ -389,7 +392,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           <Text style={styles.panelTitle}>Your bid</Text>
           {state.phase === "bidding" && state.bidding.highestBid ? (
             <Text style={styles.currentBidDisplay}>
-              High bid: {state.bidding.highestBid.bid.amount}
+              High bid: {formatBidLabel(state.bidding.highestBid.bid)}
             </Text>
           ) : null}
           <View style={styles.bidGrid}>
@@ -675,7 +678,7 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
           <View style={styles.infoGrid}>
             <InfoTile
               label="Bid"
-              value={`${view.summary.handScore.bidAmount} by ${seatNames[view.summary.handScore.declarer]} (${state.teams[view.summary.handScore.biddingTeamId].name})`}
+              value={`${view.summary.handScore.bidLabel} by ${seatNames[view.summary.handScore.declarer]} (${state.teams[view.summary.handScore.biddingTeamId].name})`}
             />
             <InfoTile
               label="Points"
@@ -880,8 +883,8 @@ function ScoreRow({
   );
 }
 
-function formatBid(bid: { readonly amount?: number; readonly kind: string }): string {
-  return bid.kind === "numeric" ? String(bid.amount) : "passed";
+function formatBid(bid: BidCall): string {
+  return bid.kind === "pass" ? "passed" : formatBidLabel(bid);
 }
 
 function formatTrumpSuit(trumpSuit: TrumpSuit): string {
@@ -1051,7 +1054,7 @@ function formatCurrentBid(state: FortyTwoState, humanSeat: SeatIndex): string {
   const teamName = state.teams[getTeamForSeat(highestBid.seat)].name;
   const bidderLabel = highestBid.seat === humanSeat ? "You" : direction;
   const forcedSuffix = highestBid.forced ? " (forced)" : "";
-  return `${highestBid.bid.amount} by ${bidderLabel} (${teamName})${forcedSuffix}`;
+  return `${formatBidLabel(highestBid.bid)} by ${bidderLabel} (${teamName})${forcedSuffix}`;
 }
 
 function formatTrumpStatus(state: FortyTwoState): string {

@@ -54,6 +54,8 @@ export interface MultiplayerTeamTotals {
 export interface MultiplayerCompletedHandSummary {
   readonly awardedTeamId?: string | null;
   readonly bidAmount: number;
+  readonly bidLabel: string;
+  readonly bidMarks?: number | null;
   readonly biddingTeamId: string;
   readonly biddingTeamPoints: number;
   readonly completedAt: string;

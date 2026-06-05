@@ -6,6 +6,7 @@ import {
   FORTY_TWO_TEAMS,
   createDomino,
   createDoubleSixSet,
+  createMarkBid,
   createNumericBid,
   getCompletedTrickCountPoints,
   getTeamForSeat,
@@ -55,6 +56,24 @@ test("scores a made bid over target", () => {
   });
 });
 
+test("scores a made mark bid as all points and awards the bid marks", () => {
+  const score = scoreCompletedHand(
+    createCompletedTricks([0, 0, 0, 0, 0, 0, 0]),
+    createMarkContract(0, 2),
+    standardRules
+  );
+
+  assert.equal(score.bidAmount, FORTY_TWO_HAND_TOTAL_POINTS);
+  assert.equal(score.bidLabel, "2 marks");
+  assert.equal(score.bidMarks, 2);
+  assert.equal(score.biddingTeamPoints, FORTY_TWO_HAND_TOTAL_POINTS);
+  assert.equal(score.outcome, "made");
+  assert.deepEqual(score.markAwards, {
+    teamA: 2,
+    teamB: 0
+  });
+});
+
 test("sets a bid missed by one point", () => {
   const score = scoreCompletedHand(
     createCompletedTricks([0, 2, 0, 2, 1, 0, 1]),
@@ -67,6 +86,24 @@ test("sets a bid missed by one point", () => {
   assert.deepEqual(score.markAwards, {
     teamA: 0,
     teamB: 1
+  });
+});
+
+test("sets a mark bid unless the bidding team takes every point", () => {
+  const score = scoreCompletedHand(
+    createCompletedTricks([0, 2, 0, 2, 0, 1, 1]),
+    createMarkContract(0, 2),
+    standardRules
+  );
+
+  assert.equal(score.bidAmount, FORTY_TWO_HAND_TOTAL_POINTS);
+  assert.equal(score.bidLabel, "2 marks");
+  assert.equal(score.bidMarks, 2);
+  assert.equal(score.biddingTeamPoints, 40);
+  assert.equal(score.outcome, "set");
+  assert.deepEqual(score.markAwards, {
+    teamA: 0,
+    teamB: 2
   });
 });
 
@@ -330,6 +367,19 @@ function createStandardTrickDominoes(): readonly [
 function createContract(seat: SeatIndex, amount: number): Contract {
   return {
     bid: createNumericBid(amount),
+    declarer: seat,
+    kind: "standardNumeric",
+    trump: {
+      kind: "pip",
+      suit: "sixes"
+    },
+    trumpSuit: "sixes"
+  };
+}
+
+function createMarkContract(seat: SeatIndex, marks: number): Contract {
+  return {
+    bid: createMarkBid(marks),
     declarer: seat,
     kind: "standardNumeric",
     trump: {

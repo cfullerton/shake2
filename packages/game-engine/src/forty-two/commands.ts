@@ -213,7 +213,8 @@ export function handleSubmitFortyTwoBidCommand(
     const nextBidding = submitBid(
       bidding,
       action.action.payload.seat,
-      action.action.payload.bid
+      action.action.payload.bid,
+      snapshot.snapshot.rules
     );
     const event = createEventEnvelope(
       snapshot,

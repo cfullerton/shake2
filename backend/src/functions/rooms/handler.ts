@@ -231,8 +231,17 @@ export function createStartGameHandler(
         previousRoom.room,
         {
           actorId: actor.playerId,
-          ...(input.noTrump !== undefined
-            ? { variants: { noTrump: input.noTrump } }
+          ...(input.markBids !== undefined || input.noTrump !== undefined
+            ? {
+                variants: {
+                  ...(input.markBids !== undefined
+                    ? { markBids: input.markBids }
+                    : {}),
+                  ...(input.noTrump !== undefined
+                    ? { noTrump: input.noTrump }
+                    : {})
+                }
+              }
             : {}),
           ...(input.targetMarks !== undefined
             ? { targetMarks: input.targetMarks }
@@ -524,9 +533,11 @@ function parseStartGameInput(
     input.targetMarks,
     "startGame.targetMarks"
   );
+  const markBids = parseOptionalBoolean(input.markBids, "startGame.markBids");
   const noTrump = parseOptionalBoolean(input.noTrump, "startGame.noTrump");
 
   return {
+    ...(markBids !== undefined ? { markBids } : {}),
     ...(noTrump !== undefined ? { noTrump } : {}),
     roomId: parseNonEmptyString(input.roomId, "startGame.roomId").trim(),
     ...(targetMarks !== undefined ? { targetMarks } : {})

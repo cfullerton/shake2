@@ -214,6 +214,59 @@ test("MultiplayerGameClient submits bids as AppSync AWSJSON actions", async () =
   });
 });
 
+test("MultiplayerGameClient submits mark bids as AppSync AWSJSON actions", async () => {
+  const result: MultiplayerSubmitGameActionResult = {
+    accepted: true,
+    committed: true,
+    duplicate: false,
+    events: [],
+    gameId: "game-1",
+    snapshot: createSnapshot()
+  };
+  const graphql = new MockGraphqlClient({
+    submitGameAction: result
+  });
+  const client = new MultiplayerGameClient(graphql);
+  const bid: MultiplayerBid = {
+    kind: "marks",
+    marks: 2
+  };
+
+  await expect(
+    client.submitBid({
+      actorId: "actor-sub",
+      actorSeat: "SEAT_1",
+      bid,
+      gameId: "game-1",
+      knownLastEventSequence: 2,
+      knownSnapshotVersion: 2
+    })
+  ).resolves.toMatchObject({
+    accepted: true,
+    snapshot: {
+      gameId: "game-1"
+    }
+  });
+
+  const variables = graphql.requests[0]?.variables as {
+    readonly input?: {
+      readonly action?: string;
+    };
+  };
+  const action = JSON.parse(variables.input?.action ?? "{}") as {
+    readonly action?: {
+      readonly payload?: {
+        readonly bid?: MultiplayerBid;
+      };
+    };
+  };
+
+  expect(action.action?.payload?.bid).toEqual({
+    kind: "marks",
+    marks: 2
+  });
+});
+
 test("MultiplayerGameClient starts the next hand through AppSync", async () => {
   const graphql = new MockGraphqlClient({
     startNextHand: {
@@ -569,6 +622,7 @@ function createCompletedHandSummary(): NonNullable<
   return {
     awardedTeamId: "teamB",
     bidAmount: 32,
+    bidLabel: "32",
     biddingTeamId: "teamA",
     biddingTeamPoints: 29,
     completedAt: "2026-05-31T00:00:00.000Z",

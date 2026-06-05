@@ -259,7 +259,12 @@ function validateBidSubmittedEvent(
     throw new EngineError("INVALID_ACTOR", "Bid event actor seat does not match payload seat.");
   }
 
-  const expectedBidding = submitBid(bidding, payload.seat, payload.bid);
+  const expectedBidding = submitBid(
+    bidding,
+    payload.seat,
+    payload.bid,
+    snapshot.snapshot.rules
+  );
   assertDeepEqual(payload.bidding, expectedBidding, "Bid event contains forged bidding state.");
 }
 
@@ -509,6 +514,11 @@ function assertBid(value: BidCall): void {
     return;
   }
 
+  if (bid.kind === "marks") {
+    assertInteger(bid.marks, "bid.marks");
+    return;
+  }
+
   throw new EngineError("INVALID_BID", "Bid kind is invalid.");
 }
 
@@ -516,6 +526,10 @@ function assertHandScore(value: HandScore): void {
   const handScore = assertRecord(value, "handScore");
   assertInteger(handScore.totalPoints, "handScore.totalPoints");
   assertInteger(handScore.bidAmount, "handScore.bidAmount");
+  assertNonEmptyString(handScore.bidLabel, "handScore.bidLabel");
+  if (handScore.bidMarks !== undefined) {
+    assertInteger(handScore.bidMarks, "handScore.bidMarks");
+  }
   assertInteger(handScore.biddingTeamPoints, "handScore.biddingTeamPoints");
 }
 

@@ -45,6 +45,10 @@ test("schema file exists and includes required operations", () => {
     schema,
     /input StartGameInput \{[\s\S]*?\bnoTrump\b[\s\S]*?\n\}/u
   );
+  assert.match(
+    schema,
+    /input StartGameInput \{[\s\S]*?\bmarkBids\b[\s\S]*?\n\}/u
+  );
   assertTypeField(schema, "Query", "getRoom");
   assertTypeField(schema, "Query", "getRoomByCode");
   assertTypeField(schema, "Query", "listPublicRooms");
@@ -142,7 +146,9 @@ test("public snapshot adapter maps compact completed-hand summaries", () => {
     createMultiplayerVisibleSnapshot(session.snapshot, 0),
     {
       awardedTeamId: "teamB",
-      bidAmount: 32,
+      bidAmount: 42,
+      bidLabel: "2 marks",
+      bidMarks: 2,
       biddingTeamId: "teamA",
       biddingTeamPoints: 29,
       completedAt: "2026-05-31T00:00:00.000Z",
@@ -168,7 +174,11 @@ test("public snapshot adapter maps compact completed-hand summaries", () => {
 
   assert.match(publicSnapshotType, /\blastCompletedHand: CompletedHandSummary\b/);
   assert.match(completedHandType, /\bdeclarer: SeatIndex!/);
+  assert.match(completedHandType, /\bbidLabel: String!/);
+  assert.match(completedHandType, /\bbidMarks: Int\b/);
   assert.match(teamTotalsType, /\bteamA: Int!/);
+  assert.equal(publicSnapshot.lastCompletedHand?.bidLabel, "2 marks");
+  assert.equal(publicSnapshot.lastCompletedHand?.bidMarks, 2);
   assert.equal(publicSnapshot.lastCompletedHand?.declarer, "SEAT_0");
   assert.equal(publicSnapshot.lastCompletedHand?.outcome, "set");
   assert.deepEqual(publicSnapshot.lastCompletedHand?.teamPoints, {

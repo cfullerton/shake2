@@ -1,6 +1,9 @@
 import {
+  createMarkBid,
   createNumericBid,
   createPassBid,
+  formatBidLabel,
+  getLegalMarkBidValues,
   MAX_NUMERIC_BID,
   MIN_NUMERIC_BID,
   type BidCall
@@ -59,10 +62,13 @@ export function getLegalBidOptions(
     return [];
   }
 
-  const highestBid = bidding?.highestBid?.bid.amount ?? null;
+  const highestBid = bidding?.highestBid ?? null;
+  const highestNumericBid = highestBid?.bid.kind === "numeric"
+    ? highestBid.bid.amount
+    : null;
   const minimumNumericBid = Math.max(
     MIN_NUMERIC_BID,
-    highestBid === null ? MIN_NUMERIC_BID : highestBid + 1
+    highestNumericBid === null ? MIN_NUMERIC_BID : highestNumericBid + 1
   );
   const options: LegalBidOption[] = [
     {
@@ -71,10 +77,21 @@ export function getLegalBidOptions(
     }
   ];
 
-  for (let amount = minimumNumericBid; amount <= MAX_NUMERIC_BID; amount += 1) {
+  if (highestBid?.bid.kind !== "marks") {
+    for (let amount = minimumNumericBid; amount <= MAX_NUMERIC_BID; amount += 1) {
+      options.push({
+        bid: createNumericBid(amount),
+        label: String(amount)
+      });
+    }
+  }
+
+  for (const marks of getLegalMarkBidValues(highestBid, snapshot.snapshot.rules)) {
+    const bid = createMarkBid(marks);
+
     options.push({
-      bid: createNumericBid(amount),
-      label: String(amount)
+      bid,
+      label: formatBidLabel(bid)
     });
   }
 

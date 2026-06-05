@@ -21,6 +21,10 @@ import type {
 
 export type MultiplayerBid =
   | {
+      readonly kind: "marks";
+      readonly marks: number;
+    }
+  | {
       readonly kind: "numeric";
       readonly amount: number;
     }
@@ -370,6 +374,8 @@ const PUBLIC_SNAPSHOT_SELECTION = `
   lastCompletedHand {
     awardedTeamId
     bidAmount
+    bidLabel
+    bidMarks
     biddingTeamId
     biddingTeamPoints
     completedAt

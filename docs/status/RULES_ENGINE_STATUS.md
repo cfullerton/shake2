@@ -4,9 +4,9 @@ Last reviewed: 2026-06-01
 
 ## Executive Summary
 
-The rules engine has moved beyond scorekeeper-only support and now contains the core local Texas 42 rule primitives for dominoes, seating, dealing, numeric bidding, trump, trick legality, trick winners, full-hand scoring, mark awards, dealer advancement, and game completion.
+The rules engine has moved beyond scorekeeper-only support and now contains the core local Texas 42 rule primitives for dominoes, seating, dealing, numeric and mark bidding, trump, trick legality, trick winners, full-hand scoring, mark awards, dealer advancement, and game completion.
 
-The implementation is now a focused local command/reducer path through `PLAY_DOMINO`: a fourth play completes a trick, the seventh completed trick completes the hand, scoring is applied, marks are awarded, and the game completes when target marks are reached. M3 Phase 1 adds a local playable session layer, legal-random bots, and a minimal mobile practice flow. The first multiplayer implementation adds a backend-neutral authoritative room/session layer, but it is still not wired into persistence, AWS, auth, realtime transport, mobile multiplayer UI, advanced bots, or variants.
+The implementation is now a command/reducer path through `PLAY_DOMINO`: a fourth play completes a trick, the seventh completed trick completes the hand, scoring is applied, marks are awarded, and the game completes when target marks are reached. Local practice, legal-random bots, and mobile practice screens are in place. Multiplayer now has backend-neutral authority modules plus Cognito/AppSync/Lambda/DynamoDB adapters, lobby UI, active-game UI, realtime snapshot sync, online bots, and variant flags for no-trump and mark bids.
 
 ## Current Package Boundary
 
@@ -81,6 +81,7 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Deterministic shuffle using `EngineContext.random`.
 - Deal model that gives exactly 7 dominoes to each of 4 seats.
 - Numeric bidding with pass, 30-42 bids, increasing bid validation, one bid per player, all-pass forced dealer bid, and declarer selection.
+- Mark bidding behind `RuleConfig.enabledContracts.markBids`: an opening mark bidder may bid one or two marks; later mark bids climb exactly one mark up to target marks; numeric bids cannot follow a mark bid.
 - Trump suit model for blanks, ones, twos, threes, fours, fives, and sixes.
 - Contract model uses a discriminated `Contract` union after declarer calls trump.
 - Standard numeric contracts store trump as nested selection: `trump: { kind: "pip"; suit: TrumpSuit }`.
@@ -96,7 +97,8 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Total hand-point invariant of 42.
 - Bidding-team point calculation.
 - Numeric bid made/set outcome.
-- Mark awards for made or set numeric bids.
+- Mark-bid made/set outcome requiring all 42 hand points, with the bid mark count awarded to the bidding team when made or opponents when set.
+- Mark awards for made or set numeric and mark bids.
 - Serializable `FortyTwoState` phase types for setup, dealt, bidding, trump, trick play, hand complete, and game complete.
 - Initial full-game snapshot builder for local practice setup state.
 - Forty Two action and event envelope types with schema version, actor, action ID, sequence, and timestamp fields.
@@ -116,6 +118,7 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Terminal game state records the winning team and completion timestamp.
 - Legal-action selectors for bids, trump calls, and domino plays.
 - Local and multiplayer no-trump setup/start-game and trump-selection exposure through engine-owned rules and legal contract calls.
+- Local and multiplayer mark-bid setup/start-game and bidding exposure through engine-owned rules and legal bid options.
 - Legal-random bot that only chooses actions exposed as legal by the engine.
 - Local game-session layer that creates games, manages human/bot seats, advances bot turns, dispatches engine commands, exposes session views, supports hand continuation, and supports restart.
 - Minimal mobile local-practice screens for start, bidding, trump selection, trick play, hand summary, and game summary.
@@ -146,12 +149,14 @@ Important covered invariants:
 - Deterministic shuffle.
 - Seven dominoes per player and all 28 dominoes dealt once.
 - Numeric bid limits and ordering.
+- Mark-bid gating, opening one/two-mark bids, exact one-mark ladder progression, and rejection of numeric bids after mark bids.
 - All-pass dealer-forced bid.
 - Declarer-only trump call.
 - Trump ranking across every suit.
 - Legal and illegal trick plays.
 - Trump and led-suit trick winners.
 - Made bid exactly.
+- Made and set mark-bid scoring.
 - Made bid over target.
 - Set bid by one point.
 - All and no count dominoes captured by bidding team.
@@ -189,11 +194,14 @@ Important covered invariants:
 Latest known verification for this report:
 
 ```text
-npm run typecheck -w @shake2/game-engine
-npm run test -w @shake2/game-engine
+npm run typecheck
+npm test --workspace @shake2/game-engine
+npm test --workspace @shake2/backend
+npm test --workspace @shake2/mobile
+npm run build:web --workspace @shake2/mobile
 ```
 
-Both passed after the accepted-event validation slice.
+All passed after the mark-bids foundation slice.
 
 ## Current M2 Plan Alignment
 
