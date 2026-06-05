@@ -31,8 +31,7 @@ import {
 import {
   isTrickComplete,
   TRICK_PLAY_COUNT,
-  type Trick,
-  type PlayedDomino
+  type Trick
 } from "./tricks.ts";
 export const FORTY_TWO_TRICKS_PER_HAND = standardRules.table.tricksPerHand;
 export const FORTY_TWO_TRICK_POINT_VALUE = standardRules.scoring.trickPointValue;
@@ -399,63 +398,63 @@ function getContractBidAmount(contract: Contract): number {
     case "standardNumeric":
       return contract.bid.amount;
   }
+}
 
-  function evaluateHandDecision(
-    input: IsHandDecidedInput
-  ): {
-    readonly bidAmount: number;
-    readonly biddingTeamId: FortyTwoTeamId;
-    readonly biddingTeamPoints: number;
-    readonly maxRemainingPointsForBidder: number;
-  } {
-    const currentScore = scoreCompletedTricks(input.completedTricks);
-    const biddingTeamId = getTeamForSeat(input.contract.declarer);
-    const bidAmount = getContractBidAmount(input.contract);
-    const biddingTeamPoints = currentScore.teamPoints[biddingTeamId];
-    const remaining = getRemainingHandTotals(input, currentScore);
+function evaluateHandDecision(
+  input: IsHandDecidedInput
+): {
+  readonly bidAmount: number;
+  readonly biddingTeamId: FortyTwoTeamId;
+  readonly biddingTeamPoints: number;
+  readonly maxRemainingPointsForBidder: number;
+} {
+  const currentScore = scoreCompletedTricks(input.completedTricks);
+  const biddingTeamId = getTeamForSeat(input.contract.declarer);
+  const bidAmount = getContractBidAmount(input.contract);
+  const biddingTeamPoints = currentScore.teamPoints[biddingTeamId];
+  const remaining = getRemainingHandTotals(input, currentScore);
 
-    return {
-      bidAmount,
-      biddingTeamId,
-      biddingTeamPoints,
-      maxRemainingPointsForBidder: remaining.remainingPointsAwarded
-    };
-  }
+  return {
+    bidAmount,
+    biddingTeamId,
+    biddingTeamPoints,
+    maxRemainingPointsForBidder: remaining.remainingPointsAwarded
+  };
+}
 
-  function getRemainingHandTotals(
-    input: Pick<IsHandDecidedInput, "completedTricks" | "currentTrick" | "hands" | "rules">,
-    currentScore: CurrentHandPointScore
-  ): {
-    readonly remainingCountPoints: number;
-    readonly remainingPointsAwarded: number;
-    readonly remainingTricks: number;
-  } {
-    const remainingTricks = Math.max(
-      input.rules.table.tricksPerHand - input.completedTricks.length,
-      0
-    );
-    const unresolvedDominoes: Domino[] = [
-      ...flattenHands(input.hands),
-      ...input.currentTrick.playedDominoes.map((play) => play.domino)
-    ];
-    const remainingCountPoints = getTotalCountPoints(unresolvedDominoes);
-    const remainingPointsByTrickAndCount =
-      remainingTricks * input.rules.scoring.trickPointValue + remainingCountPoints;
-    const remainingPointsByHandTotal = Math.max(
-      input.rules.scoring.handTotalPoints - currentScore.totalPoints,
-      0
-    );
-    const remainingPointsAwarded = Math.max(
-      remainingPointsByTrickAndCount,
-      remainingPointsByHandTotal
-    );
+function getRemainingHandTotals(
+  input: Pick<IsHandDecidedInput, "completedTricks" | "currentTrick" | "hands" | "rules">,
+  currentScore: CurrentHandPointScore
+): {
+  readonly remainingCountPoints: number;
+  readonly remainingPointsAwarded: number;
+  readonly remainingTricks: number;
+} {
+  const remainingTricks = Math.max(
+    input.rules.table.tricksPerHand - input.completedTricks.length,
+    0
+  );
+  const unresolvedDominoes: Domino[] = [
+    ...flattenHands(input.hands),
+    ...input.currentTrick.playedDominoes.map((play) => play.domino)
+  ];
+  const remainingCountPoints = getTotalCountPoints(unresolvedDominoes);
+  const remainingPointsByTrickAndCount =
+    remainingTricks * input.rules.scoring.trickPointValue + remainingCountPoints;
+  const remainingPointsByHandTotal = Math.max(
+    input.rules.scoring.handTotalPoints - currentScore.totalPoints,
+    0
+  );
+  const remainingPointsAwarded = Math.max(
+    remainingPointsByTrickAndCount,
+    remainingPointsByHandTotal
+  );
 
-    return {
-      remainingCountPoints,
-      remainingPointsAwarded,
-      remainingTricks
-    };
-  }
+  return {
+    remainingCountPoints,
+    remainingPointsAwarded,
+    remainingTricks
+  };
 }
 
 function getOpposingTeamId(teamId: FortyTwoTeamId): FortyTwoTeamId {

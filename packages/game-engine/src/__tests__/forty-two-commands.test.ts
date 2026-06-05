@@ -432,23 +432,23 @@ function createCompleteBiddingAction(
     {
       snapshot
     }
+  );
+}
 
-    function createConcedeHandAction(
-      snapshot: FortyTwoSnapshotEnvelope,
-      actorSeat: SeatIndex
-    ): FortyTwoActionEnvelope<CompleteFortyTwoHandAction> {
-      return createActionEnvelope(
-        {
-          payload: {
-            handNumber: snapshot.snapshot.handNumber
-          },
-          type: "fortyTwo.hand.complete"
-        },
-        {
-          actorSeat,
-          snapshot
-        }
-      );
+function createConcedeHandAction(
+  snapshot: FortyTwoSnapshotEnvelope,
+  actorSeat: SeatIndex
+): FortyTwoActionEnvelope<CompleteFortyTwoHandAction> {
+  return createActionEnvelope(
+    {
+      payload: {
+        handNumber: snapshot.snapshot.handNumber
+      },
+      type: "fortyTwo.hand.complete"
+    },
+    {
+      actorSeat,
+      snapshot
     }
   );
 }

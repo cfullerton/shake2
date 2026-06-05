@@ -128,6 +128,21 @@ export type PlayFortyTwoDominoAction = Extract<
   { readonly type: "fortyTwo.domino.play" }
 >;
 
+export type CompleteFortyTwoTrickAction = Extract<
+  FortyTwoAction,
+  { readonly type: "fortyTwo.trick.complete" }
+>;
+
+export type CompleteFortyTwoHandAction = Extract<
+  FortyTwoAction,
+  { readonly type: "fortyTwo.hand.complete" }
+>;
+
+export type CompleteFortyTwoGameAction = Extract<
+  FortyTwoAction,
+  { readonly type: "fortyTwo.game.complete" }
+>;
+
 export interface FortyTwoActionEnvelope<
   TAction extends FortyTwoAction = FortyTwoAction
 > {
