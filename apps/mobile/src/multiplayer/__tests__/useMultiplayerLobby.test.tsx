@@ -1,4 +1,5 @@
 import { act, render, waitFor } from "@testing-library/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Text } from "react-native";
 
 import {
@@ -20,6 +21,10 @@ import type {
   MultiplayerRoomView,
   MultiplayerStartGameResult
 } from "../types";
+
+beforeEach(async () => {
+  await AsyncStorage.clear();
+});
 
 test("normalizes lobby form values before room requests", async () => {
   const session = createSession();
@@ -512,6 +517,164 @@ test("normalizes lobby strings", () => {
   expect(normalizeRoomCode(" room42 ")).toBe("ROOM42");
   expect(normalizeRoomCode(" ab-c 12 ")).toBe("ABC12");
   expect(normalizeDisplayName("  ")).toBe("Player");
+});
+
+test("restores a valid persisted session on mount", async () => {
+  const stored = createSession();
+  const roomClient: MultiplayerLobbyClient = {
+    addBot: jest.fn(async () => createRoomView()),
+    createRoom: jest.fn(async () => createRoomView()),
+    getRoom: jest.fn(async () => createRoomView()),
+    joinRoom: jest.fn(async () => createRoomView()),
+    listPublicRooms: jest.fn(async () => []),
+    startGame: jest.fn(async () => ({
+      room: createRoomView(),
+      snapshot: createSnapshot()
+    })),
+    takeSeat: jest.fn(async () => createRoomView())
+  };
+  const harness = renderHookHarness({
+    loadSession: async () => stored,
+    createRoomClient: () => roomClient,
+    createGameClient: () => ({ getGameSnapshot: jest.fn() } as unknown as MultiplayerLobbyGameClient),
+    readConfig: () => createConfig()
+  });
+
+  await waitFor(() => {
+    expect(harness.current.session).toEqual(stored);
+  });
+});
+
+test("discards an expired persisted session with no refresh token", async () => {
+  const expired = { ...createSession(), expiresAt: Date.now() - 1_000, refreshToken: undefined };
+  const saveSession = jest.fn(async () => undefined);
+  const harness = renderHookHarness({
+    loadSession: async () => expired,
+    saveSession,
+    readConfig: () => createConfig()
+  });
+
+  await waitFor(() => {
+    expect(saveSession).toHaveBeenCalledWith(null);
+  });
+
+  expect(harness.current.session).toBeNull();
+});
+
+test("refreshes an expired persisted session using the refresh token", async () => {
+  const expired = {
+    ...createSession(),
+    expiresAt: Date.now() - 1_000,
+    refreshToken: "old-refresh-token"
+  };
+  const refreshed = {
+    ...createSession(),
+    accessToken: "new-access-token",
+    refreshToken: "old-refresh-token"
+  };
+  const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
+    completeNewPassword: jest.fn(async () => createSession()),
+    refreshSession: jest.fn(async () => refreshed),
+    signIn: jest.fn(async () => createSession()),
+    signUp: jest.fn(async () => createSignUpResult("smoke-user"))
+  };
+  const roomClient: MultiplayerLobbyClient = {
+    addBot: jest.fn(async () => createRoomView()),
+    createRoom: jest.fn(async () => createRoomView()),
+    getRoom: jest.fn(async () => createRoomView()),
+    joinRoom: jest.fn(async () => createRoomView()),
+    listPublicRooms: jest.fn(async () => []),
+    startGame: jest.fn(async () => ({
+      room: createRoomView(),
+      snapshot: createSnapshot()
+    })),
+    takeSeat: jest.fn(async () => createRoomView())
+  };
+  const harness = renderHookHarness({
+    createAuthClient: () => authClient,
+    createRoomClient: () => roomClient,
+    createGameClient: () => ({ getGameSnapshot: jest.fn() } as unknown as MultiplayerLobbyGameClient),
+    loadSession: async () => expired,
+    readConfig: () => createConfig()
+  });
+
+  await waitFor(() => {
+    expect(harness.current.session).toEqual(refreshed);
+  });
+
+  expect(authClient.refreshSession).toHaveBeenCalledWith({
+    refreshToken: "old-refresh-token",
+    username: "smoke-user"
+  });
+});
+
+test("clears a persisted session when refresh fails", async () => {
+  const expired = {
+    ...createSession(),
+    expiresAt: Date.now() - 1_000,
+    refreshToken: "bad-refresh-token"
+  };
+  const saveSession = jest.fn(async () => undefined);
+  const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
+    completeNewPassword: jest.fn(async () => createSession()),
+    refreshSession: jest.fn(async () => { throw new Error("Token expired"); }),
+    signIn: jest.fn(async () => createSession()),
+    signUp: jest.fn(async () => createSignUpResult("smoke-user"))
+  };
+  const harness = renderHookHarness({
+    createAuthClient: () => authClient,
+    loadSession: async () => expired,
+    saveSession,
+    readConfig: () => createConfig()
+  });
+
+  await waitFor(() => {
+    expect(saveSession).toHaveBeenCalledWith(null);
+  });
+
+  expect(harness.current.session).toBeNull();
+});
+
+test("saves session to storage on sign-in", async () => {
+  const session = createSession();
+  const saveSession = jest.fn(async () => undefined);
+  const authClient = {
+    confirmSignUp: jest.fn(async () => undefined),
+    completeNewPassword: jest.fn(async () => session),
+    refreshSession: jest.fn(async () => session),
+    signIn: jest.fn(async () => session),
+    signUp: jest.fn(async () => createSignUpResult("smoke-user"))
+  };
+  const roomClient: MultiplayerLobbyClient = {
+    addBot: jest.fn(async () => createRoomView()),
+    createRoom: jest.fn(async () => createRoomView()),
+    getRoom: jest.fn(async () => createRoomView()),
+    joinRoom: jest.fn(async () => createRoomView()),
+    listPublicRooms: jest.fn(async () => []),
+    startGame: jest.fn(async () => ({
+      room: createRoomView(),
+      snapshot: createSnapshot()
+    })),
+    takeSeat: jest.fn(async () => createRoomView())
+  };
+  const harness = renderHookHarness({
+    createAuthClient: () => authClient,
+    createRoomClient: () => roomClient,
+    loadSession: async () => null,
+    saveSession,
+    readConfig: () => createConfig()
+  });
+
+  await act(async () => {
+    await harness.current.signIn({
+      password: "secure-password",
+      username: "smoke-user"
+    });
+  });
+
+  expect(saveSession).toHaveBeenCalledWith(session);
 });
 
 function renderHookHarness(dependencies: MultiplayerLobbyDependencies): {

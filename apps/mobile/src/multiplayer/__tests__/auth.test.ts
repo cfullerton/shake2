@@ -398,6 +398,64 @@ test("StaticAuthSessionProvider returns an ID token", async () => {
   ).resolves.toBe("id-token");
 });
 
+test("CognitoPasswordAuthClient sends REFRESH_TOKEN_AUTH request", async () => {
+  const calls: Array<{
+    readonly body?: string;
+    readonly headers?: Readonly<Record<string, string>>;
+    readonly input: string;
+    readonly method?: string;
+  }> = [];
+  const fetcher: FetchLike = async (input, init) => {
+    calls.push({
+      body: init?.body,
+      headers: init?.headers,
+      input,
+      method: init?.method
+    });
+
+    return createJsonResponse({
+      AuthenticationResult: {
+        AccessToken: "new-access-token",
+        ExpiresIn: 3600,
+        IdToken: "new-id-token",
+        TokenType: "Bearer"
+      }
+    });
+  };
+  const client = new CognitoPasswordAuthClient(
+    {
+      awsRegion: "us-east-1",
+      cognitoUserPoolClientId: "client-id"
+    },
+    fetcher
+  );
+  const session = await client.refreshSession({
+    refreshToken: "stored-refresh-token",
+    username: "smoke-user"
+  });
+
+  expect(session).toMatchObject({
+    accessToken: "new-access-token",
+    idToken: "new-id-token",
+    refreshToken: "stored-refresh-token",
+    tokenType: "Bearer",
+    username: "smoke-user"
+  });
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.input).toBe("https://cognito-idp.us-east-1.amazonaws.com/");
+  expect(calls[0]?.headers).toMatchObject({
+    "Content-Type": "application/x-amz-json-1.1",
+    "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth"
+  });
+  expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({
+    AuthFlow: "REFRESH_TOKEN_AUTH",
+    AuthParameters: {
+      REFRESH_TOKEN: "stored-refresh-token"
+    },
+    ClientId: "client-id"
+  });
+});
+
 function createJsonResponse(
   body: unknown,
   status = 200
