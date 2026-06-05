@@ -48,6 +48,7 @@ test("normalizes lobby form values before room requests", async () => {
   const authClient = {
     confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
+    refreshSession: jest.fn(async () => session),
     signIn: jest.fn(async () => session),
     signUp: jest.fn(async () => createSignUpResult("smoke-user"))
   };
@@ -136,6 +137,7 @@ test("starts account confirmation after sign-up and signs in after verification"
   const authClient = {
     confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
+    refreshSession: jest.fn(async () => session),
     signIn: jest.fn(async () => session),
     signUp: jest.fn(async () =>
       createSignUpResult("new-player", {
@@ -207,6 +209,7 @@ test("routes unconfirmed sign-ins to account verification", async () => {
   const authClient = {
     confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
+    refreshSession: jest.fn(async () => session),
     signIn: jest.fn(async () => {
       throw new CognitoUserNotConfirmedError("new-player");
     }),
@@ -262,6 +265,7 @@ test("refreshes room state and starts non-hosts when the host starts", async () 
   const authClient = {
     confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
+    refreshSession: jest.fn(async () => session),
     signIn: jest.fn(async () => session),
     signUp: jest.fn(async () => createSignUpResult("smoke-user"))
   };
@@ -321,6 +325,7 @@ test("refreshes public room listings", async () => {
   const authClient = {
     confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
+    refreshSession: jest.fn(async () => session),
     signIn: jest.fn(async () => session),
     signUp: jest.fn(async () => createSignUpResult("smoke-user"))
   };
@@ -378,6 +383,7 @@ test("startNewGame keeps the session and clears the completed game", async () =>
   const authClient = {
     confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
+    refreshSession: jest.fn(async () => session),
     signIn: jest.fn(async () => session),
     signUp: jest.fn(async () => createSignUpResult("smoke-user"))
   };
@@ -447,6 +453,7 @@ test("completes Cognito new-password challenges", async () => {
   const authClient = {
     confirmSignUp: jest.fn(async () => undefined),
     completeNewPassword: jest.fn(async () => session),
+    refreshSession: jest.fn(async () => session),
     signIn: jest.fn(async () => {
       throw new CognitoNewPasswordRequiredError({
         challengeName: "NEW_PASSWORD_REQUIRED",
