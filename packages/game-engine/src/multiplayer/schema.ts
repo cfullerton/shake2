@@ -25,6 +25,7 @@ import {
 import {
   FORTY_TWO_RULE_SCHEMA_VERSION,
   type FortyTwoAllPassBehavior,
+  type FortyTwoHandCompletionMode,
   type FortyTwoScoringMode,
   type RuleConfig
 } from "../forty-two/rules-config.ts";
@@ -124,6 +125,12 @@ const FORTY_TWO_ALL_PASS_BEHAVIORS = [
   "dealerForcedBid",
   "redeal"
 ] as const satisfies readonly FortyTwoAllPassBehavior[];
+
+const FORTY_TWO_HAND_COMPLETION_MODES = [
+  "playAllTricks",
+  "allowConcession",
+  "autoEndWhenDecided"
+] as const satisfies readonly FortyTwoHandCompletionMode[];
 
 export function parseFortyTwoActionEnvelope(
   value: unknown
@@ -963,6 +970,12 @@ function parseRuleConfig(value: unknown): RuleConfig {
         "rules.enabledContracts.splash"
       )
     },
+    handCompletionMode: parseEnum(
+      rules.handCompletionMode ?? "playAllTricks",
+      FORTY_TWO_HAND_COMPLETION_MODES,
+      "rules.handCompletionMode",
+      "INVALID_ACTION"
+    ),
     schemaVersion: FORTY_TWO_RULE_SCHEMA_VERSION,
     scoring: {
       countDominoPoints: parseInteger(

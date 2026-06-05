@@ -33,6 +33,7 @@ import {
   type FortyTwoEvent,
   type FortyTwoEventEnvelope,
   type FortyTwoHands,
+  type FortyTwoHandCompletionMode,
   type FortyTwoSnapshotEnvelope,
   type PlayFortyTwoDominoAction,
   type RuleConfig,
@@ -271,6 +272,33 @@ test("full command hand rejects an invalid final trick play without scoring", ()
   assertReplayMatches(session.initialSnapshot, events, result.snapshot);
 });
 
+test("full command hand can auto-end once the bid is decided", () => {
+  const script = createTrumpSweepScript(1);
+  const session = createGameSession({
+    deals: [script.hands],
+    handCompletionMode: "autoEndWhenDecided",
+    targetMarks: 7
+  });
+  const result = runHandFromSetup(session.snapshot, session.context, {
+    bids: createNormalBidPlan(1, 30),
+    script: {
+      ...script,
+      plays: script.plays.slice(0, 20)
+    }
+  });
+  const events = [
+    ...session.events,
+    ...result.events
+  ];
+  const handCompleted = getLastHandCompletedEvent(events);
+
+  assert.equal(countEvents(events, "fortyTwo.trick.completed"), 5);
+  assert.equal(countEvents(events, "fortyTwo.hand.completed"), 1);
+  assert.equal(handCompleted.event.payload.handScore.earlyCompletion?.mode, "autoEndWhenDecided");
+  assert.equal(result.snapshot.snapshot.phase, "setup");
+  assertReplayMatches(session.initialSnapshot, events, result.snapshot);
+});
+
 test("full command hands rotate dealers across multiple hands", () => {
   const scripts = [
     createTrumpSweepScript(1),
@@ -365,6 +393,7 @@ interface BidInstruction {
 
 function createGameSession(options: {
   readonly deals: readonly FortyTwoHands[];
+  readonly handCompletionMode?: FortyTwoHandCompletionMode;
   readonly targetMarks: number;
 }): {
   readonly context: EngineContext;
@@ -374,6 +403,9 @@ function createGameSession(options: {
 } {
   const rules = {
     ...standardRules,
+    ...(options.handCompletionMode
+      ? { handCompletionMode: options.handCompletionMode }
+      : {}),
     targetMarks: options.targetMarks
   } satisfies RuleConfig;
   const context = createScriptedEngineContext(options.deals);

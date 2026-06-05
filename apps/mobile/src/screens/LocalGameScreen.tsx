@@ -63,6 +63,9 @@ export function LocalGameScreen({ route }: LocalGameScreenProps) {
   const [session, setSession] = useState<LocalGameSession>(() =>
     createLocalGameSession(
       {
+        ...(route.params.speedUpWhenDecided
+          ? { handCompletionMode: "autoEndWhenDecided" as const }
+          : {}),
         variants: {
           noTrump: route.params.noTrump ?? false
         },

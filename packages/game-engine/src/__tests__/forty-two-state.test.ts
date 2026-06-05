@@ -28,6 +28,7 @@ test("defines standard Texas 42 rules behind RuleConfig", () => {
   assert.equal(standardRules.bidding.minimumBid, 30);
   assert.equal(standardRules.bidding.maximumNumericBid, 42);
   assert.equal(standardRules.bidding.allPassBehavior, "dealerForcedBid");
+  assert.equal(standardRules.handCompletionMode, "playAllTricks");
   assert.equal(standardRules.table.playerCount, 4);
   assert.equal(standardRules.table.dominoesPerHand, 7);
   assert.equal(standardRules.table.tricksPerHand, 7);

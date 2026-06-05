@@ -19,6 +19,9 @@ import {
 } from "./events.ts";
 import { applyFortyTwoEvent } from "./reducer.ts";
 import {
+  isHandDecided,
+  scoreAutoCompletedDecidedHand,
+  scoreConcededHand,
   scoreCompletedHand,
   type CompletedTrick,
   type HandScore
@@ -26,6 +29,7 @@ import {
 import {
   SEAT_INDICES,
   assertSeatIndex,
+  type FortyTwoTeamId,
   type SeatIndex
 } from "./seats.ts";
 import {
@@ -436,17 +440,77 @@ function validateHandCompletedEvent(
     "Hand completed event contains forged completed tricks."
   );
 
-  const expectedScore = scoreCompletedHand(
-    snapshot.snapshot.completedTricks,
-    snapshot.snapshot.contract,
-    snapshot.snapshot.rules
-  );
+  const expectedScore = getExpectedCompletedHandScore(snapshot, event.event.payload.handScore);
   assertHandScore(event.event.payload.handScore);
   assertDeepEqual(
     event.event.payload.handScore,
     expectedScore,
     "Hand completed event contains forged hand score."
   );
+}
+
+function getExpectedCompletedHandScore(
+  snapshot: FortyTwoSnapshotEnvelope,
+  handScore: HandScore
+): HandScore {
+  if (snapshot.snapshot.phase !== "trickPlay") {
+    throw new EngineError("INVALID_PHASE", "Expected trick-play snapshot for hand completion.");
+  }
+
+  if (
+    snapshot.snapshot.completedTricks.length ===
+      snapshot.snapshot.rules.table.tricksPerHand
+  ) {
+    return scoreCompletedHand(
+      snapshot.snapshot.completedTricks,
+      snapshot.snapshot.contract,
+      snapshot.snapshot.rules
+    );
+  }
+
+  if (snapshot.snapshot.rules.handCompletionMode === "playAllTricks") {
+    throw new EngineError(
+      "INVALID_PHASE",
+      "Partial hand completion is not allowed when all tricks must be played."
+    );
+  }
+
+  if (!handScore.earlyCompletion) {
+    throw new EngineError("INVALID_ACTION", "Early hand completion metadata is required.");
+  }
+
+  if (handScore.earlyCompletion.mode === "allowConcession") {
+    const concedingTeamId = getOpposingTeamId(
+      handScore.earlyCompletion.awardedRemainingPointsTo
+    );
+
+    return scoreConcededHand({
+      completedTricks: snapshot.snapshot.completedTricks,
+      concedingTeamId,
+      contract: snapshot.snapshot.contract,
+      currentTrick: snapshot.snapshot.currentTrick,
+      hands: snapshot.snapshot.hands,
+      rules: snapshot.snapshot.rules
+    });
+  }
+
+  if (!isHandDecided({
+    completedTricks: snapshot.snapshot.completedTricks,
+    contract: snapshot.snapshot.contract,
+    currentTrick: snapshot.snapshot.currentTrick,
+    hands: snapshot.snapshot.hands,
+    rules: snapshot.snapshot.rules
+  })) {
+    throw new EngineError("INVALID_PHASE", "Auto-complete hand is not mathematically decided.");
+  }
+
+  return scoreAutoCompletedDecidedHand({
+    completedTricks: snapshot.snapshot.completedTricks,
+    contract: snapshot.snapshot.contract,
+    currentTrick: snapshot.snapshot.currentTrick,
+    hands: snapshot.snapshot.hands,
+    rules: snapshot.snapshot.rules
+  });
 }
 
 function validateGameCompletedEvent(
@@ -517,6 +581,10 @@ function assertHandScore(value: HandScore): void {
   assertInteger(handScore.totalPoints, "handScore.totalPoints");
   assertInteger(handScore.bidAmount, "handScore.bidAmount");
   assertInteger(handScore.biddingTeamPoints, "handScore.biddingTeamPoints");
+}
+
+function getOpposingTeamId(teamId: FortyTwoTeamId): FortyTwoTeamId {
+  return teamId === "teamA" ? "teamB" : "teamA";
 }
 
 function assertRecord(

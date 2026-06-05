@@ -40,6 +40,7 @@ import {
   type LegalTrumpCall
 } from "../forty-two/legal-actions.ts";
 import {
+  type FortyTwoHandCompletionMode,
   type FortyTwoEnabledContracts,
   type RuleConfig,
   standardRules
@@ -126,6 +127,7 @@ export interface CreateLocalGameSessionInput {
   readonly dealer?: SeatIndex;
   readonly gameId?: string;
   readonly humanSeat?: SeatIndex;
+  readonly handCompletionMode?: FortyTwoHandCompletionMode;
   readonly playerNames?: Partial<Record<SeatIndex, string>>;
   readonly rules?: RuleConfig;
   readonly targetMarks?: number;
@@ -917,6 +919,9 @@ function createLocalPracticeRules(input: CreateLocalGameSessionInput): RuleConfi
       ...standardRules.enabledContracts,
       noTrump: input.variants?.noTrump ?? false
     },
+    ...(input.handCompletionMode
+      ? { handCompletionMode: input.handCompletionMode }
+      : {}),
     ...(input.targetMarks !== undefined ? { targetMarks: input.targetMarks } : {})
   };
 }

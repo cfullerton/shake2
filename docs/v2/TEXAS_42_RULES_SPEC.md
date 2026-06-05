@@ -204,6 +204,7 @@ type RuleConfig = {
   schemaVersion: 1;
   scoringMode: "marks";
   targetMarks: number;
+  handCompletionMode: "playAllTricks" | "allowConcession" | "autoEndWhenDecided";
   minimumBid: number;
   allPassBehavior: "dealerForcedBid" | "redeal";
   enabledContracts: {
@@ -229,6 +230,7 @@ const standardRules: RuleConfig = {
   schemaVersion: 1,
   scoringMode: "marks",
   targetMarks: 7,
+  handCompletionMode: "playAllTricks",
   minimumBid: 30,
   allPassBehavior: "dealerForcedBid",
   enabledContracts: {

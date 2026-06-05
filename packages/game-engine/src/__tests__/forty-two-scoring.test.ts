@@ -7,8 +7,10 @@ import {
   createDomino,
   createDoubleSixSet,
   createNumericBid,
+  getDominoKey,
   getCompletedTrickCountPoints,
   getTeamForSeat,
+  isHandDecided,
   isCountDomino,
   scoreCompletedHand,
   scoreCompletedTricks,
@@ -16,6 +18,7 @@ import {
   type Contract,
   type CompletedTrick,
   type Domino,
+  type FortyTwoHands,
   type DominoSuit,
   type SeatIndex,
   type Trick
@@ -190,6 +193,51 @@ test("hand summaries do not relabel teams based on bid winner", () => {
   assert.equal(scoreTeamBDeclares.teamPoints.teamA + scoreTeamBDeclares.teamPoints.teamB, 42);
 });
 
+test("isHandDecided returns true when bid is already made with tricks remaining", () => {
+  const completedTricks = createCompletedTricks([0, 2, 0, 2, 0, 0, 0]).slice(0, 5);
+
+  assert.equal(
+    isHandDecided({
+      completedTricks,
+      contract: createContract(0, 30),
+      currentTrick: createEmptyTrick(),
+      hands: createRemainingHands(completedTricks),
+      rules: standardRules
+    }),
+    true
+  );
+});
+
+test("isHandDecided returns true when bid is impossible with tricks remaining", () => {
+  const completedTricks = createCompletedTricks([1, 3, 1, 3, 1, 1, 1]).slice(0, 5);
+
+  assert.equal(
+    isHandDecided({
+      completedTricks,
+      contract: createContract(0, 30),
+      currentTrick: createEmptyTrick(),
+      hands: createRemainingHands(completedTricks),
+      rules: standardRules
+    }),
+    true
+  );
+});
+
+test("isHandDecided returns false when legal outcomes still remain", () => {
+  const completedTricks = createCompletedTricks([0, 1, 2, 3, 0, 1, 2]).slice(0, 2);
+
+  assert.equal(
+    isHandDecided({
+      completedTricks,
+      contract: createContract(0, 30),
+      currentTrick: createEmptyTrick(),
+      hands: createRemainingHands(completedTricks),
+      rules: standardRules
+    }),
+    false
+  );
+});
+
 type TestTrickDominoes = readonly [Domino, Domino, Domino, Domino];
 
 function createCompletedTricks(
@@ -337,5 +385,38 @@ function createContract(seat: SeatIndex, amount: number): Contract {
       suit: "sixes"
     },
     trumpSuit: "sixes"
+  };
+}
+
+function createEmptyTrick(): Trick {
+  return {
+    leader: 0,
+    ledDomino: null,
+    ledSuit: null,
+    playedDominoes: []
+  };
+}
+
+function createRemainingHands(completedTricks: readonly CompletedTrick[]): FortyTwoHands {
+  const playedDominoKeys = new Set(
+    completedTricks.flatMap((completedTrick) =>
+      completedTrick.trick.playedDominoes.map((play) => getDominoKey(play.domino))
+    )
+  );
+  const remainingDominoes = createDoubleSixSet().filter(
+    (domino) => !playedDominoKeys.has(getDominoKey(domino))
+  );
+
+  if (remainingDominoes.length % 4 !== 0) {
+    throw new Error("Remaining dominoes cannot be dealt evenly across four seats.");
+  }
+
+  const seatHandSize = remainingDominoes.length / 4;
+
+  return {
+    0: remainingDominoes.slice(0, seatHandSize),
+    1: remainingDominoes.slice(seatHandSize, seatHandSize * 2),
+    2: remainingDominoes.slice(seatHandSize * 2, seatHandSize * 3),
+    3: remainingDominoes.slice(seatHandSize * 3)
   };
 }

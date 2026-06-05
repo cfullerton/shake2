@@ -4,6 +4,10 @@ export const FORTY_TWO_RULE_SCHEMA_VERSION = 1;
 
 export type FortyTwoScoringMode = "marks";
 export type FortyTwoAllPassBehavior = "dealerForcedBid" | "redeal";
+export type FortyTwoHandCompletionMode =
+  | "playAllTricks"
+  | "allowConcession"
+  | "autoEndWhenDecided";
 
 export interface FortyTwoEnabledContracts {
   readonly eightyFour: boolean;
@@ -42,6 +46,7 @@ export interface FortyTwoScoringRules {
 export interface RuleConfig {
   readonly bidding: FortyTwoBiddingRules;
   readonly enabledContracts: FortyTwoEnabledContracts;
+  readonly handCompletionMode: FortyTwoHandCompletionMode;
   readonly schemaVersion: typeof FORTY_TWO_RULE_SCHEMA_VERSION;
   readonly scoring: FortyTwoScoringRules;
   readonly scoringMode: FortyTwoScoringMode;
@@ -66,6 +71,7 @@ export const standardRules = {
     sevens: false,
     splash: false
   },
+  handCompletionMode: "playAllTricks",
   schemaVersion: FORTY_TWO_RULE_SCHEMA_VERSION,
   scoring: {
     countDominoPoints: TOTAL_COUNT_DOMINO_POINTS,
