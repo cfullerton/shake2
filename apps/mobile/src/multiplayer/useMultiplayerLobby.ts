@@ -8,6 +8,7 @@ import {
   type CognitoCompleteNewPasswordInput,
   type CognitoNewPasswordChallenge,
   type CognitoPasswordSignInInput,
+  type CognitoRefreshSessionInput,
   type CognitoSignUpInput,
   type CognitoSignUpResult,
   CognitoUserNotConfirmedError,
@@ -30,6 +31,11 @@ import {
   type StartGameInput,
   type TakeSeatInput
 } from "./rooms";
+import {
+  clearMultiplayerSession,
+  loadMultiplayerSession,
+  saveMultiplayerSession
+} from "./sessionStorage";
 import type {
   AppSyncSeatIndex,
   MultiplayerRoomView,
@@ -66,6 +72,7 @@ export interface MultiplayerLobbyAuthClient {
   completeNewPassword(
     input: CognitoCompleteNewPasswordInput
   ): Promise<CognitoAuthSession>;
+  refreshSession(input: CognitoRefreshSessionInput): Promise<CognitoAuthSession>;
   signIn(input: CognitoPasswordSignInInput): Promise<CognitoAuthSession>;
   signUp(input: CognitoSignUpInput): Promise<CognitoSignUpResult>;
 }
@@ -86,7 +93,9 @@ export interface MultiplayerLobbyDependencies {
     config: MobileMultiplayerConfig,
     session: CognitoAuthSession
   ) => MultiplayerLobbyGameClient;
+  readonly loadSession?: () => Promise<CognitoAuthSession | null>;
   readonly readConfig?: () => MobileMultiplayerConfig | null;
+  readonly saveSession?: (session: CognitoAuthSession | null) => Promise<void>;
 }
 
 export interface MultiplayerLobbySignUpInput {
@@ -191,6 +200,48 @@ export function useMultiplayerLobby(
   const roomRefreshInFlight = useRef(false);
 
   const configured = configState.config !== null && configState.error === null;
+
+  useEffect(() => {
+    async function restoreSession(): Promise<void> {
+      const config = configState.config;
+
+      if (!config) {
+        return;
+      }
+
+      const stored = await (dependencies.loadSession ?? loadMultiplayerSession)();
+
+      if (!stored) {
+        return;
+      }
+
+      const sessionIsExpired = stored.expiresAt <= Date.now();
+
+      if (!sessionIsExpired) {
+        completeSignIn(config, stored);
+        return;
+      }
+
+      if (!stored.refreshToken) {
+        await (dependencies.saveSession ?? saveOrClearMultiplayerSession)(null);
+        return;
+      }
+
+      try {
+        const authClient = (dependencies.createAuthClient ?? createDefaultAuthClient)(config);
+        const refreshed = await authClient.refreshSession({
+          refreshToken: stored.refreshToken,
+          username: stored.username
+        });
+
+        completeSignIn(config, refreshed);
+      } catch {
+        await (dependencies.saveSession ?? saveOrClearMultiplayerSession)(null);
+      }
+    }
+
+    void restoreSession();
+  }, []);
 
   useEffect(() => {
     if (!client || !room || startedGame) {
@@ -547,6 +598,8 @@ export function useMultiplayerLobby(
       dependencies.createGameClient ?? createDefaultGameClient
     )(config, nextSession);
 
+    void (dependencies.saveSession ?? saveOrClearMultiplayerSession)(nextSession);
+
     setClient(nextClient);
     setGameClient(nextGameClient);
     setNewPasswordChallenge(null);
@@ -583,6 +636,16 @@ export function useMultiplayerLobby(
     startedGame,
     takeSeat
   };
+}
+
+async function saveOrClearMultiplayerSession(
+  session: CognitoAuthSession | null
+): Promise<void> {
+  if (session) {
+    await saveMultiplayerSession(session);
+  } else {
+    await clearMultiplayerSession();
+  }
 }
 
 function createDefaultAuthClient(

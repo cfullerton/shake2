@@ -5,6 +5,7 @@ export * from "./graphql";
 export * from "./game";
 export * from "./realtime";
 export * from "./rooms";
+export * from "./sessionStorage";
 export * from "./snapshots";
 export * from "./types";
 export * from "./useMultiplayerActiveGame";

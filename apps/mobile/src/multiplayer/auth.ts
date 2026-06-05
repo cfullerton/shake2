@@ -46,6 +46,11 @@ export interface CognitoNewPasswordChallenge {
   readonly username: string;
 }
 
+export interface CognitoRefreshSessionInput {
+  readonly refreshToken: string;
+  readonly username: string;
+}
+
 export interface AuthSessionProvider {
   getIdToken(): Promise<string>;
 }
@@ -161,6 +166,27 @@ export class CognitoPasswordAuthClient {
       ConfirmationCode: input.confirmationCode,
       Username: input.username
     });
+  }
+
+  async refreshSession(
+    input: CognitoRefreshSessionInput
+  ): Promise<CognitoAuthSession> {
+    const body = await this.requestCognito(
+      "AWSCognitoIdentityProviderService.InitiateAuth",
+      {
+        AuthFlow: "REFRESH_TOKEN_AUTH",
+        AuthParameters: {
+          REFRESH_TOKEN: input.refreshToken
+        },
+        ClientId: this.config.cognitoUserPoolClientId
+      }
+    );
+    const result = readAuthenticationResult(body, input.username);
+
+    return {
+      ...toAuthSession(result, input.username),
+      refreshToken: input.refreshToken
+    };
   }
 
   async completeNewPassword(
