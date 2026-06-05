@@ -8,6 +8,7 @@ import {
   createInitialFortyTwoSnapshot,
   handleCallFortyTwoTrumpCommand,
   handleCompleteFortyTwoBiddingCommand,
+  handleCompleteFortyTwoHandCommand,
   handleCreateFortyTwoGameCommand,
   handleDealFortyTwoHandCommand,
   handleSubmitFortyTwoBidCommand,
@@ -16,6 +17,7 @@ import {
   standardRules,
   type CallFortyTwoTrumpAction,
   type CompleteFortyTwoBiddingAction,
+  type CompleteFortyTwoHandAction,
   type CreateFortyTwoGameAction,
   type DealFortyTwoHandAction,
   type EngineContext,
@@ -222,6 +224,42 @@ test("replay produces same state as command application", () => {
   assert.deepEqual(replayed, journey.finalSnapshot);
 });
 
+test("allow-concession mode can end a hand before all tricks are played", () => {
+  const context = createCommandContext();
+  const journey = runCommandHappyPathBeforeTrump({
+    rules: {
+      ...standardRules,
+      handCompletionMode: "allowConcession"
+    }
+  });
+  const trumpCalled = unwrapSuccess(
+    handleCallFortyTwoTrumpCommand(
+      journey.snapshot,
+      createCallTrumpAction(journey.snapshot, "sixes", 1),
+      journey.context
+    )
+  );
+  const conceded = unwrapSuccess(
+    handleCompleteFortyTwoHandCommand(
+      trumpCalled.snapshot,
+      createConcedeHandAction(trumpCalled.snapshot, 1),
+      context
+    )
+  );
+
+  assert.equal(conceded.events.some((event) => event.event.type === "fortyTwo.hand.completed"), true);
+  assert.equal(conceded.snapshot.snapshot.phase, "setup");
+
+  const handCompleted = conceded.events.find((event) => event.event.type === "fortyTwo.hand.completed");
+
+  if (!handCompleted || handCompleted.event.type !== "fortyTwo.hand.completed") {
+    throw new Error("Expected a hand-completed event after concession.");
+  }
+
+  assert.equal(handCompleted.event.payload.handScore.earlyCompletion?.mode, "allowConcession");
+  assert.equal(handCompleted.event.payload.handScore.totalPoints, 42);
+});
+
 function runCommandHappyPath(): {
   readonly events: readonly FortyTwoEventEnvelope[];
   readonly finalSnapshot: FortyTwoSnapshotEnvelope;
@@ -392,6 +430,24 @@ function createCompleteBiddingAction(
       type: "fortyTwo.bidding.complete"
     },
     {
+      snapshot
+    }
+  );
+}
+
+function createConcedeHandAction(
+  snapshot: FortyTwoSnapshotEnvelope,
+  actorSeat: SeatIndex
+): FortyTwoActionEnvelope<CompleteFortyTwoHandAction> {
+  return createActionEnvelope(
+    {
+      payload: {
+        handNumber: snapshot.snapshot.handNumber
+      },
+      type: "fortyTwo.hand.complete"
+    },
+    {
+      actorSeat,
       snapshot
     }
   );

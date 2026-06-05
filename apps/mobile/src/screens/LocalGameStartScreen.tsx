@@ -16,6 +16,7 @@ type LocalGameStartScreenProps = NativeStackScreenProps<
 
 export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) {
   const [noTrump, setNoTrump] = useState(false);
+  const [speedUpWhenDecided, setSpeedUpWhenDecided] = useState(false);
   const [targetMarks, setTargetMarks] = useState("7");
 
   function handleStart() {
@@ -28,6 +29,7 @@ export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) 
 
     navigation.navigate("LocalGame", {
       noTrump,
+      speedUpWhenDecided,
       targetMarks: parsedTarget
     });
   }
@@ -60,6 +62,27 @@ export function LocalGameStartScreen({ navigation }: LocalGameStartScreenProps) 
           onChangeText={setTargetMarks}
           value={targetMarks}
         />
+        <Pressable
+          accessibilityLabel="Speed up play when outcome is decided"
+          accessibilityRole="switch"
+          accessibilityState={{ checked: speedUpWhenDecided }}
+          onPress={() => setSpeedUpWhenDecided((current) => !current)}
+          style={styles.optionRow}
+        >
+          <View style={styles.optionText}>
+            <Text style={styles.optionLabel}>Speed up play when outcome is decided</Text>
+            <Text style={styles.optionMeta}>Auto-end decided hands</Text>
+          </View>
+          <Switch
+            onValueChange={setSpeedUpWhenDecided}
+            thumbColor={speedUpWhenDecided ? palette.goldSoft : palette.paper}
+            trackColor={{
+              false: palette.paperMuted,
+              true: palette.crimson
+            }}
+            value={speedUpWhenDecided}
+          />
+        </Pressable>
         <Pressable
           accessibilityLabel="No Trump"
           accessibilityRole="switch"

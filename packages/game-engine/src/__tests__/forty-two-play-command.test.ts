@@ -26,6 +26,7 @@ import {
   type FortyTwoHands,
   type FortyTwoSnapshotEnvelope,
   type PlayFortyTwoDominoAction,
+  type FortyTwoHandCompletionMode,
   type SeatIndex,
   type TrumpSuit
 } from "../index.ts";
@@ -318,6 +319,48 @@ test("replay produces same post-hand state as play commands", () => {
   assert.deepEqual(replayed, snapshot);
 });
 
+test("play command auto-ends decided hands when autoEndWhenDecided is enabled", () => {
+  const context = createCommandContext();
+  const initialSnapshot = createTrickPlaySnapshot(
+    createMadeBidHands(),
+    "sixes",
+    {
+      handCompletionMode: "autoEndWhenDecided"
+    }
+  );
+  const { events, snapshot } = playHand(
+    initialSnapshot,
+    context,
+    createMadeBidPlays().slice(0, 20)
+  );
+  const handCompleted = getHandCompletedEvent(events);
+
+  assert.equal(countEvents(events, "fortyTwo.trick.completed"), 5);
+  assert.equal(countEvents(events, "fortyTwo.hand.completed"), 1);
+  assert.equal(handCompleted.event.payload.handScore.earlyCompletion?.mode, "autoEndWhenDecided");
+  assert.equal(snapshot.snapshot.phase, "setup");
+});
+
+test("play command still requires all seven tricks in playAllTricks mode", () => {
+  const context = createCommandContext();
+  const initialSnapshot = createTrickPlaySnapshot(
+    createMadeBidHands(),
+    "sixes",
+    {
+      handCompletionMode: "playAllTricks"
+    }
+  );
+  const { events, snapshot } = playHand(
+    initialSnapshot,
+    context,
+    createMadeBidPlays().slice(0, 20)
+  );
+
+  assert.equal(countEvents(events, "fortyTwo.trick.completed"), 5);
+  assert.equal(countEvents(events, "fortyTwo.hand.completed"), 0);
+  assert.equal(snapshot.snapshot.phase, "trickPlay");
+});
+
 type PlaySpec = readonly [
   SeatIndex,
   Domino,
@@ -390,6 +433,7 @@ function createTrickPlaySnapshot(
   hands: FortyTwoHands,
   trumpSuit: TrumpSuit = "sixes",
   options: {
+    readonly handCompletionMode?: FortyTwoHandCompletionMode;
     readonly targetMarks?: number;
   } = {}
 ): FortyTwoSnapshotEnvelope {
@@ -401,9 +445,19 @@ function createTrickPlaySnapshot(
         ? {
             rules: {
               ...standardRules,
+              ...(options.handCompletionMode
+                ? { handCompletionMode: options.handCompletionMode }
+                : {}),
               targetMarks: options.targetMarks
             }
           }
+        : options.handCompletionMode
+          ? {
+              rules: {
+                ...standardRules,
+                handCompletionMode: options.handCompletionMode
+              }
+            }
         : {})
     },
     {

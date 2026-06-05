@@ -90,6 +90,19 @@ test("local practice exposes and plays a no-trump contract when enabled", () => 
   assertReplayMatches(session);
 });
 
+test("local practice can enable auto hand completion when decided", () => {
+  const context = createSimulationContext(9);
+  const session = createLocalGameSession(
+    {
+      handCompletionMode: "autoEndWhenDecided",
+      targetMarks: 7
+    },
+    context
+  );
+
+  assert.equal(session.snapshot.snapshot.rules.handCompletionMode, "autoEndWhenDecided");
+});
+
 test("sorts local domino hands with trump first and high dominoes descending", () => {
   const sorted = sortDominoesForLocalPlay(
     [

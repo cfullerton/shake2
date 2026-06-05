@@ -60,7 +60,7 @@ This file lists rules and product decisions missing from the current engine comp
 | Misdeal handling | Missing | No command for misdeal, redeal, or manual correction. |
 | Dealer cut/shuffle protocol | Missing | Deterministic shuffle exists, but no multiplayer-verifiable shuffle/cut flow. |
 | Reneging penalties | Missing | Illegal plays are rejected before acceptance; there is no post-facto renege adjudication. |
-| Undo/concede/adjudication | Missing | Contract docs mention future concepts, but command handlers do not implement them. |
+| Undo/concede/adjudication | Partial | Engine now supports concession-driven early hand completion and decided-hand auto-end; undo/admin adjudication flows are still missing. |
 | Spectator rules | Missing | No spectator state or visibility rules. |
 
 ## Missing Multiplayer Rule Boundaries

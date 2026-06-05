@@ -71,7 +71,7 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 
 - Stable `EngineError` codes and command-result primitives.
 - `EngineContext` injection for `now`, `newId`, and `random`.
-- Standard `RuleConfig` and `standardRules` for marks scoring, target marks, numeric bid limits, all-pass behavior, table size, trick count, hand value, disabled variants, and trump behavior.
+- Standard `RuleConfig` and `standardRules` for marks scoring, target marks, numeric bid limits, all-pass behavior, hand-completion mode, table size, trick count, hand value, disabled variants, and trump behavior.
 - Normalized `Pip` and `Domino` model with canonical keys and string formatting.
 - Double-six domino set generation with exactly 28 unique dominoes.
 - Count-domino recognition and scoring for the five count dominoes.
@@ -108,7 +108,10 @@ The mobile app now has two local modes: the original scorekeeper flow and a mini
 - Automatic trick completion when the fourth domino is played.
 - Trick winner derivation through contract-aware trick winner helpers.
 - Completed tricks are stored in `FortyTwoState`, and the next trick leader is set to the trick winner.
-- Automatic hand completion when the seventh trick is completed.
+- Configurable hand completion through `RuleConfig.handCompletionMode`:
+  - `"playAllTricks"` keeps full seven-trick completion.
+  - `"allowConcession"` supports command-layer concession to end the hand early.
+  - `"autoEndWhenDecided"` auto-completes when bid outcome is mathematically fixed.
 - `HAND_COMPLETED` event emission with a full `HandScore`.
 - Mark awards applied to match score through the reducer.
 - Non-terminal hand completion prepares the next hand by rotating dealer, incrementing hand number, clearing current-hand data, and returning to setup.

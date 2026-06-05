@@ -13,6 +13,7 @@ import {
   FORTY_TWO_ACTION_SCHEMA_VERSION,
   type CallFortyTwoTrumpAction,
   type CompleteFortyTwoBiddingAction,
+  type CompleteFortyTwoHandAction,
   type CreateFortyTwoGameAction,
   type DealFortyTwoHandAction,
   type FortyTwoAction,
@@ -27,16 +28,20 @@ import {
 } from "./events.ts";
 import { applyFortyTwoEvent } from "./reducer.ts";
 import {
-  FORTY_TWO_TRICKS_PER_HAND,
+  isHandDecided,
+  scoreAutoCompletedDecidedHand,
+  scoreConcededHand,
   scoreCompletedHand
 } from "./scoring.ts";
 import {
   createInitialFortyTwoSnapshot,
+  type FortyTwoTrickPlayState,
   type FortyTwoSnapshotEnvelope
 } from "./state.ts";
 import {
   FORTY_TWO_TEAM_IDS,
   assertSeatIndex,
+  getTeamForSeat,
   type FortyTwoTeamId,
   type SeatIndex
 } from "./seats.ts";
@@ -382,7 +387,7 @@ export function handlePlayFortyTwoDominoCommand(
 
     if (
       nextSnapshot.snapshot.phase === "trickPlay" &&
-      nextSnapshot.snapshot.completedTricks.length === FORTY_TWO_TRICKS_PER_HAND
+      shouldCompleteHandAfterTrick(nextSnapshot)
     ) {
       const handCompletedEvent = createEventEnvelope(
         nextSnapshot,
@@ -390,11 +395,7 @@ export function handlePlayFortyTwoDominoCommand(
         {
           payload: {
             completedTricks: nextSnapshot.snapshot.completedTricks,
-            handScore: scoreCompletedHand(
-              nextSnapshot.snapshot.completedTricks,
-              nextSnapshot.snapshot.contract,
-              nextSnapshot.snapshot.rules
-            )
+            handScore: scoreHandForCompletion(nextSnapshot.snapshot)
           },
           type: "fortyTwo.hand.completed"
         },
@@ -426,6 +427,82 @@ export function handlePlayFortyTwoDominoCommand(
         events.push(gameCompletedEvent);
         nextSnapshot = applyFortyTwoEvent(nextSnapshot, gameCompletedEvent);
       }
+    }
+
+    return {
+      events,
+      ok: true,
+      snapshot: nextSnapshot
+    };
+  });
+}
+
+export function handleCompleteFortyTwoHandCommand(
+  snapshot: FortyTwoSnapshotEnvelope,
+  action: FortyTwoActionEnvelope<CompleteFortyTwoHandAction>,
+  context: Pick<EngineContext, "newId" | "now">
+): FortyTwoCommandResult<FortyTwoHandCompletedEvent | FortyTwoGameCompletedEvent> {
+  return runFortyTwoCommand(() => {
+    assertActionForSnapshot(snapshot, action);
+
+    if (snapshot.snapshot.phase !== "trickPlay") {
+      throw new EngineError("INVALID_PHASE", "Hand concession can only happen during trick play.");
+    }
+
+    if (snapshot.snapshot.rules.handCompletionMode !== "allowConcession") {
+      throw new EngineError("INVALID_ACTION", "Hand concession is disabled for these rules.");
+    }
+
+    if (action.action.payload.handNumber !== snapshot.snapshot.handNumber) {
+      throw new EngineError("INVALID_ACTION", "Concede hand action does not match hand number.");
+    }
+
+    const actorSeat = getActorSeat(action);
+    const handCompletedEvent = createEventEnvelope(
+      snapshot,
+      action,
+      {
+        payload: {
+          completedTricks: snapshot.snapshot.completedTricks,
+          handScore: scoreConcededHand({
+            completedTricks: snapshot.snapshot.completedTricks,
+            concedingTeamId: getTeamForSeat(actorSeat),
+            contract: snapshot.snapshot.contract,
+            currentTrick: snapshot.snapshot.currentTrick,
+            hands: snapshot.snapshot.hands,
+            rules: snapshot.snapshot.rules
+          })
+        },
+        type: "fortyTwo.hand.completed"
+      },
+      context
+    );
+    let nextSnapshot = applyFortyTwoEvent(snapshot, handCompletedEvent);
+    const events: FortyTwoEventEnvelope<
+      FortyTwoHandCompletedEvent | FortyTwoGameCompletedEvent
+    >[] = [handCompletedEvent];
+    const winningTeamId = getGameWinningTeamId(
+      nextSnapshot.snapshot.marks,
+      nextSnapshot.snapshot.rules.targetMarks
+    );
+
+    if (winningTeamId) {
+      const completedAt = getEngineTimestamp(context);
+      const gameCompletedEvent = createEventEnvelope(
+        nextSnapshot,
+        action,
+        {
+          payload: {
+            completedAt,
+            winningTeamId
+          },
+          type: "fortyTwo.game.completed"
+        },
+        context,
+        completedAt
+      );
+      events.push(gameCompletedEvent);
+      nextSnapshot = applyFortyTwoEvent(nextSnapshot, gameCompletedEvent);
     }
 
     return {
@@ -468,6 +545,47 @@ function getGameWinningTeamId(
   targetMarks: number
 ): FortyTwoTeamId | null {
   return FORTY_TWO_TEAM_IDS.find((teamId) => marks[teamId] >= targetMarks) ?? null;
+}
+
+function shouldCompleteHandAfterTrick(snapshot: FortyTwoSnapshotEnvelope): boolean {
+  if (snapshot.snapshot.phase !== "trickPlay") {
+    return false;
+  }
+
+  if (
+    snapshot.snapshot.completedTricks.length ===
+      snapshot.snapshot.rules.table.tricksPerHand
+  ) {
+    return true;
+  }
+
+  if (snapshot.snapshot.rules.handCompletionMode !== "autoEndWhenDecided") {
+    return false;
+  }
+
+  return isHandDecided({
+    completedTricks: snapshot.snapshot.completedTricks,
+    contract: snapshot.snapshot.contract,
+    currentTrick: snapshot.snapshot.currentTrick,
+    hands: snapshot.snapshot.hands,
+    rules: snapshot.snapshot.rules
+  });
+}
+
+function scoreHandForCompletion(
+  state: FortyTwoTrickPlayState
+) {
+  if (state.completedTricks.length === state.rules.table.tricksPerHand) {
+    return scoreCompletedHand(state.completedTricks, state.contract, state.rules);
+  }
+
+  return scoreAutoCompletedDecidedHand({
+    completedTricks: state.completedTricks,
+    contract: state.contract,
+    currentTrick: state.currentTrick,
+    hands: state.hands,
+    rules: state.rules
+  });
 }
 
 function runFortyTwoCommand<TEvent extends FortyTwoEvent>(
